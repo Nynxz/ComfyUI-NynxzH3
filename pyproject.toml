@@ -1,0 +1,56 @@
+# Packaging + Python tooling. The pack's RUNTIME identity (namespace, category, routes) lives
+# in pack.json, not here — see framework/identity.py. What's below is registry metadata and
+# linting.
+
+[project]
+name = "comfyui-nynxzh3"
+version = "0.0.1"
+description = "MiniMax H3 for ComfyUI: one drag-and-drop input node covering t2va/fl2va/ref2va, plus step caching, partial decode and profiling."
+authors = [{ name = "Nynxz", email = "contact@nynxz.com" }]
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+classifiers = []
+dependencies = []
+
+[project.urls]
+Repository = "https://github.com/Nynxz/ComfyUI-NynxzH3"
+BugTracker = "https://github.com/Nynxz/ComfyUI-NynxzH3/issues"
+
+[tool.comfy]
+PublisherId = "nynxz"
+DisplayName = "Nynxz H3"
+Icon = "https://avatars.githubusercontent.com/u/60878743?v=4"
+Tags = ["video", "minimax", "h3", "conditioning", "reference", "optimization", "cache"]
+Repository = "https://github.com/Nynxz/ComfyUI-NynxzH3"
+# The frontend ships as-is. There is no build step, so `web/` is both the source and what
+# runs — nothing to compile, and nothing to keep in sync with a bundle.
+includes = ["web"]
+
+
+# Linting / formatting. Run with `uvx ruff check` and `uvx ruff format`
+# (uv is already available; no project install needed).
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+extend-exclude = ["web", "temp", "__pycache__"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort (import sorting)
+    "UP",  # pyupgrade (modern syntax)
+    "B",   # flake8-bugbear (likely bugs)
+    "C4",  # flake8-comprehensions
+    "SIM", # flake8-simplify
+    "BLE", # flake8-blind-except (the `# noqa: BLE001` sites opt into this)
+    "RUF", # ruff-specific rules
+]
+# `ruff format` owns code line width; E501 only fires on comments/docstrings/long
+# tooltip strings it deliberately leaves alone, so linting it here is just noise.
+ignore = ["E501"]
+
+[tool.ruff.format]
+docstring-code-format = true

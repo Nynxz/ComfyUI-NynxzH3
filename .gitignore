@@ -1,0 +1,8 @@
+__pycache__
+temp
+.ruff_cache/
+.mypy_cache/
+
+
+# Packaging artifact from the registry pack step — regenerated, never source.
+node.zip
