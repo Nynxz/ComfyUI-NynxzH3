@@ -3,6 +3,7 @@ temp
 .ruff_cache/
 .mypy_cache/
 
+tests
 
 # Packaging artifact from the registry pack step — regenerated, never source.
 node.zip

@@ -6,3 +6,4 @@
 tests/
 temp/
 .venv/
+docs/
