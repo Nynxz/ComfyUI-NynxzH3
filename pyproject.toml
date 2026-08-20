@@ -52,5 +52,10 @@ select = [
 # tooltip strings it deliberately leaves alone, so linting it here is just noise.
 ignore = ["E501"]
 
+[tool.ruff.lint.per-file-ignores]
+# The rewriter's system prompt is vendored verbatim from the LoRA repo, en dashes and all.
+# Normalising them to hyphens would edit the string the adapter was trained on.
+"nodes/rewrite/_prompt.py" = ["RUF001"]
+
 [tool.ruff.format]
 docstring-code-format = true
