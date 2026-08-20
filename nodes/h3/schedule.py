@@ -65,6 +65,19 @@ class H3DetailSchedule(PackNode):
                     "untouched by this node — every sigma it emits lies exactly on this curve, "
                     "only sampled more densely at the bottom. Change it here and on the model.",
                 ),
+                io.Float.Input(
+                    "detail_spacing",
+                    default=0.0,
+                    min=0.0,
+                    max=1.0,
+                    step=0.05,
+                    tooltip="Evens out the refinement steps. At 0 the detail phase follows the "
+                    "curve, which makes its first step 3.7x shorter than the structure step before "
+                    "it — and res_multistep's second-order term, built from exactly that ratio, "
+                    "stops contributing for one step at the handoff. At 1 every refinement step is "
+                    "the same size in the sampler's own coordinate. The split and the final sigma "
+                    "do not move at any setting. Free; costs no steps.",
+                ),
             ],
             outputs=[
                 io.Sigmas.Output(),
@@ -77,8 +90,10 @@ class H3DetailSchedule(PackNode):
         )
 
     @classmethod
-    def execute(cls, structure_steps=15, detail_steps=8, split=0.5, shift=12.0) -> io.NodeOutput:
-        sigmas = _schedule.split_sigmas(structure_steps, detail_steps, split, shift)
+    def execute(
+        cls, structure_steps=15, detail_steps=8, split=0.5, shift=12.0, detail_spacing=0.0
+    ) -> io.NodeOutput:
+        sigmas = _schedule.split_sigmas(structure_steps, detail_steps, split, shift, detail_spacing)
         plain = _schedule.uniform_sigmas(max(1, structure_steps + detail_steps), shift)
         report = (
             f"split schedule (shift {shift:g}, split {split:g})\n"

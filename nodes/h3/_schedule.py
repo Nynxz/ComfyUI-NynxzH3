@@ -25,6 +25,8 @@ this and lowering the shift, and it is the whole idea.
 
 from __future__ import annotations
 
+import math
+
 import torch
 
 
@@ -38,11 +40,24 @@ def t_of(sigma: float, shift: float) -> float:
     return sigma / (shift + sigma * (1.0 - shift))
 
 
-def split_sigmas(structure_steps: int, detail_steps: int, split: float, shift: float):
+def split_sigmas(
+    structure_steps: int, detail_steps: int, split: float, shift: float, detail_spacing: float = 0.0
+):
     """Sigmas for a two-phase walk down one shift curve, ending at 0.
 
     Returns `structure_steps + detail_steps + 1` values, strictly decreasing. The +1 is the
     terminal 0 every sampler expects; a schedule of N steps is N+1 sigmas.
+
+    `detail_spacing` fixes the join, and costs nothing. Spreading the detail phase linearly in `t`
+    the way the structure phase is spread makes its first step much shorter than the structure step
+    that preceded it — 0.075 against 0.275 in `-log(sigma)` at 15/8, a 3.7x drop. `res_multistep`
+    builds its second-order term from exactly that ratio, and across a drop that size the term
+    stops contributing: its share of the update falls from ~34% to 10.8% for one step, which is the
+    handoff step, the one this node exists to set up. At 1.0 the detail phase is instead spread
+    evenly in `-log(sigma)`, so every refinement step is the same size and the ratio at the join is
+    1.4 rather than 3.7. **The phase's endpoints do not move** — the split it starts at and the
+    final sigma it reads out from are identical at every setting, so nothing this node is judged on
+    changes. 0.0 is the original spacing, exactly.
     """
     shift = max(1e-3, float(shift))
     split = min(max(float(split), 1e-4), 0.9999)
@@ -51,6 +66,7 @@ def split_sigmas(structure_steps: int, detail_steps: int, split: float, shift: f
     # sigma max, and silently starting at 0.5 would look like the model ignoring the prompt.
     structure_steps = max(1, int(structure_steps))
     detail_steps = max(0, int(detail_steps))
+    detail_spacing = min(max(float(detail_spacing), 0.0), 1.0)
 
     t_split = t_of(split, shift)
     values: list[float] = []
@@ -62,9 +78,20 @@ def split_sigmas(structure_steps: int, detail_steps: int, split: float, shift: f
         values.append(sigma_of(t, shift))
 
     # Detail: t_split down to 0, inclusive of the split and exclusive of the terminal zero.
-    for i in range(detail_steps):
-        t = t_split * (1.0 - i / detail_steps)
-        values.append(sigma_of(t, shift))
+    on_curve = [sigma_of(t_split * (1.0 - i / detail_steps), shift) for i in range(detail_steps)]
+    if detail_spacing > 0.0 and detail_steps >= 2:
+        # The same span walked at a constant step size in the integrator's own coordinate. Blended
+        # in log-sigma because that is the axis both variants are straight in, and because a convex
+        # combination there is guaranteed monotonic — the two agree at both ends, so any blend
+        # keeps the endpoints and only redistributes what is between them.
+        first, last = on_curve[0], on_curve[-1]
+        ratio = last / first
+        even = [first * ratio ** (i / (detail_steps - 1)) for i in range(detail_steps)]
+        on_curve = [
+            math.exp((1.0 - detail_spacing) * math.log(a) + detail_spacing * math.log(b))
+            for a, b in zip(on_curve, even, strict=True)
+        ]
+    values.extend(on_curve)
 
     values.append(0.0)
     return torch.FloatTensor(values)

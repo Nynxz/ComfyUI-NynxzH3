@@ -37,9 +37,12 @@ this node by about 2%. Measuring also catches the cases where the arithmetic is 
 from __future__ import annotations
 
 import logging
+import math
 import time
 
 import torch
+
+from . import _plan
 
 #: Prefix on every line this node logs.
 NAME = "H3 Block Cache"
@@ -202,6 +205,15 @@ class BlockCache:
         #: being compared against. Choosing a threshold blind is guesswork; choosing it against
         #: the numbers the model actually produced is not.
         self.drifts: list[float] = []
+        #: The same measurements with the sigma and plan step they were taken at, which is what
+        #: turns them from a distribution into a curve. The open question this pack cannot answer
+        #: from theory is whether drift is predicted by step size; if it is, every window and floor
+        #: in the group can be computed from the schedule alone, before the run. `dump_samples`
+        #: writes these out. Four floats per pass — the memory cost is nil.
+        self.samples: list[tuple[float | None, float, int | None, float | None]] = []
+        #: The run's schedule, taken from `transformer_options["sample_sigmas"]` where CFGGuider
+        #: files it (`samplers.py:1229`). Only used to recover step sizes when no plan is driving.
+        self.schedule: list[float] | None = None
 
     def stats(self) -> dict:
         drifts = self.drifts
@@ -303,9 +315,34 @@ class BlockCache:
         state["residual"] = residual
 
         sigma = self._sigma(options)
+        step = options.get(_plan.KEY)  # H3 Scheduled Sampler's plan for this step, if it is driving
         if previous is None or state["tail"] is None:
             return self._compute(state, "nothing cached yet")
-        if sigma is not None and not (self.sigma_end <= sigma <= self.sigma_start):
+        if previous.shape != residual.shape:  # sequence changed under us; the tail is meaningless
+            state["tail"] = None
+            return self._compute(
+                state, f"sequence changed, {tuple(previous.shape)} -> {tuple(residual.shape)}"
+            )
+
+        # **Measure first, gate second.** This used to sit below the window check, so the drift
+        # distribution in the report only ever described the steps caching was already switched on
+        # for — which is exactly the wrong half if the question being asked is whether the window
+        # is in the right place. The measurement is a strided relative L1 over 4096 rows and costs
+        # nothing worth saving, so every pass now records one whether it is eligible or not.
+        scale = previous.abs().mean().clamp_min(1e-6)
+        drift = float(((residual - previous).abs().mean() / scale).item())
+        self.drifts.append(drift)
+        self.samples.append((sigma, drift, getattr(step, "index", None), getattr(step, "h", None)))
+
+        if step is not None:
+            # A plan is driving. It supersedes the sigma window, because the window is denoise
+            # percentages resolved against the model's own unsplit curve and stops describing the
+            # run the moment a split schedule is wired in — at detail_steps 16 it excludes ten of
+            # thirty-one steps, all of them refinement. The plan grants permission only; the drift
+            # test below still decides, so this can never skip more than the threshold allows.
+            if not step.cache_ok:
+                return self._compute(state, f"the plan reserves step {step.index} for a full pass")
+        elif sigma is not None and not (self.sigma_end <= sigma <= self.sigma_start):
             return self._compute(
                 state,
                 f"sigma {sigma:.4f} is outside the caching window "
@@ -313,15 +350,7 @@ class BlockCache:
             )
         if state["streak"] >= self.max_consecutive:
             return self._compute(state, f"max_consecutive {self.max_consecutive} reached")
-        if previous.shape != residual.shape:  # sequence changed under us; the tail is meaningless
-            state["tail"] = None
-            return self._compute(
-                state, f"sequence changed, {tuple(previous.shape)} -> {tuple(residual.shape)}"
-            )
 
-        scale = previous.abs().mean().clamp_min(1e-6)
-        drift = float(((residual - previous).abs().mean() / scale).item())
-        self.drifts.append(drift)
         state["accum"] += drift
         budget = f"drift {drift:.4f}, accumulated {state['accum']:.4f}"
         if state["accum"] < self.threshold:
@@ -335,6 +364,11 @@ class BlockCache:
         state = self.slot(options)
         if self._new_run(state, self._sigma(options)):
             state.update(residual=None, tail=None, out0=None, accum=0.0, streak=0)
+
+        if self.schedule is None:
+            filed = options.get("sample_sigmas")
+            if filed is not None:
+                self.schedule = [float(v) for v in filed]
 
         image = args["img"]
         self.timer.start(image.device)
@@ -416,6 +450,8 @@ class BlockCache:
         self.computed = 0
         self.skipped = 0
         self.drifts = []
+        self.samples = []
+        self.schedule = None
         self.timer.reset()
         logging.info(
             "%s enabled — threshold: %g, max_consecutive: %d, start_percent: %g, end_percent: %g",
@@ -438,6 +474,59 @@ class BlockCache:
             logging.info("%s", line)
         self.slots = {}
         self.timer.reset()
+
+    def paired(self) -> list[tuple[float, float]]:
+        """`(step size, drift)` for every pass that can be attributed to a step.
+
+        The step size comes from the plan when one is driving, and otherwise from the schedule the
+        guider filed, matched to the sigma the pass ran at. Only the plan knows about subdivision,
+        so a substepped run without one would attribute a substep to its parent — which is why the
+        plan's own `h` is preferred rather than merely convenient.
+        """
+        sizes: dict[float, float] = {}
+        if self.schedule:
+            for i in range(len(self.schedule) - 1):
+                a, b = self.schedule[i], self.schedule[i + 1]
+                if a > 0 and b > 0:
+                    sizes[a] = math.log(a / b)
+
+        out = []
+        for sigma, drift, _, h in self.samples:
+            if h is not None and math.isfinite(h) and h > 0:
+                out.append((h, drift))
+            elif sigma is not None and sizes:
+                nearest = min(sizes, key=lambda s: abs(s - sigma))
+                if abs(nearest - sigma) < 1e-4:
+                    out.append((sizes[nearest], drift))
+        return [(h, d) for h, d in out if h > 0 and d > 0]
+
+    def fit(self) -> tuple[float, float, int] | None:
+        """`(exponent, r_squared, n)` from a log-log least squares of drift against step size.
+
+        **The measurement the rest of this group is waiting on.** Every window, floor and budget in
+        the pack is currently chosen against either a denoise percentage or a step size, and which
+        of those is right depends on a fact nobody has measured: whether how far the model's
+        representation moves in a step is predicted by how long that step is. An exponent near 1
+        with a tight fit means it is, and every one of those settings can then be computed from the
+        schedule before the run rather than tuned by hand against it. A loose fit means drift is
+        carrying information about the content that step size cannot, and the closed loop earns its
+        keep. It is two lines in a log and it decides which of those two designs is correct.
+        """
+        pairs = self.paired()
+        if len(pairs) < 6:
+            return None
+        xs = [math.log(h) for h, _ in pairs]
+        ys = [math.log(d) for _, d in pairs]
+        n = len(xs)
+        mx, my = sum(xs) / n, sum(ys) / n
+        sxx = sum((x - mx) ** 2 for x in xs)
+        if sxx <= 0:
+            return None
+        slope = sum((x - mx) * (y - my) for x, y in zip(xs, ys, strict=True)) / sxx
+        intercept = my - slope * mx
+        residual = sum((y - (slope * x + intercept)) ** 2 for x, y in zip(xs, ys, strict=True))
+        variance = sum((y - my) ** 2 for y in ys)
+        return slope, (1.0 - residual / variance) if variance > 0 else 1.0, n
 
     def report(self) -> list[str]:
         """The lines `end_run` logs. Split out so it can be asserted on without a log capture."""
@@ -471,7 +560,19 @@ class BlockCache:
             lines.append(
                 f"{NAME} [verbose]: drift over {len(self.drifts)} measurements — min "
                 f"{min(self.drifts):.4f}, mean {sum(self.drifts) / len(self.drifts):.4f}, max "
-                f"{max(self.drifts):.4f} (threshold {self.threshold:g}, accumulated across passes)"
+                f"{max(self.drifts):.4f} (threshold {self.threshold:g}, accumulated across passes; "
+                f"measured on every pass, including ones caching was switched off for)"
+            )
+        fitted = self.fit()
+        if fitted is not None:
+            exponent, r2, n = fitted
+            verdict = (
+                "step size predicts drift — windows and floors can be planned from the schedule"
+                if r2 >= 0.8
+                else "step size only partly predicts drift — the runtime signal is carrying the rest"
+            )
+            lines.append(
+                f"{NAME} [verbose]: drift ~ h^{exponent:.2f}, r2 {r2:.2f} over {n} passes — {verdict}"
             )
         computed, skipped = self.timer.computed, self.timer.skipped
         if computed and skipped:

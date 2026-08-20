@@ -17,6 +17,24 @@ nothing here. The only thing that buys time is **issuing less arithmetic**:
                                that, and it decides nothing on its own.
     schedule    schedule.py    Detail Schedule budgets the refinement phase separately from the
                                structure phase, without changing the shift curve.
+    budget      scheduled.py   Scheduled Sampler decides what each step is worth and tells the
+                               other three, which until now could not see each other.
+
+**Why the fourth one exists.** The first three answer overlapping questions in four different
+coordinate systems — sigma, denoise-percent, log-sigma and log-SNR — and the disagreements are
+not cosmetic. Block Cache's window is a percentage resolved on the model's *unsplit* curve, so a
+split schedule silently moves it: at `detail_steps` 16 the default excludes ten of thirty-one
+steps, all refinement. And the steps are nothing like equal — four of a 15/8 split's twenty-two
+carry 97% of its local truncation error, the smallest twelve carry 0.07% — so effort spread evenly
+across them is almost entirely spent where it cannot matter. `_plan.py` is the one place that
+converts between the coordinates and hands out a single per-step budget; `_scheduled.py` runs it
+and publishes it where the block patches can read it.
+
+**The distinction the whole group turns on.** Step density, integration order and how much of the
+stack runs all converge on the *same* answer, the exact solution of the model's own ODE. Buying
+more of any of them buys fidelity to that answer — cleaner, more converged, sometimes flatter. The
+only lever that changes *which* answer you get is stochasticity, which is why `detail_eta` is
+banded separately and kept out of the error budget entirely.
 
 Coming back out:
 

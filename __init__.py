@@ -25,9 +25,11 @@ from .nodes.h3.depthskip import H3DepthSkip
 from .nodes.h3.isolate import H3ReferenceIsolate
 from .nodes.h3.rowchunk import H3RowChunk
 from .nodes.h3.schedule import H3DetailSchedule
+from .nodes.h3.scheduled import H3ScheduledSampler
 from .nodes.h3.slice import H3LatentSlice
 from .nodes.h3.window import H3SlidingWindow
 from .nodes.inputs.node import H3Inputs
+from .nodes.rewrite.node import H3ClipLora, H3RewriteClean, H3RewritePrompt
 
 #: Every node this pack registers.
 NODES: list[type[io.ComfyNode]] = [
@@ -39,10 +41,15 @@ NODES: list[type[io.ComfyNode]] = [
     H3Audio,
     H3Encode,
     H3Extras,
+    # Prompt — what the request becomes before any of the above.
+    H3RewritePrompt,
+    H3RewriteClean,
+    H3ClipLora,
     # Sampling — what a step costs.
     H3BlockCache,
     H3DepthSkip,
     H3DetailSchedule,
+    H3ScheduledSampler,
     # Sequence-length work — experimental, and only bites on longer clips.
     H3RowChunk,
     H3SlidingWindow,

@@ -55,7 +55,7 @@ def adapt_canvas(width: int, height: int) -> tuple[int, int]:
 
 def encode_ref_audio(audio_vae, audio):
     """`(latent [1, 32, 2, T], T)` — resampled to the audio VAE's rate first."""
-    return core().MiniMaxH3ReferenceToVideo._encode_ref_audio(audio_vae, audio)
+    return core()._encode_ref_audio(audio_vae, audio)
 
 
 def temporal_shape(length: int) -> tuple[int, int, int]:
