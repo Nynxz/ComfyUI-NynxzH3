@@ -4,7 +4,7 @@
 
 [project]
 name = "comfyui-nynxzh3"
-version = "0.0.1"
+version = "0.0.2"
 description = "MiniMax H3 for ComfyUI: one drag-and-drop input node covering t2va/fl2va/ref2va, plus step caching, partial decode and profiling."
 authors = [{ name = "Nynxz", email = "contact@nynxz.com" }]
 readme = "README.md"
