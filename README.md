@@ -120,17 +120,24 @@ Reads the canvas back off the wire, including the frame count it snapped up to.
 
 ### H3 Edit (experimental)
 
-`source, instruction, references, pictures, style, keep, mode, size` → `prompt, h3_inputs, report`
+`source, instruction, references, pictures, style, keep, mode, size, vae?` → `prompt, h3_inputs, report, latent`
 
 H3's shortest clip is 5 frames, and its last frame decodes to a clean still — so H3 is an image
 editor that understands references. H3 Edit writes the prompt for that the way H3's own
 reference guide lays it out, and the assets on a 5-frame canvas sized to the source:
 
 ```
-source + pictures ─► H3 Edit ─┬─► prompt    ─► H3 Encode (mode auto) ─► sampler
-                              └─► h3_inputs ─┘                            │
-                                             H3 Decode Frames (last frame) ◄┘
+source + pictures ─► H3 Edit ─┬─► prompt    ─► H3 Encode (mode auto) ─► positive ─► sampler
+         vae ──────►          ├─► h3_inputs ─┘                                       ▲   │
+                              └─► latent ────────────────────────────────────────────┘   │
+                                             H3 Decode Frames (index -1) ◄────────────────┘
 ```
+
+**Sample H3 Edit's `latent`, not H3 Encode's, with denoise below 1.** H3 Encode's LATENT is an
+empty canvas: from it the sampler invents a new picture, and in `reference` mode the source is
+only one reference among several, so a style picture's *content* can win. H3 Edit's latent (with
+`vae` wired) is the source held for 5 frames, so a partial denoise edits *your* picture — lower
+keeps more of it; around 0.6–0.85 is a place to start for a restyle.
 
 - **instruction** — what changes, in plain words. `@source` is the picture being edited; each
   reference is `@name`. Names become the right `<Subject N>` / `<Picture N>` whatever the slot

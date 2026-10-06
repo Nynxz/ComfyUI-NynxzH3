@@ -10,6 +10,8 @@ canvas sized to the source — so H3 Encode and the sampler stay the ones you al
 
 from __future__ import annotations
 
+import torch
+from comfy.nested_tensor import NestedTensor
 from comfy_api.latest import io
 
 from .. import _core
@@ -95,6 +97,12 @@ class H3Edit(PackNode):
                     default="auto",
                     tooltip="Detail the pictures are fed in at: max costs more and keeps more.",
                 ),
+                io.Vae.Input(
+                    "vae",
+                    optional=True,
+                    tooltip="H3's video VAE. Wire it to get a latent that starts from the source, "
+                    "so the sampler edits your picture instead of inventing a new one.",
+                ),
             ],
             outputs=[
                 io.String.Output(display_name="prompt", tooltip="Into H3 Encode's prompt."),
@@ -102,6 +110,12 @@ class H3Edit(PackNode):
                 io.String.Output(
                     display_name="report",
                     tooltip="Which tag each @name became, and anything worth fixing.",
+                ),
+                io.Latent.Output(
+                    display_name="latent",
+                    tooltip="The source held for 5 frames (with the vae wired; empty otherwise). "
+                    "Sample it in place of H3 Encode's LATENT with denoise below 1 — lower keeps "
+                    "more of the source, around 0.6-0.85 for a restyle.",
                 ),
             ],
         )
@@ -117,6 +131,7 @@ class H3Edit(PackNode):
         keep="changes",
         mode="reference",
         size="auto",
+        vae=None,
     ) -> io.NodeOutput:
         size = size if size in _rows.SIZES else "auto"
         images = [p for p in (pictures or {}).values() if p is not None]
@@ -135,7 +150,35 @@ class H3Edit(PackNode):
         height, width = int(source.shape[1]), int(source.shape[2])
         w, h = _core.adapt_canvas(width, height)
         payload = _payload.make(items, {"width": w, "height": h, "length": _edit.FRAMES})
-        return io.NodeOutput(prompt, payload, _report(items, refs, mode, w, h, warnings))
+        latent = _source_latent(source, vae, w, h)
+        if vae is None:
+            warnings.append(
+                "No vae wired: the latent is empty, so the sampler starts from noise and only "
+                "the references say what the source looked like."
+            )
+        return io.NodeOutput(prompt, payload, _report(items, refs, mode, w, h, warnings), latent)
+
+
+def _source_latent(source, vae, width: int, height: int) -> dict:
+    """H3's AV latent for the canvas, with the source in every video frame when a VAE is given.
+
+    The audio half stays silent. The video half is the source resized to the canvas and held for
+    the clip, encoded the way core encodes guide frames — so a partial denoise starts from the
+    picture rather than from noise.
+    """
+    empty, _ = _core.empty_latent(width, height, _edit.FRAMES)
+    if vae is None:
+        return empty
+    video, audio = empty["samples"].tensors
+    frames = _core.resize(source[:1], width, height, "center").repeat(_edit.FRAMES, 1, 1, 1)
+    encoded = vae.encode(frames).to(video.dtype)
+    t = video.shape[2]
+    if encoded.shape[2] < t:  # hold the last latent frame if the VAE returned fewer
+        encoded = torch.cat(
+            [encoded, encoded[:, :, -1:].repeat(1, 1, t - encoded.shape[2], 1, 1)], 2
+        )
+    encoded = encoded[:, :, :t].to(video.device)
+    return {"samples": NestedTensor((encoded, audio))}
 
 
 def _item(image, role: str, size: str, label: str) -> dict:
