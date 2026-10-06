@@ -17,6 +17,7 @@ from comfy_api.latest import ComfyExtension, io
 
 from .nodes.assets.node import H3Audio, H3Image, H3Video
 from .nodes.canvas.node import H3Canvas
+from .nodes.edit.node import H3Edit
 from .nodes.encode.node import H3Encode
 from .nodes.extras.node import H3Extras
 from .nodes.h3.cache import H3BlockCache
@@ -42,6 +43,7 @@ NODES: list[type[io.ComfyNode]] = [
     H3Encode,
     H3Extras,
     # Prompt — what the request becomes before any of the above.
+    H3Edit,
     H3RewritePrompt,
     H3RewriteClean,
     H3ClipLora,

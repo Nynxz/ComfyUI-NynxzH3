@@ -22,6 +22,7 @@ Restart ComfyUI. Requires ComfyUI 0.30.0 or newer.
 | H3 Audio | `Nynxz/H3` | Audio reference |
 | H3 Encode | `Nynxz/H3` | Conditioning and AV latent |
 | H3 Extras | `Nynxz/H3` | Canvas values from the wire |
+| H3 Edit | `Nynxz/H3/Prompt` | Edit or restyle a still: instruction + `@named` references → prompt and assets (experimental) |
 | H3 Rewrite Prompt | `Nynxz/H3/Prompt` | Build the prompt the rewriter LoRA was trained on |
 | H3 Rewrite Clean | `Nynxz/H3/Prompt` | Trim a rewriter response to the production prompt |
 | H3 CLIP LoRA | `Nynxz/H3/Prompt` | Apply a LoRA to a text encoder, no MODEL input |
@@ -114,6 +115,39 @@ the alignment line an fl2va prompt should open with, using the snapped duration.
 is_keyframes, is_references, summary`
 
 Reads the canvas back off the wire, including the frame count it snapped up to.
+
+## Editing a still
+
+### H3 Edit (experimental)
+
+`source, instruction, references, pictures, style, keep, mode, size` → `prompt, h3_inputs, report`
+
+H3's shortest clip is 5 frames, and its last frame decodes to a clean still — so H3 is an image
+editor that understands references. H3 Edit writes the prompt for that the way H3's own
+reference guide lays it out, and the assets on a 5-frame canvas sized to the source:
+
+```
+source + pictures ─► H3 Edit ─┬─► prompt    ─► H3 Encode (mode auto) ─► sampler
+                              └─► h3_inputs ─┘                            │
+                                             H3 Decode Frames (last frame) ◄┘
+```
+
+- **instruction** — what changes, in plain words. `@source` is the picture being edited; each
+  reference is `@name`. Names become the right `<Subject N>` / `<Picture N>` whatever the slot
+  order, and anything unknown or unmentioned is in `report`.
+- **references** — one line per wired picture, in slot order: `@name (role): what it is`.
+
+  | role | retention marker | use |
+  |---|---|---|
+  | `look` | `fully_preserved` | a character, prop or place that appears as shown |
+  | `style` | `attribute_transfer` | its rendering moves onto the source; none of its content |
+  | `loose` | `weak_reference` | a broad likeness only |
+
+- **keep** — how much of the source survives: `closely`, `changes` (composition and poses stay),
+  `loosely`.
+- **mode** — `reference` makes the source a subject H3 redraws (the strongest restyle);
+  `first_frame` pins it as the opening keyframe and changes it across the clip (closest to the
+  source, and references only reach the text encoder).
 
 ## Prompt
 
