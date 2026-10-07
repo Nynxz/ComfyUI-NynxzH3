@@ -418,8 +418,12 @@ TRANSITION_WORDS = {
 }
 
 
-def _lower_first(text: str) -> str:
-    """'She turns' → 'she turns', for joining a sentence after "Then,"; names and tags stay."""
+def _lower_first(text: str, names: frozenset[str] = frozenset()) -> str:
+    """'She turns' → 'she turns', for joining a sentence after "Then,"; names and tags stay —
+    `names` are the cast's, lowercased."""
+    first = re.match(r"[\w'-]+", text)
+    if first and first.group(0).lower() in names:
+        return text
     if len(text) > 1 and text[0].isupper() and (text[1].islower() or text.startswith("A ")):
         return text[0].lower() + text[1:]
     return text
@@ -618,6 +622,7 @@ def compile_scene(project: dict[str, Any], index: int, has_audio=None) -> Compil
 
     shots = [s for s in scene["shots"] if s["at"] < seconds or s is scene["shots"][0]]
     dialogue = Dialogue(project["cast"], refs, warnings, subjects=bool(refs))
+    cast_names = frozenset(v["name"].lower() for v in project["cast"])
     # A shot either starts a new [Shot N] (a cut, or a dissolve / fade / wipe) or carries on the
     # one before without a cut — so H3's shot numbers count only the former.
     numbers = []
@@ -639,16 +644,16 @@ def compile_scene(project: dict[str, Any], index: int, has_audio=None) -> Compil
             paragraphs.append(f"[Shot 1] {text or 'The scene continues.'}")
         elif shot["transition"] == "continue":
             if text:
-                paragraphs[-1] += f" Then, {_lower_first(text)}"
+                paragraphs[-1] += f" Then, {_lower_first(text, cast_names)}"
         elif shot["transition"] == "continue_timed":
             if text:
-                paragraphs[-1] += f" At {when}, {_lower_first(text)}"
+                paragraphs[-1] += f" At {when}, {_lower_first(text, cast_names)}"
         else:
             how = TRANSITION_WORDS.get(shot["transition"])
             opening = f"At {when}, {how}. " if how else f"At {when}, "
             body_text = text or "The scene continues."
             if not how:  # "At 00:03.000, the camera cuts to…", not "…, The camera…"
-                body_text = _lower_first(body_text)
+                body_text = _lower_first(body_text, cast_names)
             paragraphs.append(f"[Shot {numbers[i]}] {opening}{body_text}")
     body = "\n".join(paragraphs)
     final_shot = numbers[-1]
