@@ -71,7 +71,7 @@
           playsinline
         />
         <img
-        v-else-if="picture"
+          v-else-if="picture"
           :key="picture.media"
           class="plan-pic"
           :style="{ '--push': push }"
