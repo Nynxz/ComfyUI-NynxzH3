@@ -178,6 +178,25 @@ const keyOf = (s: string) => s.trim().replace(/^@/, "").toLowerCase();
  * A script read against a project: its @names matched to the project's references, its speakers to
  * the project's voices (by name or reference), new voices made for the rest.
  */
+/** How a scene continues, or its length — what may sit in a heading's last brackets. */
+const SCENE_OPTION =
+  /\d|\b(cut|continues?|same place|setting|reference|last frame|first frame|picks? up|sound|music carries|audio carries)\b/i;
+/** `## Scene 1: A title (6s, cut)` → [row, title, options]. The last bracket is the options only
+ *  when it reads like them, so a title may hold brackets of its own: "Anna (again)". */
+function sceneHeading(row: string): [string, string, string] | null {
+  const head = /^#{2}\s*scene\b(.*)$/i.exec(row);
+  if (!head) return null;
+  let rest = head[1]!;
+  let options = "";
+  const tail = /\(([^()]*)\)\s*$/.exec(rest);
+  if (tail && SCENE_OPTION.test(tail[1]!)) {
+    options = tail[1]!;
+    rest = rest.slice(0, tail.index);
+  }
+  const colon = rest.indexOf(":");
+  return [row, colon >= 0 ? rest.slice(colon + 1).trim() : "", options];
+}
+
 export function parseProjectScript(project: Project, text: string): ScriptResult {
   const result: ScriptResult = {
     cast: [],
@@ -268,11 +287,13 @@ export function parseProjectScript(project: Project, text: string): ScriptResult
       section = "cast";
       continue;
     }
-    if ((m = /^#{2}\s*scene\b[^:(]*(?::\s*([^(]*))?(?:\(([^)]*)\))?\s*$/i.exec(row))) {
+    const heading = sceneHeading(row);
+    if (heading) {
       section = "scene";
-      const opts = (m[2] ?? "").split(",").map((o) => o.trim());
+      const [, title, options] = heading;
+      const opts = options.split(",").map((o) => o.trim());
       const len = opts.map(parseTime).find((n) => n !== null);
-      scene = { ...newScene(len ?? 5), shots: [], title: (m[1] ?? "").trim() };
+      scene = { ...newScene(len ?? 5), shots: [], title };
       scene.seconds = snapSeconds(Math.min(Math.max(len ?? 5, 1), 30));
       scene.continuation.mode = opts.some((o) => /sound|music carries|audio carries/i.test(o))
         ? "sound"
@@ -442,7 +463,8 @@ function scriptUses(project: Project, script: ScriptResult) {
       ),
     ),
   ]);
-  const linked = new Set(script.cast.map((v) => v.ref).filter(Boolean));
+  // A voice keeps the reference it is and the one it sounds like (its timbre).
+  const linked = new Set(script.cast.flatMap((v) => [v.ref, v.timbre]).filter(Boolean));
   const voices = new Set(script.cast.map((v) => v.id));
   return {
     ref: (r: Ref) => names.has(r.name.toLowerCase()) || linked.has(r.id),

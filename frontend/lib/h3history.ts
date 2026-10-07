@@ -9,9 +9,10 @@ import type { Project } from "./h3studio";
 
 const BURST_MS = 600;
 const LIMIT = 200;
-const VOLATILE = new Set(["active", "render", "layout"]);
+const VOLATILE = new Set(["active", "render", "layout", "renderOnly"]);
 
-const snapshot = (project: Project) => JSON.stringify(project, (key, value) => (VOLATILE.has(key) ? undefined : value));
+const snapshot = (project: Project) =>
+  JSON.stringify(project, (key, value) => (VOLATILE.has(key) ? undefined : value));
 
 export interface ProjectHistory {
   readonly canUndo: boolean;
@@ -47,20 +48,20 @@ export function useProjectHistory(project: Project): ProjectHistory {
   // Detached: the history must outlive whichever view (node or panel) happened to create it.
   effectScope(true).run(() =>
     watch(
-    project,
-    () => {
-      const now = snapshot(project);
-      if (now === current && !burst) return;
-      if (!burst) {
-        past.push(current);
-        if (past.length > LIMIT) past.shift();
-        future.length = 0;
-      }
-      window.clearTimeout(burst);
-      burst = window.setTimeout(settle, BURST_MS);
-      sync();
-    },
-    { deep: true },
+      project,
+      () => {
+        const now = snapshot(project);
+        if (now === current && !burst) return;
+        if (!burst) {
+          past.push(current);
+          if (past.length > LIMIT) past.shift();
+          future.length = 0;
+        }
+        window.clearTimeout(burst);
+        burst = window.setTimeout(settle, BURST_MS);
+        sync();
+      },
+      { deep: true },
     ),
   );
 

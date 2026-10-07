@@ -122,6 +122,8 @@ export async function renderScenes(project: Project, studioNodeId: string, ids: 
       await queue();
     } finally {
       project.renderOnly = undefined;
+      // Cleared once queued, so the next run (a plain Queue too) isn't served the cached pick.
+      markScenesNodes(studioNodeId, undefined);
     }
     return;
   }
