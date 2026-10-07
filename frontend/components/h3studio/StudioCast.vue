@@ -1,10 +1,6 @@
 <template>
   <div ref="root" class="cast">
-    <p class="hintline">
-      The voices that speak. A voice linked to a reference is that subject in the prompt; its
-      description is written the first time it is heard in a scene, and it keeps one speaker ID (S1,
-      S2…) through the scene.
-    </p>
+    <p class="hintline">The film's voices. Link one to its reference so H3 knows who's talking.</p>
     <div
       v-for="v in cast"
       :key="v.id"
@@ -63,27 +59,58 @@
       </div>
     </div>
     <div class="row">
-      <ZenButton sm variant="ghost" icon="mdi mdi-account-plus-outline" @click="add()"
-        >Voice</ZenButton
-      >
       <ZenButton
-        v-for="r in unvoiced"
-        :key="r.id"
+        v-if="!unvoiced.length"
         sm
         variant="ghost"
-        icon="mdi mdi-plus"
-        :title="`A voice for @${r.name}`"
-        @click="add(r.name, r.id)"
+        icon="mdi mdi-account-plus-outline"
+        @click="add()"
+        >Voice</ZenButton
       >
-        @{{ r.name }}
-      </ZenButton>
+      <ZenPopover v-else placement="bottom-start">
+        <template #trigger="{ toggle }">
+          <ZenButton sm variant="ghost" icon="mdi mdi-account-plus-outline" @click="toggle"
+            >Voice <i class="mdi mdi-chevron-down"
+          /></ZenButton>
+        </template>
+        <template #default="{ close }">
+          <div class="menu">
+            <ZenMenuItem
+              icon="mdi mdi-account-plus-outline"
+              @select="
+                close();
+                add();
+              "
+              >New voice</ZenMenuItem
+            >
+            <ZenMenuSeparator />
+            <ZenMenuItem
+              v-for="r in unvoiced"
+              :key="r.id"
+              icon="mdi mdi-account-box-outline"
+              @select="
+                close();
+                add(r.name, r.id);
+              "
+              >For @{{ r.name }}</ZenMenuItem
+            >
+          </div>
+        </template>
+      </ZenPopover>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import { ZenButton, ZenIconButton, ZenSelect } from "@nynxz/zenkit-ui";
+import {
+  ZenButton,
+  ZenIconButton,
+  ZenMenuItem,
+  ZenMenuSeparator,
+  ZenPopover,
+  ZenSelect,
+} from "@nynxz/zenkit-ui";
 import type { Project } from "@/lib/h3studio";
 import { LANGUAGES, newVoice, voiceColor, voiceThumb } from "@/lib/h3dialogue";
 
@@ -104,11 +131,11 @@ const audioOptions = computed(() => [
     .filter((r) => r.kind === "audio")
     .map((r) => ({ value: r.id, label: `@${r.name}` })),
 ]);
-/** Picture and video references with no voice yet — one click gives them one. */
+/** References that could speak and have no voice yet. Blocking only stages a scene. */
 const unvoiced = computed(() =>
-  props.project.refs
-    .filter((r) => r.kind !== "audio" && !cast.value.some((v) => v.ref === r.id))
-    .slice(0, 4),
+  props.project.refs.filter(
+    (r) => r.kind !== "audio" && r.role !== "blocking" && !cast.value.some((v) => v.ref === r.id),
+  ),
 );
 
 const spoken = (id: string) =>
@@ -274,6 +301,14 @@ function remove(id: string) {
 .soft {
   color: var(--h3-muted);
   font-size: 10.5px;
+}
+.menu {
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  max-height: 320px;
+  padding: 4px;
+  overflow-y: auto;
 }
 .hintline {
   margin: 0;

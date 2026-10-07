@@ -25,8 +25,9 @@ Open the **Cast** tab in the sidebar. Each card is one voice:
 - **Timbre** (only when the film has an audio reference). An audio clip whose voice this one
   should follow.
 
-The **+ @name** buttons under the cards make a voice for a reference that doesn't have one yet.
-Drag a card by its grip to reorder; the timeline's voice lanes follow the same order.
+**+ Voice** adds one. When there are references without a voice, it opens a menu: a new voice,
+or one already linked to a reference (blocking videos and audio are left out). Drag a card by its
+grip to reorder; the timeline's voice lanes follow the same order.
 
 Voices belong to the whole film, so Mika sounds the same in every scene.
 
