@@ -45,7 +45,17 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
 import { CSS2DObject, CSS2DRenderer } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 import { ZenIconButton, ZenToggleGroup } from "@nynxz/zenkit-ui";
-import { Evaluator, figure, fovOf, isVec, type ShapeData, type Vec } from "@/lib/greybox";
+import {
+  Evaluator,
+  expandShapes,
+  figure,
+  fovOf,
+  isRod,
+  isVec,
+  type ShapeData,
+  type Vec,
+} from "@/lib/greybox";
+import { shapesOf } from "@/lib/greyboxActions";
 import type { GreyBoxSession } from "@/lib/greyboxDoc";
 
 export type Selection =
@@ -142,7 +152,14 @@ function shapeMesh(s: ShapeData, selected: boolean): THREE.Mesh {
   const tone = s.tone ?? 0.7;
   let geo: THREE.BufferGeometry;
   const mesh = new THREE.Mesh();
-  if (s.type === "cylinder") {
+  if (isRod(s)) {
+    const a = new THREE.Vector3(...(s.a ?? [0, 0, 0]));
+    const b = new THREE.Vector3(...(s.b ?? [0, 1, 0]));
+    const len = Math.max(a.distanceTo(b), 1e-4);
+    geo = new THREE.CylinderGeometry(s.radius ?? 0.5, s.radius ?? 0.5, len, 32);
+    mesh.position.copy(a.clone().add(b).multiplyScalar(0.5));
+    mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize());
+  } else if (s.type === "cylinder") {
     const h = s.height ?? 1;
     geo = new THREE.CylinderGeometry(s.radius ?? 0.5, s.radius ?? 0.5, h, 32);
     const at = s.at ?? [0, 0, 0];
@@ -204,13 +221,21 @@ const isSel = (s: Selection) =>
 // --- building the view -----------------------------------------------------------------------------
 function buildSet() {
   clear(setGroup);
-  const set = props.session.doc.set;
-  for (const s of set.shapes) {
+  const { doc } = props.session;
+  const set = doc.set;
+  const editingProp = !!doc.focus && !!doc.props[doc.focus];
+  // Editing a prop shows only the prop, in its own frame.
+  pathGroup.visible = liveGroup.visible = !editingProp;
+  for (const s of shapesOf(doc)) {
     const pick: Selection = { type: "shape", id: s.id ?? "" };
-    const m = shapeMesh(s, isSel(pick));
-    picks.set(m, pick);
-    setGroup.add(m);
+    // A placed prop is its shapes, picked and highlighted as one.
+    for (const part of (s.type ?? "box") === "prop" ? expandShapes([s], doc.props) : [s]) {
+      const m = shapeMesh(part, isSel(pick));
+      picks.set(m, pick);
+      setGroup.add(m);
+    }
   }
+  if (editingProp) return;
   for (const [name, p] of Object.entries(set.marks)) {
     const pick: Selection = { type: "mark", id: name };
     const ring = new THREE.Mesh(
@@ -386,19 +411,26 @@ function buildLive() {
 
 // --- the gizmo: what's selected, moved by dragging -------------------------------------------------
 let dragging = false;
-function selectedPoint(): { at: Vec; yaw?: number; size?: Vec; radius?: number } | null {
+function selectedPoint(): {
+  at: Vec;
+  yaw?: number;
+  size?: Vec;
+  radius?: number;
+  scale?: number;
+} | null {
   const sel = selection.value;
   if (!sel) return null;
   const { doc } = props.session;
   const ev = evaluator.value;
   if (sel.type === "shape") {
-    const s = doc.set.shapes.find((x) => x.id === sel.id);
+    const s = shapesOf(doc).find((x) => x.id === sel.id);
     if (!s) return null;
-    if (s.type === "capsule") {
+    if (s.type === "capsule" || isRod(s)) {
       const a = s.a ?? [0, 0, 0];
       const b = s.b ?? [0, 1, 0];
       return { at: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2], radius: s.radius };
     }
+    if (s.type === "prop") return { at: s.at ?? [0, 0, 0], yaw: s.yaw ?? 0, scale: s.scale ?? 1 };
     return { at: s.at ?? [0, 0, 0], yaw: s.yaw ?? 0, size: s.size, radius: s.radius };
   }
   if (sel.type === "mark") return doc.set.marks[sel.id] ? { at: doc.set.marks[sel.id]! } : null;
@@ -417,6 +449,7 @@ function selectedPoint(): { at: Vec; yaw?: number; size?: Vec; radius?: number }
 }
 let startSize: Vec | null = null;
 let startRadius: number | null = null;
+let startScale: number | null = null;
 function attachGizmo() {
   if (!gizmo || dragging) return;
   const p = selectedPoint();
@@ -449,10 +482,22 @@ function onGizmoChange() {
   const pos: Vec = [handle.position.x, handle.position.y, handle.position.z];
   const yaw = (handle.rotation.y * 180) / Math.PI;
   if (sel.type === "shape") {
-    const shape = s.doc.set.shapes.find((x) => x.id === sel.id);
+    const shape = shapesOf(s.doc).find((x) => x.id === sel.id);
     if (!shape) return;
     if (gizmo!.mode === "scale") {
-      if (shape.type === "box" && startSize)
+      if (shape.type === "prop" && startScale !== null)
+        s.run(
+          "shape.update",
+          {
+            id: sel.id,
+            scale: Math.max(
+              0.05,
+              startScale * Math.max(handle.scale.x, handle.scale.y, handle.scale.z),
+            ),
+          },
+          { settle: false },
+        );
+      else if (shape.type === "box" && startSize)
         s.run(
           "shape.update",
           {
@@ -476,7 +521,7 @@ function onGizmoChange() {
         );
     } else if (gizmo!.mode === "rotate")
       s.run("shape.update", { id: sel.id, yaw }, { settle: false });
-    else if (shape.type === "capsule") {
+    else if (shape.type === "capsule" || isRod(shape)) {
       const a = shape.a ?? [0, 0, 0];
       const b = shape.b ?? [0, 1, 0];
       const mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2];
@@ -638,6 +683,7 @@ onMounted(() => {
       const p = selectedPoint();
       startSize = p?.size ?? null;
       startRadius = p?.radius ?? null;
+      startScale = p?.scale ?? null;
     } else {
       props.session.endChange();
       attachGizmo();
@@ -671,7 +717,10 @@ const docKey = computed(
   () => JSON.stringify(props.session.doc.scene) + JSON.stringify(props.session.doc.cast),
 );
 watch(
-  () => JSON.stringify(props.session.doc.set),
+  () =>
+    JSON.stringify(props.session.doc.set) +
+    JSON.stringify(props.session.doc.props) +
+    (props.session.doc.focus ?? ""),
   () => {
     buildSet();
     buildPaths();
@@ -774,7 +823,10 @@ function frameSelected(): boolean {
   if (box.isEmpty()) return false;
   const c = box.getCenter(new THREE.Vector3());
   const r = Math.max(box.getSize(new THREE.Vector3()).length() / 2, 0.6);
-  const dir = persp.position.clone().sub(orbit?.target ?? c).normalize();
+  const dir = persp.position
+    .clone()
+    .sub(orbit?.target ?? c)
+    .normalize();
   const dist = (r / Math.sin(((persp.fov / 2) * Math.PI) / 180)) * 1.1;
   persp.position.copy(c).addScaledVector(dir, dist);
   persp.lookAt(c);

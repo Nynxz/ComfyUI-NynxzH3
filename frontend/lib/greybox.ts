@@ -3,7 +3,7 @@
 // so the editor moves things exactly as the render will.
 
 export type Vec = [number, number, number];
-export type ShapeKind = "box" | "cylinder" | "sphere" | "capsule";
+export type ShapeKind = "box" | "cylinder" | "sphere" | "capsule" | "prop";
 
 export interface ShapeData {
   id?: string;
@@ -16,6 +16,59 @@ export interface ShapeData {
   b?: Vec;
   yaw?: number;
   tone?: number;
+  /** A placed prop: which one, and how big (1 = as built). */
+  prop?: string;
+  scale?: number;
+}
+/** Shapes built once (`props/<name>.json`) and placed in sets as `{type: "prop", prop}`: their
+ *  own frame has the origin on the floor under the middle, +z the front. */
+export interface PropData {
+  name?: string;
+  notes?: string;
+  shapes: ShapeData[];
+}
+export type Props = Record<string, PropData>;
+export const toProp = (raw: unknown): PropData => {
+  const o = (raw && typeof raw === "object" ? raw : {}) as Partial<PropData>;
+  return { ...o, shapes: Array.isArray(o.shapes) ? o.shapes : [] };
+};
+/** A cylinder given by its two ends (a wheel, a pipe) rather than standing on `at`. */
+export const isRod = (s: ShapeData) => (s.type ?? "box") === "cylinder" && (!!s.a || !!s.b);
+
+/** A placed prop's shape, from the prop's frame to where it stands: scaled, turned by `yaw` (as a
+ *  box turns) and moved to `at` — nodes/greybox/core/scene.py's `_placed`. */
+function placed(local: ShapeData, at: Vec, yaw: number, scale: number): ShapeData {
+  const r = (yaw * Math.PI) / 180;
+  const c = Math.cos(r);
+  const s = Math.sin(r);
+  const move = (p: Vec): Vec => {
+    const [x, y, z] = [p[0] * scale, p[1] * scale, p[2] * scale];
+    return [at[0] + c * x + s * z, at[1] + y, at[2] - s * x + c * z];
+  };
+  const out: ShapeData = { ...local };
+  if (local.at) out.at = move(local.at);
+  if (local.a) out.a = move(local.a);
+  if (local.b) out.b = move(local.b);
+  if (local.size) out.size = [local.size[0] * scale, local.size[1] * scale, local.size[2] * scale];
+  if (local.radius !== undefined) out.radius = local.radius * scale;
+  if (local.height !== undefined) out.height = local.height * scale;
+  out.yaw = (local.yaw ?? 0) + yaw;
+  return out;
+}
+/** Shapes with every placed prop opened into its own, as the render sees them. */
+export function expandShapes(shapes: ShapeData[], props: Props, depth = 0): ShapeData[] {
+  const out: ShapeData[] = [];
+  for (const s of shapes) {
+    if ((s.type ?? "box") !== "prop") {
+      out.push(s);
+      continue;
+    }
+    const prop = s.prop ? props[s.prop] : undefined;
+    if (!prop || depth > 3) continue;
+    for (const local of expandShapes(prop.shapes, props, depth + 1))
+      out.push(placed(local, s.at ?? [0, 0, 0], s.yaw ?? 0, s.scale ?? 1));
+  }
+  return out;
 }
 export interface SetCam {
   at: Vec;

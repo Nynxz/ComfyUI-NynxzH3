@@ -3,7 +3,7 @@
 // one undo step and is saved to its file shortly after. Files changed by someone else (an agent
 // working on them) are picked up and reloaded, unless an edit here is waiting to be saved.
 import { reactive } from "vue";
-import { toScene, toSet, emptyScene, emptySet, type CastData } from "./greybox";
+import { toProp, toScene, toSet, emptyScene, emptySet, type CastData } from "./greybox";
 import { act, ActionError, type Args, type Doc } from "./greyboxActions";
 
 type Kind = "scene" | "set" | "cast";
@@ -44,11 +44,15 @@ export function useGreyBox() {
     /** Bumped when files are reloaded from disk. */
     reloads: 0,
   });
-  const doc = reactive<Doc>({ scene: toScene({}), set: toSet({}), cast: {} });
+  const doc = reactive<Doc>({ scene: toScene({}), set: toSet({}), cast: {}, props: {} });
 
   const saved: Record<Kind, string> = { scene: "", set: "", cast: "" };
+  /** Each prop as last saved (or loaded), by name. */
+  let savedProps: Record<string, string> = {};
   let stamps: Record<string, number> = {};
   const json = (k: Kind) => JSON.stringify(doc[k]);
+  const propJson = (name: string) => JSON.stringify(doc.props[name]);
+  const dirtyProps = () => Object.keys(doc.props).filter((n) => propJson(n) !== savedProps[n]);
 
   // --- history -----------------------------------------------------------------------------------
   const past: string[] = [];
@@ -73,6 +77,8 @@ export function useGreyBox() {
     doc.scene = d.scene;
     doc.set = d.set;
     doc.cast = d.cast;
+    doc.props = d.props ?? {};
+    doc.focus = d.focus;
     base = to;
   }
   function undo() {
@@ -98,8 +104,9 @@ export function useGreyBox() {
 
   // --- saving ------------------------------------------------------------------------------------
   let timer = 0;
-  const dirty = (): Kind[] =>
+  const dirtyFiles = (): Kind[] =>
     (["scene", "set", "cast"] as Kind[]).filter((k) => json(k) !== saved[k]);
+  const dirty = (): string[] => [...dirtyFiles(), ...dirtyProps().map((n) => `prop:${n}`)];
   function schedule() {
     window.clearTimeout(timer);
     timer = window.setTimeout(() => void flush(), 500);
@@ -107,10 +114,22 @@ export function useGreyBox() {
   async function flush() {
     window.clearTimeout(timer);
     if (!state.project || !state.sceneName) return;
-    const kinds = dirty();
-    if (!kinds.length) return;
+    const kinds = dirtyFiles();
+    const propNames = dirtyProps();
+    if (!kinds.length && !propNames.length) return;
     state.saving = true;
     try {
+      for (const name of propNames) {
+        const body = propJson(name);
+        const res = await post<{ stamps: Record<string, number> }>("/nynxz/greybox/save", {
+          project: state.project,
+          kind: "prop",
+          name,
+          data: JSON.parse(body),
+        });
+        savedProps[name] = body;
+        stamps = res.stamps;
+      }
       for (const kind of kinds) {
         const name = kind === "scene" ? state.sceneName : kind === "set" ? state.setName : "cast";
         if (kind === "set" && !name) continue;
@@ -166,6 +185,7 @@ export function useGreyBox() {
     set: unknown;
     setName: string | null;
     cast: CastData;
+    propShapes?: Record<string, unknown>;
     scenes: string[];
     sets: string[];
     stamps: Record<string, number>;
@@ -181,6 +201,12 @@ export function useGreyBox() {
     doc.scene = toScene(o.scene ?? emptyScene(state.setName));
     doc.set = toSet(o.set ?? emptySet(state.setName || "set"));
     doc.cast = o.cast ?? {};
+    const focus = doc.focus;
+    doc.props = Object.fromEntries(
+      Object.entries(o.propShapes ?? {}).map(([name, raw]) => [name, toProp(raw)]),
+    );
+    doc.focus = focus && doc.props[focus] ? focus : undefined;
+    savedProps = Object.fromEntries(Object.keys(doc.props).map((n) => [n, propJson(n)]));
     saved.scene = o.scene ? json("scene") : "";
     saved.set = o.set ? json("set") : "";
     saved.cast = json("cast");
@@ -254,7 +280,11 @@ export function useGreyBox() {
     state.scenes = res.scenes;
     state.sets = res.sets;
     const mine = [`scenes/${state.sceneName}.json`, `sets/${state.setName}.json`, "cast.json"];
-    const changed = mine.some((f) => res.stamps[f] !== undefined && res.stamps[f] !== stamps[f]);
+    const changed =
+      mine.some((f) => res.stamps[f] !== undefined && res.stamps[f] !== stamps[f]) ||
+      Object.keys({ ...res.stamps, ...stamps }).some(
+        (f) => f.startsWith("props/") && res.stamps[f] !== stamps[f],
+      );
     stamps = res.stamps;
     if (!changed || dirty().length) return;
     const keepUndo = { past: [...past], future: [...future] };
@@ -303,6 +333,7 @@ export async function renderStill(
     scene: s.doc.scene,
     set: s.doc.set,
     cast: s.doc.cast,
+    props: s.doc.props,
     shot,
     t,
     width,
@@ -324,6 +355,7 @@ export async function renderShot(
     scene: s.doc.scene,
     set: s.doc.set,
     cast: s.doc.cast,
+    props: s.doc.props,
     shot,
     width,
     height,

@@ -85,6 +85,7 @@ that H3 Studio can take as a reference).
 greybox/
   cast.json          everyone's figure: height, build, grey
   sets/<set>.json    places, built once, reused by every scene there
+  props/<prop>.json  objects built once from shapes (a truck, a table), placed in sets
   scenes/<scene>.json
 ```
 
@@ -126,7 +127,9 @@ Shapes:
 | `box`      | `at`: its centre                                          | `size`: [w, h, d]; `yaw`     |
 | `cylinder` | `at`: the middle of its base (it stands on `at`)          | `radius`, `height`           |
 | `sphere`   | `at`: its centre                                          | `radius`                     |
-| `capsule`  | from `a` to `b` (any direction)                           | `radius`                     |
+| `cylinder` | from `a` to `b` when they're given: lying down, any way   | `radius`                     |
+| `capsule`  | from `a` to `b` (any direction), rounded ends             | `radius`                     |
+| `prop`     | `at`: the spot on the floor its origin goes               | `prop`: its name; `yaw`, `scale` |
 
 - `tone`: its grey, 0 (black) to 1 (white); default 0.7. Keep floors darker, walls mid, furniture
   lighter, so forms separate. Characters are lighter still.
@@ -137,6 +140,38 @@ Shapes:
 - `marks` are named spots on the floor that actors and cameras can use by name. Mark every place a
   character stands, sits or enters from.
 - `cameras` are named set-ups (`at`, `look`, `lens`) for the angles the place is usually shot from.
+
+## Props — `props/<name>.json`
+
+A prop is an object built once from shapes and placed as often as needed: a truck, a booth, a
+lamp post. Change the prop and every place it stands follows.
+
+```json
+{
+  "name": "Box truck",
+  "notes": "Origin on the ground under the middle; +z is the front.",
+  "shapes": [
+    { "id": "cargo",      "type": "box", "at": [0, 1.75, -0.9], "size": [2.2, 2.3, 4.2], "tone": 0.82 },
+    { "id": "cab",        "type": "box", "at": [0, 1.3, 2.05],  "size": [2.1, 1.7, 1.7], "tone": 0.7 },
+    { "id": "windscreen", "type": "box", "at": [0, 1.7, 2.91],  "size": [1.8, 0.7, 0.04], "tone": 0.18 },
+    { "id": "wheel-fl",   "type": "cylinder", "a": [1.0, 0.45, 1.9], "b": [1.2, 0.45, 1.9], "radius": 0.45, "tone": 0.15 }
+  ]
+}
+```
+
+Placed in a set:
+
+```json
+{ "id": "truck-1", "type": "prop", "prop": "truck", "at": [3, 0, 7.5], "yaw": 90, "scale": 1 }
+```
+
+- Build it around its own origin: the spot on the floor it's placed at, with **+z its front**.
+- Dark shapes read as glass and openings: windows a little proud of the body at `tone` ~0.2.
+- `yaw` turns it like a box; `scale` grows or shrinks all of it. A prop can place other props.
+- A placed prop is **one object**: it moves as one in the editor and has one mask.
+- In the editor: **Props** in the outliner places a prop (+) or opens it (✎); while it's open,
+  the shape tools build it, and **Done** goes back to the set. Agents use `prop.new`, `prop.edit`,
+  `prop.make` (shapes already in the set become a prop, placed where they were) and `prop.done`.
 
 ## Cast — `cast.json`
 

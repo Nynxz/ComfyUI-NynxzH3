@@ -3,7 +3,7 @@
 // sheet with the plan — so an agent can build and block scenes without working blind. Changes go
 // through an open Grey Box Studio when it shows that scene (live, undoable), else to the files.
 import { registerZenCapability } from "@/framework";
-import { toScene, toSet, emptyScene, emptySet, type CastData } from "./greybox";
+import { toProp, toScene, toSet, emptyScene, emptySet, type CastData } from "./greybox";
 import { ACTIONS, act, ActionError, type Doc } from "./greyboxActions";
 import { liveSessions, type GreyBoxSession } from "./greyboxDoc";
 
@@ -63,6 +63,7 @@ interface Opened {
   set: unknown;
   setName: string | null;
   cast: CastData;
+  propShapes?: Record<string, unknown>;
 }
 async function load(project: string, scene: string): Promise<{ doc: Doc; setName: string }> {
   const o = await post<Opened>("/nynxz/greybox/open", { project, scene });
@@ -71,6 +72,9 @@ async function load(project: string, scene: string): Promise<{ doc: Doc; setName
       scene: toScene(o.scene),
       set: toSet(o.set ?? emptySet(o.setName ?? "set")),
       cast: o.cast ?? {},
+      props: Object.fromEntries(
+        Object.entries(o.propShapes ?? {}).map(([name, raw]) => [name, toProp(raw)]),
+      ),
     },
     setName: o.setName ?? "",
   };
@@ -97,7 +101,7 @@ export function registerGreyBoxCapabilities() {
     effect: "read",
     description:
       "Read a grey box scene as JSON: the scene (actors with their keys, shots with camera keys), its set " +
-      "(shapes, marks, set cameras) and the cast (heights). Units are metres, Y up, floor y=0; yaw 0 faces +Z, " +
+      "(shapes, marks, set cameras), the cast (heights), and the project's props (reusable objects built from shapes, placed in sets as {type: prop}). Units are metres, Y up, floor y=0; yaw 0 faces +Z, " +
       "90 faces +X. Read before changing anything.",
     params: {
       type: "object",
@@ -113,6 +117,7 @@ export function registerGreyBoxCapabilities() {
         scene: doc.scene,
         set: doc.set,
         cast: doc.cast,
+        props: doc.props,
       };
     },
   });
@@ -267,7 +272,11 @@ async function save(
 ) {
   if (touched.has("scene"))
     await post("/nynxz/greybox/save", { project, kind: "scene", name: scene, data: doc.scene });
-  if (touched.has("set") && setName)
+  if (touched.has("props"))
+    for (const [name, data] of Object.entries(doc.props))
+      await post("/nynxz/greybox/save", { project, kind: "prop", name, data });
+  // Making a prop also changes the set it came from.
+  if ((touched.has("set") || touched.has("props")) && setName)
     await post("/nynxz/greybox/save", { project, kind: "set", name: setName, data: doc.set });
   if (touched.has("cast"))
     await post("/nynxz/greybox/save", { project, kind: "cast", name: "cast", data: doc.cast });

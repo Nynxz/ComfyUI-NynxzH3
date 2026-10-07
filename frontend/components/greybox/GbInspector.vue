@@ -3,80 +3,141 @@
     <!-- a shape of the set -->
     <template v-if="sel?.type === 'shape' && shape">
       <header>
-        <i class="mdi mdi-cube-outline" /><b>{{ shape.id }}</b
-        ><span class="kind">{{ shape.type ?? "box" }}</span>
+        <i
+          class="mdi"
+          :class="shape.type === 'prop' ? 'mdi-package-variant-closed' : 'mdi-cube-outline'"
+        /><b>{{ shape.id }}</b
+        ><span class="kind">{{
+          shape.type === "prop"
+            ? `prop · ${shape.prop}`
+            : rod
+              ? "lying cylinder"
+              : (shape.type ?? "box")
+        }}</span>
       </header>
       <ZenField label="Name" stack
         ><ZenInput sm :model-value="shape.id ?? ''" @change="rename($event)"
       /></ZenField>
-      <template v-if="shape.type === 'capsule'">
-        <ZenField label="From" stack
-          ><GbVec :model-value="shape.a ?? [0, 0, 0]" @update:model-value="up({ a: $event })"
-        /></ZenField>
-        <ZenField label="To" stack
-          ><GbVec :model-value="shape.b ?? [0, 1, 0]" @update:model-value="up({ b: $event })"
-        /></ZenField>
+      <template v-if="shape.type === 'prop'">
+        <ZenField label="Placed at" stack>
+          <GbVec :model-value="shape.at ?? [0, 0, 0]" @update:model-value="up({ at: $event })" />
+        </ZenField>
+        <div class="row2">
+          <ZenField label="Turn" stack>
+            <ZenNumber
+              size="sm"
+              :model-value="shape.yaw ?? 0"
+              :step="5"
+              :precision="0"
+              @update:model-value="up({ yaw: $event })"
+            />
+          </ZenField>
+          <ZenField label="Scale" stack>
+            <ZenNumber
+              size="sm"
+              :model-value="shape.scale ?? 1"
+              :min="0.05"
+              :step="0.05"
+              :precision="2"
+              @update:model-value="up({ scale: $event })"
+            />
+          </ZenField>
+        </div>
+        <div class="actions">
+          <ZenButton
+            size="sm"
+            icon="mdi mdi-pencil-outline"
+            :title="`Edit ${shape.prop}: every place it's used follows`"
+            @click="editProp(shape.prop ?? '')"
+            >Edit {{ shape.prop }}</ZenButton
+          >
+          <ZenButton
+            size="sm"
+            icon="mdi mdi-content-copy"
+            @click="run('shape.duplicate', { id: shape.id })"
+            >Duplicate</ZenButton
+          >
+          <ZenButton
+            size="sm"
+            icon="mdi mdi-delete-outline"
+            @click="remove('shape.remove', { id: shape.id })"
+            >Delete</ZenButton
+          >
+        </div>
       </template>
-      <ZenField v-else :label="shape.type === 'cylinder' ? 'Base at' : 'Centre at'" stack>
-        <GbVec :model-value="shape.at ?? [0, 0, 0]" @update:model-value="up({ at: $event })" />
-      </ZenField>
-      <ZenField v-if="(shape.type ?? 'box') === 'box'" label="Size" stack>
-        <GbVec :model-value="shape.size ?? [1, 1, 1]" @update:model-value="up({ size: $event })" />
-      </ZenField>
-      <div class="row2">
-        <ZenField v-if="shape.type !== 'box' && shape.type" label="Radius" stack>
-          <ZenNumber
-            size="sm"
-            :model-value="shape.radius ?? 0.5"
-            :min="0.01"
-            :step="0.02"
-            :precision="2"
-            @update:model-value="up({ radius: $event })"
+      <template v-else>
+        <template v-if="shape.type === 'capsule' || rod">
+          <ZenField label="From" stack
+            ><GbVec :model-value="shape.a ?? [0, 0, 0]" @update:model-value="up({ a: $event })"
+          /></ZenField>
+          <ZenField label="To" stack
+            ><GbVec :model-value="shape.b ?? [0, 1, 0]" @update:model-value="up({ b: $event })"
+          /></ZenField>
+        </template>
+        <ZenField v-else :label="shape.type === 'cylinder' ? 'Base at' : 'Centre at'" stack>
+          <GbVec :model-value="shape.at ?? [0, 0, 0]" @update:model-value="up({ at: $event })" />
+        </ZenField>
+        <ZenField v-if="(shape.type ?? 'box') === 'box'" label="Size" stack>
+          <GbVec
+            :model-value="shape.size ?? [1, 1, 1]"
+            @update:model-value="up({ size: $event })"
           />
         </ZenField>
-        <ZenField v-if="shape.type === 'cylinder'" label="Height" stack>
-          <ZenNumber
-            size="sm"
-            :model-value="shape.height ?? 1"
-            :min="0.01"
-            :step="0.05"
-            :precision="2"
-            @update:model-value="up({ height: $event })"
+        <div class="row2">
+          <ZenField v-if="shape.type !== 'box' && shape.type" label="Radius" stack>
+            <ZenNumber
+              size="sm"
+              :model-value="shape.radius ?? 0.5"
+              :min="0.01"
+              :step="0.02"
+              :precision="2"
+              @update:model-value="up({ radius: $event })"
+            />
+          </ZenField>
+          <ZenField v-if="shape.type === 'cylinder' && !rod" label="Height" stack>
+            <ZenNumber
+              size="sm"
+              :model-value="shape.height ?? 1"
+              :min="0.01"
+              :step="0.05"
+              :precision="2"
+              @update:model-value="up({ height: $event })"
+            />
+          </ZenField>
+          <ZenField v-if="(shape.type ?? 'box') === 'box'" label="Turn" stack>
+            <ZenNumber
+              size="sm"
+              :model-value="shape.yaw ?? 0"
+              :step="5"
+              :precision="0"
+              @update:model-value="up({ yaw: $event })"
+            />
+          </ZenField>
+        </div>
+        <ZenField label="Grey" stack>
+          <ZenSlider
+            :model-value="shape.tone ?? 0.7"
+            :min="0"
+            :max="1"
+            :step="0.01"
+            @update:model-value="up({ tone: $event })"
           />
         </ZenField>
-        <ZenField v-if="(shape.type ?? 'box') === 'box'" label="Turn" stack>
-          <ZenNumber
+        <div class="actions">
+          <ZenButton
             size="sm"
-            :model-value="shape.yaw ?? 0"
-            :step="5"
-            :precision="0"
-            @update:model-value="up({ yaw: $event })"
-          />
-        </ZenField>
-      </div>
-      <ZenField label="Grey" stack>
-        <ZenSlider
-          :model-value="shape.tone ?? 0.7"
-          :min="0"
-          :max="1"
-          :step="0.01"
-          @update:model-value="up({ tone: $event })"
-        />
-      </ZenField>
-      <div class="actions">
-        <ZenButton
-          size="sm"
-          icon="mdi mdi-content-copy"
-          @click="run('shape.duplicate', { id: shape.id })"
-          >Duplicate</ZenButton
-        >
-        <ZenButton
-          size="sm"
-          icon="mdi mdi-delete-outline"
-          @click="remove('shape.remove', { id: shape.id })"
-          >Delete</ZenButton
-        >
-      </div>
+            icon="mdi mdi-content-copy"
+            @click="run('shape.duplicate', { id: shape.id })"
+            >Duplicate</ZenButton
+          >
+          <ZenButton
+            size="sm"
+            icon="mdi mdi-delete-outline"
+            @click="remove('shape.remove', { id: shape.id })"
+            >Delete</ZenButton
+          >
+        </div>
+      </template>
     </template>
 
     <!-- a mark -->
@@ -395,6 +456,32 @@
       </div>
     </template>
 
+    <!-- nothing selected while a prop is open: the prop -->
+    <template v-else-if="openProp">
+      <header>
+        <i class="mdi mdi-package-variant-closed" /><b>{{ doc.focus }}</b
+        ><span class="kind">prop</span>
+      </header>
+      <ZenField label="Notes" stack>
+        <ZenInput
+          sm
+          type="textarea"
+          :model-value="openProp.notes ?? ''"
+          placeholder="What it is, which way it faces"
+          @change="run('prop.update', { notes: String($event) })"
+        />
+      </ZenField>
+      <p class="soft">
+        {{ openProp.shapes.length }} shape{{ openProp.shapes.length === 1 ? "" : "s" }} · placed
+        {{ placedTimes }}× in this set. Changes show everywhere it's placed.
+      </p>
+      <div class="actions">
+        <ZenButton size="sm" variant="primary" icon="mdi mdi-check" @click="run('prop.done', {})"
+          >Done</ZenButton
+        >
+      </div>
+    </template>
+
     <!-- nothing selected: the scene and its set -->
     <template v-else>
       <header>
@@ -448,7 +535,8 @@
         />
       </ZenField>
       <p class="soft small">
-        Click something in the view or the list to edit it. W / E / R: move, turn, resize; F: frame it.
+        Click something in the view or the list to edit it. W / E / R: move, turn, resize; F: frame
+        it.
       </p>
     </template>
   </div>
@@ -458,7 +546,15 @@
 // The Grey Box Studio inspector: the exact values of what's selected, each change an action.
 import { computed } from "vue";
 import { ZenButton, ZenField, ZenInput, ZenNumber, ZenSelect, ZenSlider } from "@nynxz/zenkit-ui";
-import { Evaluator, describeRef, member as memberOf, type KeyData, type Ref } from "@/lib/greybox";
+import {
+  Evaluator,
+  describeRef,
+  isRod,
+  member as memberOf,
+  type KeyData,
+  type Ref,
+} from "@/lib/greybox";
+import { shapesOf } from "@/lib/greyboxActions";
 import type { GreyBoxSession } from "@/lib/greyboxDoc";
 import type { Selection } from "./GbViewport.vue";
 import GbRef from "./GbRef.vue";
@@ -482,10 +578,16 @@ const EASES = [
 ];
 
 const shape = computed(() =>
-  props.sel?.type === "shape"
-    ? doc.value.set.shapes.find((s) => s.id === props.sel!.id)
-    : undefined,
+  props.sel?.type === "shape" ? shapesOf(doc.value).find((s) => s.id === props.sel!.id) : undefined,
 );
+const rod = computed(() => !!shape.value && isRod(shape.value));
+const openProp = computed(() => (doc.value.focus ? doc.value.props[doc.value.focus] : undefined));
+const placedTimes = computed(
+  () => doc.value.set.shapes.filter((s) => s.type === "prop" && s.prop === doc.value.focus).length,
+);
+function editProp(name: string) {
+  if (run("prop.edit", { name })) emit("select", null);
+}
 const mark = computed(() =>
   props.sel?.type === "mark" ? doc.value.set.marks[props.sel.id] : undefined,
 );
@@ -528,7 +630,7 @@ function up(patch: Record<string, unknown>) {
 function rename(v: unknown) {
   const id = shape.value!.id;
   if (run("shape.update", { id, rename: String(v) })) {
-    const next = doc.value.set.shapes.find((s) => s.id === String(v).trim());
+    const next = shapesOf(doc.value).find((s) => s.id === String(v).trim());
     if (next) emit("select", { type: "shape", id: next.id! });
   }
 }

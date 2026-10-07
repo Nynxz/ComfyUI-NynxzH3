@@ -6,6 +6,7 @@ import {
   isVec,
   type CastData,
   type KeyData,
+  type Props,
   type SceneData,
   type SetData,
   type ShapeData,
@@ -17,6 +18,10 @@ export interface Doc {
   scene: SceneData;
   set: SetData;
   cast: CastData;
+  /** The project's props, by name (each its own file). */
+  props: Props;
+  /** The prop being edited: shape actions then change its shapes instead of the set's. */
+  focus?: string;
 }
 export type Args = Record<string, unknown>;
 export interface ActionInfo {
@@ -24,7 +29,7 @@ export interface ActionInfo {
   /** What it does and its arguments, for whoever calls it (an agent reads exactly this). */
   help: string;
   /** Which file it changes. */
-  touches: "scene" | "set" | "cast";
+  touches: "scene" | "set" | "cast" | "props";
   run: (doc: Doc, a: Args) => string;
 }
 
@@ -50,13 +55,31 @@ const near = (a: number, b: number) => Math.abs(a - b) < 1e-3;
 const round = (v: number) => Math.round(v * 1000) / 1000;
 const roundVec = (v: Vec): Vec => [round(v[0]), round(v[1]), round(v[2])];
 
+/** The shapes being edited: the open prop's, else the set's. */
+export function shapesOf(doc: Doc): ShapeData[] {
+  return doc.focus && doc.props[doc.focus] ? doc.props[doc.focus]!.shapes : doc.set.shapes;
+}
+function setShapes(doc: Doc, shapes: ShapeData[]) {
+  if (doc.focus && doc.props[doc.focus]) doc.props[doc.focus]!.shapes = shapes;
+  else doc.set.shapes = shapes;
+}
+const where = (doc: Doc) => (doc.focus ? `the prop ${doc.focus}` : "the set");
 function shape(doc: Doc, id: unknown): ShapeData {
-  const s = doc.set.shapes.find((x) => x.id === id);
+  const s = shapesOf(doc).find((x) => x.id === id);
   if (!s)
     throw new ActionError(
-      `No shape ${String(id)} in the set (shapes: ${doc.set.shapes.map((x) => x.id).join(", ")}).`,
+      `No shape ${String(id)} in ${where(doc)} (shapes: ${shapesOf(doc)
+        .map((x) => x.id)
+        .join(", ")}).`,
     );
   return s;
+}
+const PROP_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$/;
+function propName(v: unknown): string {
+  const name = str(v, "The prop's name");
+  if (!PROP_NAME.test(name))
+    throw new ActionError(`${name} can't be a prop's name: use letters, numbers, - and _.`);
+  return name;
 }
 function actor(doc: Doc, id: unknown) {
   const a = doc.scene.actors.find((x) => x.id === mention(id));
@@ -117,7 +140,7 @@ function keyPatch(a: Args, camera: boolean): Partial<KeyData> {
   return p;
 }
 
-const SHAPE_FIELDS = ["at", "size", "radius", "height", "a", "b", "yaw", "tone"] as const;
+const SHAPE_FIELDS = ["at", "size", "radius", "height", "a", "b", "yaw", "tone", "scale"] as const;
 function applyShape(s: ShapeData, a: Args) {
   for (const f of SHAPE_FIELDS) {
     if (!(f in a)) continue;
@@ -125,8 +148,15 @@ function applyShape(s: ShapeData, a: Args) {
     if (f === "at" || f === "size" || f === "a" || f === "b")
       (s as Args)[f] = roundVec(vec(v, `\`${f}\``));
     else if (f === "tone") s.tone = Math.min(Math.max(num(v, "`tone`"), 0), 1);
+    else if (f === "scale") s.scale = round(Math.min(Math.max(num(v, "`scale`"), 0.01), 100));
     else (s as Args)[f] = round(num(v, `\`${f}\``));
   }
+}
+/** Roughly where a shape sits on the floor, for finding the middle of several. */
+function footprint(s: ShapeData): [number, number] {
+  const p =
+    s.at ?? (s.a && s.b ? ([(s.a[0] + s.b[0]) / 2, 0, (s.a[2] + s.b[2]) / 2] as Vec) : null);
+  return p ? [p[0], p[2]] : [0, 0];
 }
 
 export const ACTIONS: ActionInfo[] = [
@@ -134,22 +164,39 @@ export const ACTIONS: ActionInfo[] = [
   {
     name: "shape.add",
     touches: "set",
-    help: "Add a shape to the set. {kind: box|cylinder|sphere|capsule, id?, at?: [x,y,z], size?: [w,h,d] (box), radius?, height? (cylinder), a?, b? (capsule ends), yaw?, tone? (0-1)}. A box's `at` is its centre; a cylinder stands on `at`.",
+    help: "Add a shape to the set (or to the prop being edited). {kind: box|cylinder|sphere|capsule|prop, id?, at?: [x,y,z], size?: [w,h,d] (box), radius?, height? (cylinder), a?, b? (capsule or lying cylinder ends), yaw?, tone? (0-1), prop? and scale? (kind prop)}. A box's `at` is its centre; a cylinder stands on `at`, or lies from `a` to `b` when they're given; a prop is placed with its origin at `at`.",
     run: (doc, a) => {
       const kind = (
-        ["box", "cylinder", "sphere", "capsule"].includes(String(a.kind)) ? a.kind : "box"
+        ["box", "cylinder", "sphere", "capsule", "prop"].includes(String(a.kind)) ? a.kind : "box"
       ) as ShapeKind;
+      if (kind === "prop") {
+        const name = str(a.prop, "Which prop (`prop`)");
+        if (!doc.props[name])
+          throw new ActionError(
+            `No prop ${name} (props: ${Object.keys(doc.props).join(", ") || "none yet"}).`,
+          );
+        if (doc.focus === name) throw new ActionError(`A prop can't be placed inside itself.`);
+      }
       const id = freeId(
-        new Set(doc.set.shapes.map((x) => x.id ?? "")),
-        typeof a.id === "string" && a.id ? a.id : kind,
+        new Set(shapesOf(doc).map((x) => x.id ?? "")),
+        typeof a.id === "string" && a.id ? a.id : kind === "prop" ? String(a.prop) : kind,
       );
       const s: ShapeData = { id, type: kind, tone: 0.7 };
+      if (kind === "prop") {
+        Object.assign(s, { prop: String(a.prop), at: [0, 0, 0], yaw: 0, scale: 1 });
+        delete s.tone;
+      }
       if (kind === "box") Object.assign(s, { at: [0, 0.5, 0], size: [1, 1, 1], yaw: 0 });
       if (kind === "cylinder") Object.assign(s, { at: [0, 0, 0], radius: 0.3, height: 1 });
       if (kind === "sphere") Object.assign(s, { at: [0, 0.5, 0], radius: 0.5 });
       if (kind === "capsule") Object.assign(s, { a: [0, 0.3, 0], b: [0, 1.5, 0], radius: 0.3 });
+      if (kind === "cylinder" && ("a" in a || "b" in a)) {
+        Object.assign(s, { a: [0, 0.3, -0.5], b: [0, 0.3, 0.5] });
+        delete s.at;
+        delete s.height;
+      }
       applyShape(s, a);
-      doc.set.shapes.push(s);
+      shapesOf(doc).push(s);
       return `Added ${kind} ${id}.`;
     },
   },
@@ -161,17 +208,20 @@ export const ACTIONS: ActionInfo[] = [
       const s = shape(doc, a.id);
       applyShape(s, a);
       if (typeof a.rename === "string" && a.rename.trim() && a.rename !== s.id)
-        s.id = freeId(new Set(doc.set.shapes.map((x) => x.id ?? "")), a.rename.trim());
+        s.id = freeId(new Set(shapesOf(doc).map((x) => x.id ?? "")), a.rename.trim());
       return `Changed ${s.id}.`;
     },
   },
   {
     name: "shape.remove",
     touches: "set",
-    help: "Remove a shape from the set. {id}.",
+    help: "Remove a shape from the set (or the prop being edited). {id}.",
     run: (doc, a) => {
       const s = shape(doc, a.id);
-      doc.set.shapes = doc.set.shapes.filter((x) => x !== s);
+      setShapes(
+        doc,
+        shapesOf(doc).filter((x) => x !== s),
+      );
       return `Removed ${s.id}.`;
     },
   },
@@ -183,13 +233,99 @@ export const ACTIONS: ActionInfo[] = [
       const s = shape(doc, a.id);
       const off = "offset" in a ? vec(a.offset, "`offset`") : ([0.6, 0, 0] as Vec);
       const copy: ShapeData = JSON.parse(JSON.stringify(s));
-      copy.id = freeId(new Set(doc.set.shapes.map((x) => x.id ?? "")), s.id ?? "shape");
+      copy.id = freeId(new Set(shapesOf(doc).map((x) => x.id ?? "")), s.id ?? "shape");
       const shift = (p?: Vec) => (p ? roundVec([p[0] + off[0], p[1] + off[1], p[2] + off[2]]) : p);
       copy.at = shift(copy.at);
       copy.a = shift(copy.a);
       copy.b = shift(copy.b);
-      doc.set.shapes.push(copy);
+      shapesOf(doc).push(copy);
       return `Copied ${s.id} as ${copy.id}.`;
+    },
+  },
+  {
+    name: "prop.new",
+    touches: "props",
+    help: "Start a new prop (a reusable object built from shapes, placed in sets with shape.add {kind: prop}) with one box, and open it for editing. Its origin is on the floor under the middle; +z is its front. {name}.",
+    run: (doc, a) => {
+      const name = propName(a.name);
+      if (doc.props[name]) throw new ActionError(`There's already a prop called ${name}.`);
+      doc.props[name] = {
+        name,
+        shapes: [{ id: "body", type: "box", at: [0, 0.5, 0], size: [1, 1, 1], yaw: 0, tone: 0.7 }],
+      };
+      doc.focus = name;
+      return `Started the prop ${name}: shape actions now build it (prop.done to go back to the set).`;
+    },
+  },
+  {
+    name: "prop.make",
+    touches: "props",
+    help: "Make a prop from shapes already in the set: they move into the prop, and the set gets the prop placed where they were. {name, ids: [shape ids]}.",
+    run: (doc, a) => {
+      if (doc.focus) throw new ActionError("Finish editing the prop first (prop.done).");
+      const name = propName(a.name);
+      if (doc.props[name]) throw new ActionError(`There's already a prop called ${name}.`);
+      const ids = Array.isArray(a.ids) ? a.ids.map(String) : [];
+      const picked = ids.map((id) => shape(doc, id));
+      if (!picked.length) throw new ActionError("Which shapes (`ids`)?");
+      const feet = picked.map(footprint);
+      const xs = feet.map((f) => f[0]);
+      const zs = feet.map((f) => f[1]);
+      const origin: Vec = roundVec([
+        (Math.min(...xs) + Math.max(...xs)) / 2,
+        0,
+        (Math.min(...zs) + Math.max(...zs)) / 2,
+      ]);
+      const back = (p?: Vec) => (p ? roundVec([p[0] - origin[0], p[1], p[2] - origin[2]]) : p);
+      doc.props[name] = {
+        name,
+        shapes: picked.map((s) => {
+          const local: ShapeData = JSON.parse(JSON.stringify(s));
+          local.at = back(local.at);
+          local.a = back(local.a);
+          local.b = back(local.b);
+          return local;
+        }),
+      };
+      doc.set.shapes = doc.set.shapes.filter((x) => !picked.includes(x));
+      const id = freeId(new Set(doc.set.shapes.map((x) => x.id ?? "")), name);
+      doc.set.shapes.push({ id, type: "prop", prop: name, at: origin, yaw: 0, scale: 1 });
+      return `Made the prop ${name} from ${picked.length} shape${picked.length === 1 ? "" : "s"}, placed as ${id}.`;
+    },
+  },
+  {
+    name: "prop.edit",
+    touches: "props",
+    help: "Open a prop for editing: shape actions then change its shapes, in its own frame. {name}.",
+    run: (doc, a) => {
+      const name = str(a.name, "Which prop");
+      if (!doc.props[name])
+        throw new ActionError(
+          `No prop ${name} (props: ${Object.keys(doc.props).join(", ") || "none yet"}).`,
+        );
+      doc.focus = name;
+      return `Editing the prop ${name}.`;
+    },
+  },
+  {
+    name: "prop.update",
+    touches: "props",
+    help: "Change the open prop's notes (what it is, which way it faces). {notes}.",
+    run: (doc, a) => {
+      const prop = doc.focus ? doc.props[doc.focus] : undefined;
+      if (!prop) throw new ActionError("Open a prop first (prop.edit).");
+      prop.notes = typeof a.notes === "string" ? a.notes.trim() : "";
+      return `Changed the notes of ${doc.focus}.`;
+    },
+  },
+  {
+    name: "prop.done",
+    touches: "props",
+    help: "Stop editing a prop and go back to the set. {}.",
+    run: (doc) => {
+      const was = doc.focus;
+      doc.focus = undefined;
+      return was ? `Back to the set (the prop ${was} is saved).` : "Already on the set.";
     },
   },
   {

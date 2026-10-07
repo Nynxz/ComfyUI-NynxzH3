@@ -341,7 +341,12 @@ import type { Selection as ViewSelection } from "./GbViewport.vue";
 /** Where a shared session's editor was looking, for the editor that takes it over. */
 const views = new Map<
   string,
-  { mode: "free" | "shot" | "plan"; selection: ViewSelection | null; time: number; followCuts: boolean }
+  {
+    mode: "free" | "shot" | "plan";
+    selection: ViewSelection | null;
+    time: number;
+    followCuts: boolean;
+  }
 >();
 </script>
 
@@ -423,9 +428,7 @@ const overlay = ref<{
   note?: string;
   /** Several videos side by side: every shot rendered at once. */
   clips?: { title: string; src: string }[];
-} | null>(
-  null,
-);
+} | null>(null);
 const aspect = computed(() => (props.width ?? 832) / (props.height ?? 480));
 
 const evaluator = computed(() => new Evaluator(s.doc.scene, s.doc.set, s.doc.cast));
