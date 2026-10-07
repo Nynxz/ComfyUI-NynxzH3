@@ -547,7 +547,22 @@ function openRenderMenu(e: MouseEvent) {
         disabled: !outOfDate.value.length,
         run: () => render(outOfDate.value),
       },
+      ...(picked.value.length > 1
+        ? [
+            {
+              label: `The ${picked.value.length} picked scenes`,
+              icon: "mdi mdi-checkbox-multiple-marked-outline",
+              run: () => render(pickedInOrder()),
+            },
+          ]
+        : []),
       { label: "Every scene", icon: "mdi mdi-filmstrip", run: () => render(null) },
+      {
+        label: "Pick several: Ctrl/⌘- or Shift-click scenes on the timeline",
+        icon: "mdi mdi-information-outline",
+        disabled: true,
+        run: () => {},
+      },
     ],
     e,
   );
@@ -834,8 +849,32 @@ function toggleFilter(id: string) {
   else hide.add(id);
   view.hide = [...hide];
 }
+// Scenes picked for a render: Ctrl/⌘-click adds or removes one, Shift-click picks the run from the
+// last one picked; a plain click goes back to a single selection.
+const picked = ref<string[]>([]);
+const pickedInOrder = () => project.scenes.map((s) => s.id).filter((id) => picked.value.includes(id));
+function pickScene(id: string, e?: PointerEvent) {
+  const ids = project.scenes.map((s) => s.id);
+  const current = selection.value.kind === "scene" ? selection.value.id : null;
+  // A right-click on a picked scene opens its menu with the pick kept.
+  if (e?.button === 2 && picked.value.includes(id)) return true;
+  if (e?.shiftKey) {
+    const anchor = picked.value.at(-1) ?? current ?? id;
+    const [a, b] = [ids.indexOf(anchor), ids.indexOf(id)].sort((x, y) => x - y);
+    picked.value = [...new Set([...picked.value, ...ids.slice(a, b + 1)])];
+    return true;
+  }
+  if (e?.ctrlKey || e?.metaKey) {
+    const base = picked.value.length ? picked.value : current ? [current] : [];
+    picked.value = base.includes(id) ? base.filter((x) => x !== id) : [...base, id];
+    return true;
+  }
+  picked.value = [];
+  return false;
+}
 const selectedItemIds = computed(() => {
   const s = selection.value;
+  if (picked.value.length > 1) return pickedInOrder();
   if (s.kind !== "ref") return [s.id];
   return tracks.value.flatMap((t) =>
     t.items.filter((i) => i.id.startsWith(`${s.id}|`)).map((i) => i.id),
@@ -881,8 +920,12 @@ function onTrackAction(trackId: string, action: string) {
 // --- the timeline's events ------------------------------------------------------------------------
 const onTrackReorder = (trackId: string, beforeId: string | null) =>
   edit.reorderTrack(project, trackId, beforeId);
-function onTimelineSelect(itemId: string | null, trackId: string) {
-  if (!itemId) return (explicit.value = null);
+function onTimelineSelect(itemId: string | null, trackId: string, e?: PointerEvent) {
+  if (!itemId) {
+    picked.value = [];
+    return (explicit.value = null);
+  }
+  if (trackId === "scenes" && pickScene(itemId, e)) return;
   if (itemId.startsWith("curve:lora:")) return select("lora", trackId.replace(/^lora:/, ""));
   if (itemId.startsWith("ghost:")) {
     const [, edge, sceneId] = itemId.split(":");
@@ -1115,6 +1158,7 @@ const menus = studioMenus(project, {
   seek,
   render,
   staleIds: () => outOfDate.value,
+  pickedScenes: pickedInOrder,
 });
 const refMenu = menus.refMenu;
 function onTimelineContext(target: TimelineTarget, t: number, e: MouseEvent) {

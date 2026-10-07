@@ -47,6 +47,8 @@ export interface MenuActions {
   render: (ids: string[] | null) => void;
   /** Ids of the scenes whose latest render is out of date. */
   staleIds: () => string[];
+  /** Scenes picked on the timeline (Ctrl/⌘- or Shift-click), in film order. */
+  pickedScenes: () => string[];
 }
 
 export function studioMenus(project: Project, a: MenuActions) {
@@ -68,6 +70,15 @@ export function studioMenus(project: Project, a: MenuActions) {
       { label: "Re-roll seed", icon: "mdi mdi-dice-5-outline", run: () => (s.seed = randomSeed()) },
       "-",
       { heading: "Render" },
+      ...(a.pickedScenes().length > 1 && a.pickedScenes().includes(s.id)
+        ? [
+            {
+              label: `The ${a.pickedScenes().length} picked scenes`,
+              icon: "mdi mdi-checkbox-multiple-marked-outline",
+              run: () => a.render(a.pickedScenes()),
+            },
+          ]
+        : []),
       { label: "This scene", icon: "mdi mdi-play-box-outline", run: () => a.render([s.id]) },
       {
         label: "From here to the end",
