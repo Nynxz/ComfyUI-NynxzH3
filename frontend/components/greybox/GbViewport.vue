@@ -98,6 +98,8 @@ ortho.layers.enableAll();
 let orbit: OrbitControls | null = null;
 let gizmo: TransformControls | null = null;
 const handle = new THREE.Object3D();
+// Yaw first, so a pure turn past ±90° reads back as itself rather than mirrored through x = 180°.
+handle.rotation.order = "YXZ";
 world.add(handle);
 
 const hemi = new THREE.HemisphereLight(0xffffff, 0x404048, 1.1);

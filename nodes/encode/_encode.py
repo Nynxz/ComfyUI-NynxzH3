@@ -163,7 +163,7 @@ def plan(items: list[dict], mode: str = "auto") -> dict:
 
     semantic: list[dict] = []
     for item in items:
-        if item in keyframes or item["role"] in _rows.KEYFRAME_ROLES:
+        if any(item is k for k in keyframes) or item["role"] in _rows.KEYFRAME_ROLES:
             continue
         if item["kind"] == "image":
             semantic.append(item)

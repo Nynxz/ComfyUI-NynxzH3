@@ -319,7 +319,7 @@ class Scene:
 
     # positions and look targets ---------------------------------------------------------------
 
-    def point(self, ref: Any, t: float, what: str) -> Vec:
+    def point(self, ref: Any, t: float, what: str, _depth: int = 0) -> Vec:
         """A point named in a key: [x, y, z], a set mark ("stove" or "mark:stove"), or an actor
         ("@ren") — its feet for positions; use `target` for where to look."""
         if isinstance(ref, (list, tuple)):
@@ -329,7 +329,7 @@ class Scene:
             if name in self.set.marks:
                 return self.set.marks[name]
             if ref.startswith("@"):
-                return self.actor_at(ref, t).at
+                return self.actor_at(ref, t, _depth).at
         raise SceneError(
             f"{what}: {ref!r} isn't a point, a mark of the set "
             f"({', '.join(self.set.marks) or 'it has none'}) or an actor."
@@ -349,10 +349,10 @@ class Scene:
         if actor is None:
             raise SceneError(f"There's no actor {aid} in this scene.")
         if _depth > 4:
-            raise SceneError(f"{aid}'s keys look at each other in a loop.")
+            raise SceneError(f"{aid}'s keys look at or stand on each other in a loop.")
         keys = actor.keys
         times = [k.t for k in keys]
-        points = [self.point(k.at, k.t, f"{aid} at {k.t}s") for k in keys]
+        points = [self.point(k.at, k.t, f"{aid} at {k.t}s", _depth + 1) for k in keys]
         at = path_at(times, points, [k.ease for k in keys], t)
         prev = [k for k in keys if k.t <= t] or keys[:1]
         pose = next((k.pose for k in reversed(prev) if k.pose), "stand")
@@ -368,8 +368,8 @@ class Scene:
         if isinstance(face, (int, float)):
             # Between two keys that both give a yaw, it turns from one to the other.
             after = [k for k in keys if k.t > t and isinstance(k.face, (int, float))]
-            last = next(k for k in reversed(before or keys[:1]) if k.face is not None)
-            if after and isinstance(last.face, (int, float)):
+            last = next((k for k in reversed(before) if k.face is not None), None)
+            if last is not None and after and isinstance(last.face, (int, float)):
                 nxt = after[0]
                 u = (t - last.t) / max(nxt.t - last.t, 1e-9)
                 return _angle_lerp(float(last.face), float(nxt.face), min(max(u, 0), 1))
