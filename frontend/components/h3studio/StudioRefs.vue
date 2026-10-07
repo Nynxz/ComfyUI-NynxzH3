@@ -83,7 +83,7 @@
             <div
               class="thumb"
               draggable="true"
-              title="Drag to reorder · hold Shift to see it large"
+              :title="`${inScene(r) ? '' : 'Not used in this scene · '}Drag to reorder · hold Shift to see it large`"
               @dragstart="startDrag(r.id, $event)"
             >
               <MediaThumb :media="r.media" :badge="false" :label="r.name" />
@@ -113,9 +113,7 @@
               >
                 <i class="mdi mdi-volume-high" />
               </span>
-              <span v-if="!inScene(r)" class="outmark" title="Not used in this scene"
-                ><i class="mdi mdi-eye-off"
-              /></span>
+              <span v-if="!inScene(r)" class="outmark"><i class="mdi mdi-eye-off" /></span>
               <div class="meta">
                 <span class="name">@{{ r.name }}</span>
               </div>
@@ -901,6 +899,8 @@ function onEditorDrop(e: DragEvent) {
 .outmark {
   position: absolute;
   inset: 0;
+  /* The hover belongs to the picture under it (Shift shows it large). */
+  pointer-events: none;
   display: grid;
   place-items: center;
   background: rgb(0 0 0 / 45%);

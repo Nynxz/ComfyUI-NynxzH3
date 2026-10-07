@@ -3,11 +3,21 @@
     <!-- scene + its shots: one panel for both, so a scene is worked through without the timeline -->
     <template v-if="(sel.kind === 'shot' || sel.kind === 'scene') && scene">
       <header class="ih scenehead">
-        <ZenIconButton icon="mdi mdi-chevron-left" title="Previous scene" :disabled="sel.sceneIndex === 0" @click="goScene(-1)" />
+        <ZenIconButton
+          icon="mdi mdi-chevron-left"
+          title="Previous scene"
+          :disabled="sel.sceneIndex === 0"
+          @click="goScene(-1)"
+        />
         <ZenSelect
           class="scenepick"
           :model-value="scene.id"
-          :options="project.scenes.map((s, i) => ({ value: s.id, label: `Scene ${i + 1}${s.title ? ` · ${s.title}` : ''}` }))"
+          :options="
+            project.scenes.map((s, i) => ({
+              value: s.id,
+              label: `Scene ${i + 1}${s.title ? ` · ${s.title}` : ''}`,
+            }))
+          "
           @update:model-value="(id: string) => emit('select', { kind: 'scene', id })"
         />
         <ZenIconButton
@@ -16,11 +26,23 @@
           :disabled="sel.sceneIndex === project.scenes.length - 1"
           @click="goScene(1)"
         />
-        <span class="meta len" :title="`${framesFor(scene.seconds)} frames at 24 fps`">{{ scene.seconds.toFixed(1) }}s</span>
+        <span class="meta len" :title="`${framesFor(scene.seconds)} frames at 24 fps`"
+          >{{ scene.seconds.toFixed(1) }}s</span
+        >
         <span class="grow" />
         <ZenPopover v-if="sceneRefs.length" placement="bottom-end">
           <template #trigger="{ toggle }">
-            <button type="button" class="refsbtn" :title="openShot ? 'Insert a reference into the open shot' : 'Open a shot to insert references'" :disabled="!openShot" @click="toggle">
+            <button
+              type="button"
+              class="refsbtn"
+              :title="
+                openShot
+                  ? 'Insert a reference into the open shot'
+                  : 'Open a shot to insert references'
+              "
+              :disabled="!openShot"
+              @click="toggle"
+            >
               <i class="mdi mdi-at" />{{ sceneRefs.length }}
             </button>
           </template>
@@ -32,7 +54,10 @@
                 type="button"
                 class="refcard"
                 :title="`Insert @${r.name}${r.note ? ` — ${r.note}` : ''}`"
-                @click="mention(r.name); close()"
+                @click="
+                  mention(r.name);
+                  close();
+                "
               >
                 <span class="refthumb"><MediaThumb :media="r.media" :badge="false" /></span>
                 <b>@{{ r.name }}</b>
@@ -51,51 +76,103 @@
           placeholder="Name this scene…"
           :aria-label="`Scene ${sel.sceneIndex + 1} title`"
         />
+        <!-- Shots or Settings, one click apart; Settings is this scene's or the whole film's -->
+        <ZenToggleGroup
+          v-model="view"
+          class="viewpick"
+          :options="[
+            { value: 'shots', label: `Shots · ${scene.shots.length}`, icon: 'mdi mdi-filmstrip' },
+            { value: 'settings', label: 'Settings', icon: 'mdi mdi-tune-variant' },
+          ]"
+        />
+        <ZenToggleGroup
+          v-model="level"
+          class="levelpick"
+          :class="{ away: view !== 'settings' }"
+          :options="[
+            {
+              value: 'scene',
+              label: 'This scene',
+              title: 'This scene\'s own settings; what it leaves empty comes from the film',
+            },
+            {
+              value: 'film',
+              label: 'Whole film',
+              title: 'What every scene says unless it says its own',
+            },
+          ]"
+        />
+
         <!-- film settings: what every scene says unless it says its own -->
-        <section class="settings acc filmsec" :class="{ open: section === 'film' }">
-          <button type="button" class="sechead" :aria-expanded="section === 'film'" @click="section = 'film'">
-            <i class="mdi" :class="section === 'film' ? 'mdi-chevron-down' : 'mdi-chevron-right'" />
-            <span>Film</span>
-            <span class="soft ellipsis">{{ film.style || "style, direction, ambience, music" }}</span>
-          </button>
-          <div v-if="section === 'film'" class="accbody">
+        <section
+          v-if="level === 'film'"
+          class="settings pane setpane"
+          :class="{ away: view !== 'settings' }"
+        >
+          <div class="accbody">
             <label class="col">
               <span class="lbl">style</span>
-              <textarea class="fits" v-model="film.style" rows="2" placeholder="the look, e.g. 2D cel animation, painted backgrounds, warm amber light" />
+              <textarea
+                class="fits"
+                v-model="film.style"
+                rows="2"
+                placeholder="the look, e.g. 2D cel animation, painted backgrounds, warm amber light"
+              />
             </label>
             <label class="col">
               <span class="lbl">direction</span>
-              <textarea class="fits" v-model="film.direction" rows="2" placeholder="how it's made, e.g. animated on twos, held poses, smear frames on fast moves" />
+              <textarea
+                class="fits"
+                v-model="film.direction"
+                rows="2"
+                placeholder="how it's made, e.g. animated on twos, held poses, smear frames on fast moves"
+              />
             </label>
             <label class="col">
               <span class="lbl">ambience</span>
-              <textarea class="fits" v-model="film.soundscape" rows="2" placeholder="e.g. rain on glass, distant traffic" />
+              <textarea
+                class="fits"
+                v-model="film.soundscape"
+                rows="2"
+                placeholder="e.g. rain on glass, distant traffic"
+              />
             </label>
             <label class="col">
               <span class="lbl">music</span>
-              <textarea class="fits" v-model="film.music" rows="2" placeholder="leave empty for none" />
+              <textarea
+                class="fits"
+                v-model="film.music"
+                rows="2"
+                placeholder="leave empty for none"
+              />
             </label>
           </div>
         </section>
 
         <!-- scene settings -->
-        <section class="settings acc scenesec" :class="{ open: section === 'scene' }">
-          <button type="button" class="sechead" :aria-expanded="section === 'scene'" @click="section = 'scene'">
-            <i class="mdi" :class="section === 'scene' ? 'mdi-chevron-down' : 'mdi-chevron-right'" />
-            <span>Scene settings</span>
-            <span class="soft">
-              {{ sel.sceneIndex > 0 ? continuationOf(scene.continuation.mode).label.toLowerCase() : "opens the film" }}
-              <template v-if="edgeKeyframe('first') || edgeKeyframe('last')"> · keyframes</template>
-            </span>
-          </button>
-          <div v-if="section === 'scene'" class="accbody">
-            <label class="row" title="H3 renders in steps of 17 frames, so the length rounds up a little">
+        <section v-else class="settings pane setpane" :class="{ away: view !== 'settings' }">
+          <div class="accbody">
+            <label
+              class="row"
+              title="H3 renders in steps of 17 frames, so the length rounds up a little"
+            >
               <span class="lbl">length</span>
-              <ZenNumber :model-value="scene.seconds" :min="1" :max="30" :step="0.5" :precision="2" @update:model-value="(v: number) => emit('seconds', sel.sceneIndex, v)" />
+              <ZenNumber
+                :model-value="scene.seconds"
+                :min="1"
+                :max="30"
+                :step="0.5"
+                :precision="2"
+                @update:model-value="(v: number) => emit('seconds', sel.sceneIndex, v)"
+              />
               <span class="soft">s</span>
             </label>
             <div class="row">
-              <span class="lbl" title="This scene's noise seed. The workflow uses it when H3 Studio Outputs' seed is wired to Random Noise.">seed</span>
+              <span
+                class="lbl"
+                title="This scene's noise seed. The workflow uses it when H3 Studio Outputs' seed is wired to Random Noise."
+                >seed</span
+              >
               <ZenNumber
                 class="seed"
                 :model-value="scene.seed"
@@ -139,126 +216,233 @@
                 type="button"
                 class="kf"
                 :class="{ set: !!edgeKeyframe(edge) }"
-                :title="edgeKeyframe(edge) ? `The ${edge} frame — click to select` : `Set the ${edge} frame`"
-                @click="edgeKeyframe(edge) ? emit('select', { kind: 'keyframe', id: edgeKeyframe(edge)!.id }) : emit('setKeyframe', sel.sceneIndex, edge)"
+                :title="
+                  edgeKeyframe(edge)
+                    ? `The ${edge} frame — click to select`
+                    : `Set the ${edge} frame`
+                "
+                @click="
+                  edgeKeyframe(edge)
+                    ? emit('select', { kind: 'keyframe', id: edgeKeyframe(edge)!.id })
+                    : emit('setKeyframe', sel.sceneIndex, edge)
+                "
               >
-                <MediaThumb v-if="edgeKeyframe(edge)" :media="edgeKeyframe(edge)!.media" :badge="false" />
-                <i v-else class="mdi" :class="edge === 'first' ? 'mdi-page-first' : 'mdi-page-last'" />
+                <MediaThumb
+                  v-if="edgeKeyframe(edge)"
+                  :media="edgeKeyframe(edge)!.media"
+                  :badge="false"
+                />
+                <i
+                  v-else
+                  class="mdi"
+                  :class="edge === 'first' ? 'mdi-page-first' : 'mdi-page-last'"
+                />
                 <span class="kfl">{{ edge }}</span>
               </button>
               <span v-if="keyframeHint" class="hintline">{{ keyframeHint }}</span>
             </div>
             <label class="col">
-              <span class="lbl">direction</span>
-              <textarea class="fits" v-model="scene.direction" rows="2" :placeholder="project.direction || 'the film\'s direction (Film, above)'" />
+              <span class="lbl own"
+                >direction
+                <span v-if="scene.direction" class="ownmark">this scene's</span>
+                <span v-else class="soft">the film's</span>
+                <button
+                  v-if="scene.direction"
+                  type="button"
+                  class="reset"
+                  title="Use the film's again"
+                  @click.prevent="scene.direction = ''"
+                >
+                  <i class="mdi mdi-close" />
+                </button>
+              </span>
+              <textarea
+                class="fits"
+                v-model="scene.direction"
+                rows="2"
+                :placeholder="project.direction || 'the film\'s direction (Film, above)'"
+              />
             </label>
             <label class="col">
-              <span class="lbl">ambience</span>
-              <textarea class="fits" v-model="scene.soundscape" rows="2" :placeholder="project.soundscape || 'e.g. rain on glass, distant traffic'" />
+              <span class="lbl own"
+                >ambience
+                <span v-if="scene.soundscape" class="ownmark">this scene's</span>
+                <span v-else class="soft">the film's</span>
+                <button
+                  v-if="scene.soundscape"
+                  type="button"
+                  class="reset"
+                  title="Use the film's again"
+                  @click.prevent="scene.soundscape = ''"
+                >
+                  <i class="mdi mdi-close" />
+                </button>
+              </span>
+              <textarea
+                class="fits"
+                v-model="scene.soundscape"
+                rows="2"
+                :placeholder="project.soundscape || 'e.g. rain on glass, distant traffic'"
+              />
             </label>
             <label class="col">
-              <span class="lbl">music</span>
-              <textarea class="fits" v-model="scene.music" rows="2" :placeholder="project.music || 'leave empty for none'" />
+              <span class="lbl own"
+                >music
+                <span v-if="scene.music" class="ownmark">this scene's</span>
+                <span v-else class="soft">the film's</span>
+                <button
+                  v-if="scene.music"
+                  type="button"
+                  class="reset"
+                  title="Use the film's again"
+                  @click.prevent="scene.music = ''"
+                >
+                  <i class="mdi mdi-close" />
+                </button>
+              </span>
+              <textarea
+                class="fits"
+                v-model="scene.music"
+                rows="2"
+                :placeholder="project.music || 'leave empty for none'"
+              />
             </label>
           </div>
         </section>
 
         <!-- shots -->
-        <section class="shots acc" :class="{ open: section === 'shots' }">
-          <button type="button" class="sechead shotshead" :aria-expanded="section === 'shots'" @click="section = 'shots'">
-            <i class="mdi" :class="section === 'shots' ? 'mdi-chevron-down' : 'mdi-chevron-right'" />
-            <span>Shots</span>
-            <span class="soft ellipsis">{{ scene.shots.length }} · {{ scene.seconds.toFixed(1) }}s</span>
-          </button>
+        <section class="shots pane" :class="{ away: view !== 'shots' }">
           <div ref="shotsEl" class="accbody shotlist">
-          <div
-            v-for="(sh, i) in scene.shots"
-            :key="sh.id"
-            class="shotcard"
-            :class="{ open: openShot?.id === sh.id, lifted: draggingShot === sh.id }"
-          >
-            <div class="shothead" @click="openShotCard(sh.id)">
-              <span
-                v-if="scene.shots.length > 1"
-                class="grip"
-                title="Drag to reorder — the shot keeps its length, text and lines"
-                @pointerdown.stop="startShotDrag($event, sh.id)"
-                @click.stop
-              >
-                <i class="mdi mdi-drag-vertical" />
-              </span>
-              <span class="swatch" :style="{ background: colors[i] }" />
-              <b>Shot {{ i + 1 }}</b>
-              <i
-                v-if="i > 0 && (sh.transition ?? 'cut') !== 'cut'"
-                class="mdi trans"
-                :class="transitionOf(sh).icon"
-                :title="transitionOf(sh).title"
-              />
-              <span class="soft">{{ formatTime(sh.at) }} – {{ formatTime(scene.shots[i + 1]?.at ?? scene.seconds) }}</span>
-              <span v-if="openShot?.id !== sh.id" class="shotpeek" :class="{ empty: !sh.text.trim() }">
-                <template v-if="sh.text.trim()">
-                  <template v-for="(part, j) in mentionParts(sh.text)" :key="j">
-                    <b v-if="part.ref" :class="{ unknown: !part.known }">{{ part.text }}</b>
-                    <template v-else>{{ part.text }}</template>
-                  </template>
-                </template>
-                <template v-else>no text yet</template>
-              </span>
-              <span class="grow" />
-              <span v-if="sh.lines?.length" class="shotlines" :title="`${sh.lines.length} line${sh.lines.length === 1 ? '' : 's'} of dialogue`">
-                <i class="mdi mdi-comment-quote-outline" />{{ sh.lines.length }}
-              </span>
-              <StudioDraft v-if="openShot?.id === sh.id" :project="project" :scene-index="sel.sceneIndex" :shot-index="i" part="button" />
-              <ZenIconButton
-                v-if="scene.shots.length > 1"
-                icon="mdi mdi-trash-can-outline"
-                title="Remove this shot"
-                @click.stop="emit('removeShot', sh.id)"
-              />
-            </div>
-            <template v-if="openShot?.id === sh.id">
-              <ZenMentionInput
-                v-model="sh.text"
-                class="prompt"
-                resizable
-                :items="mentionItems"
-                :placeholder="i === 0 ? 'What happens in this shot? Type @ to bring in a reference.' : 'The camera cuts to… (@ for references)'"
-              >
-                <template #thumb="{ item }">
-                  <MediaThumb :media="mediaOf(item.key)" :badge="false" />
-                </template>
-                <template #preview="{ item }">
-                  <div class="peek"><MediaThumb :media="mediaOf(item.key)" :badge="false" play /></div>
-                </template>
-              </ZenMentionInput>
-              <StudioDraft :project="project" :scene-index="sel.sceneIndex" :shot-index="i" part="box" />
-              <label v-if="i > 0" class="row" :title="transitionOf(sh).title">
-                <span class="lbl">transition</span>
-                <ZenSelect
-                  class="transition"
-                  :model-value="sh.transition ?? 'cut'"
-                  :options="TRANSITIONS.map((t) => ({ value: t.value, label: t.label }))"
-                  @update:model-value="(v: string) => setTransition(sh, v)"
+            <div
+              v-for="(sh, i) in scene.shots"
+              :key="sh.id"
+              class="shotcard"
+              :class="{ open: openShot?.id === sh.id, lifted: draggingShot === sh.id }"
+            >
+              <div class="shothead" @click="openShotCard(sh.id)">
+                <span
+                  v-if="scene.shots.length > 1"
+                  class="grip"
+                  title="Drag to reorder — the shot keeps its length, text and lines"
+                  @pointerdown.stop="startShotDrag($event, sh.id)"
+                  @click.stop
+                >
+                  <i class="mdi mdi-drag-vertical" />
+                </span>
+                <span class="swatch" :style="{ background: colors[i] }" />
+                <b>Shot {{ i + 1 }}</b>
+                <i
+                  v-if="i > 0 && (sh.transition ?? 'cut') !== 'cut'"
+                  class="mdi trans"
+                  :class="transitionOf(sh).icon"
+                  :title="transitionOf(sh).title"
                 />
-              </label>
-              <label v-if="i > 0" class="row">
-                <span class="lbl">starts at</span>
-                <ZenNumber :model-value="sh.at" :min="0" :max="scene.seconds" :step="0.1" :precision="2" @update:model-value="(v: number) => setShotStart(i, v)" />
-                <span class="soft">s into the scene</span>
-              </label>
-              <StudioDialogue
-                :project="project"
-                :scene="scene"
-                :shot="sh"
-                :index="i"
-                :seconds="(scene.shots[i + 1]?.at ?? scene.seconds) - sh.at"
-                :last="i === scene.shots.length - 1"
-                @voice="(id: string) => emit('voice', id)"
-              />
-            </template>
-          </div>
-          <ZenButton sm variant="ghost" icon="mdi mdi-plus" title="Split the last shot in two" @click="emit('addShot', sel.sceneIndex)">Shot</ZenButton>
+                <span class="soft"
+                  >{{ formatTime(sh.at) }} –
+                  {{ formatTime(scene.shots[i + 1]?.at ?? scene.seconds) }}</span
+                >
+                <span
+                  v-if="openShot?.id !== sh.id"
+                  class="shotpeek"
+                  :class="{ empty: !sh.text.trim() }"
+                >
+                  <template v-if="sh.text.trim()">
+                    <template v-for="(part, j) in mentionParts(sh.text)" :key="j">
+                      <b v-if="part.ref" :class="{ unknown: !part.known }">{{ part.text }}</b>
+                      <template v-else>{{ part.text }}</template>
+                    </template>
+                  </template>
+                  <template v-else>no text yet</template>
+                </span>
+                <span class="grow" />
+                <span
+                  v-if="sh.lines?.length"
+                  class="shotlines"
+                  :title="`${sh.lines.length} line${sh.lines.length === 1 ? '' : 's'} of dialogue`"
+                >
+                  <i class="mdi mdi-comment-quote-outline" />{{ sh.lines.length }}
+                </span>
+                <StudioDraft
+                  v-if="openShot?.id === sh.id"
+                  :project="project"
+                  :scene-index="sel.sceneIndex"
+                  :shot-index="i"
+                  part="button"
+                />
+                <ZenIconButton
+                  v-if="scene.shots.length > 1"
+                  icon="mdi mdi-trash-can-outline"
+                  title="Remove this shot"
+                  @click.stop="emit('removeShot', sh.id)"
+                />
+              </div>
+              <template v-if="openShot?.id === sh.id">
+                <ZenMentionInput
+                  v-model="sh.text"
+                  class="prompt"
+                  resizable
+                  :items="mentionItems"
+                  :placeholder="
+                    i === 0
+                      ? 'What happens in this shot? Type @ to bring in a reference.'
+                      : 'The camera cuts to… (@ for references)'
+                  "
+                >
+                  <template #thumb="{ item }">
+                    <MediaThumb :media="mediaOf(item.key)" :badge="false" />
+                  </template>
+                  <template #preview="{ item }">
+                    <div class="peek">
+                      <MediaThumb :media="mediaOf(item.key)" :badge="false" play />
+                    </div>
+                  </template>
+                </ZenMentionInput>
+                <StudioDraft
+                  :project="project"
+                  :scene-index="sel.sceneIndex"
+                  :shot-index="i"
+                  part="box"
+                />
+                <label v-if="i > 0" class="row" :title="transitionOf(sh).title">
+                  <span class="lbl">transition</span>
+                  <ZenSelect
+                    class="transition"
+                    :model-value="sh.transition ?? 'cut'"
+                    :options="TRANSITIONS.map((t) => ({ value: t.value, label: t.label }))"
+                    @update:model-value="(v: string) => setTransition(sh, v)"
+                  />
+                </label>
+                <label v-if="i > 0" class="row">
+                  <span class="lbl">starts at</span>
+                  <ZenNumber
+                    :model-value="sh.at"
+                    :min="0"
+                    :max="scene.seconds"
+                    :step="0.1"
+                    :precision="2"
+                    @update:model-value="(v: number) => setShotStart(i, v)"
+                  />
+                  <span class="soft">s into the scene</span>
+                </label>
+                <StudioDialogue
+                  :project="project"
+                  :scene="scene"
+                  :shot="sh"
+                  :index="i"
+                  :seconds="(scene.shots[i + 1]?.at ?? scene.seconds) - sh.at"
+                  :last="i === scene.shots.length - 1"
+                  @voice="(id: string) => emit('voice', id)"
+                />
+              </template>
+            </div>
+            <ZenButton
+              sm
+              variant="ghost"
+              icon="mdi mdi-plus"
+              title="Split the last shot in two"
+              @click="emit('addShot', sel.sceneIndex)"
+              >Shot</ZenButton
+            >
           </div>
         </section>
       </div>
@@ -292,13 +476,24 @@
       </div>
       <div class="col">
         <span class="lbl">per scene — a scene renders all its frames at one strength</span>
-        <div class="lscenes" title="Or drag each scene's bar on the timeline. Dashed bars follow the lane's strength.">
+        <div
+          class="lscenes"
+          title="Or drag each scene's bar on the timeline. Dashed bars follow the lane's strength."
+        >
           <label
             v-for="(sc, i) in project.scenes"
             :key="sc.id"
             class="lscene"
-            :class="{ here: i === currentScene, own: lane.scenes?.[sc.id] !== undefined, zero: laneScenes[i] === 0 }"
-            :title="lane.scenes?.[sc.id] !== undefined ? `Scene ${i + 1} has its own strength` : `Scene ${i + 1} follows the lane's strength`"
+            :class="{
+              here: i === currentScene,
+              own: lane.scenes?.[sc.id] !== undefined,
+              zero: laneScenes[i] === 0,
+            }"
+            :title="
+              lane.scenes?.[sc.id] !== undefined
+                ? `Scene ${i + 1} has its own strength`
+                : `Scene ${i + 1} follows the lane's strength`
+            "
           >
             S{{ i + 1 }}
             <ZenNumber
@@ -325,8 +520,11 @@
         <i class="mdi mdi-information-outline" />
         This lane has step shapes, but with dynamic VRAM on they can't change over the steps, so
         they apply as their average:
-        <b>×{{ shapeMean(lane.sampling).toFixed(2) }}</b><template v-if="shapedScenes.length">
-          for the lane, and their own for {{ shapedScenes.length }} scene{{ shapedScenes.length === 1 ? "" : "s" }}</template
+        <b>×{{ shapeMean(lane.sampling).toFixed(2) }}</b
+        ><template v-if="shapedScenes.length">
+          for the lane, and their own for {{ shapedScenes.length }} scene{{
+            shapedScenes.length === 1 ? "" : "s"
+          }}</template
         >.
         <button type="button" class="linkbtn" @click="clearShapes">Remove step shapes</button>
       </p>
@@ -334,7 +532,9 @@
         <button type="button" class="sechead" @click="stepsOpen = !stepsOpen">
           <i class="mdi" :class="stepsOpen ? 'mdi-chevron-down' : 'mdi-chevron-right'" />
           ∿ Within each scene: over the sampling steps
-          <span class="soft">{{ isShaped(lane.sampling) || shapedScenes.length ? "shaped" : "constant" }}</span>
+          <span class="soft">{{
+            isShaped(lane.sampling) || shapedScenes.length ? "shaped" : "constant"
+          }}</span>
         </button>
         <div v-if="stepsOpen" class="col">
           <span class="lbl">the lane's shape — for every scene without its own</span>
@@ -348,14 +548,19 @@
           />
           <span class="hintline">
             Advanced. Multiplies the scene's strength while it is made: the first steps settle the
-            layout and motion, the last ones the detail. Flat at 1 does nothing. Give a scene its own
-            shape on the timeline (the lane's ∿ button).
+            layout and motion, the last ones the detail. Flat at 1 does nothing. Give a scene its
+            own shape on the timeline (the lane's ∿ button).
           </span>
           <div v-if="shapedScenes.length" class="row">
             <span class="lbl">own shape</span>
             <span v-for="i in shapedScenes" :key="i" class="lscene own">
               S{{ i + 1 }}
-              <button type="button" class="unown" title="Follow the lane's shape again" @click="unshape(project.scenes[i]!.id)">
+              <button
+                type="button"
+                class="unown"
+                title="Follow the lane's shape again"
+                @click="unshape(project.scenes[i]!.id)"
+              >
                 <i class="mdi mdi-close" />
               </button>
             </span>
@@ -370,7 +575,10 @@
         <span class="ttl">Keyframe</span>
         <span class="meta">scene {{ sel.sceneIndex + 1 }} · {{ keyframeRole }}</span>
       </header>
-      <div class="fitframe" :style="{ aspectRatio: `${project.canvas.width} / ${project.canvas.height}` }">
+      <div
+        class="fitframe"
+        :style="{ aspectRatio: `${project.canvas.width} / ${project.canvas.height}` }"
+      >
         <img :class="keyframe.fit ?? 'crop'" :src="stableUrl(keyframe.media)" alt="" />
       </div>
       <div class="row">
@@ -378,21 +586,38 @@
         <ZenToggleGroup
           :model-value="keyframe.fit ?? 'crop'"
           :options="[
-            { value: 'crop', label: 'Crop', title: 'Fill the canvas, cutting off what doesn\'t fit' },
-            { value: 'stretch', label: 'Stretch', title: 'Squash it onto the canvas, keeping everything' },
+            {
+              value: 'crop',
+              label: 'Crop',
+              title: 'Fill the canvas, cutting off what doesn\'t fit',
+            },
+            {
+              value: 'stretch',
+              label: 'Stretch',
+              title: 'Squash it onto the canvas, keeping everything',
+            },
           ]"
-          @update:model-value="(v: string) => (keyframe!.fit = v === 'stretch' ? 'stretch' : 'crop')"
+          @update:model-value="
+            (v: string) => (keyframe!.fit = v === 'stretch' ? 'stretch' : 'crop')
+          "
         />
         <span class="soft">as H3 will see it, in the canvas's shape</span>
       </div>
       <div class="row">
         <ZenButton sm icon="mdi mdi-page-first" @click="keyframe.at = 0">First frame</ZenButton>
-        <ZenButton sm icon="mdi mdi-page-last" @click="keyframe.at = scene!.seconds">Last frame</ZenButton>
+        <ZenButton sm icon="mdi mdi-page-last" @click="keyframe.at = scene!.seconds"
+          >Last frame</ZenButton
+        >
         <span class="grow" />
-        <ZenButton sm variant="danger" icon="mdi mdi-trash-can-outline" @click="emit('removeKeyframe', keyframe.id)">Remove</ZenButton>
+        <ZenButton
+          sm
+          variant="danger"
+          icon="mdi mdi-trash-can-outline"
+          @click="emit('removeKeyframe', keyframe.id)"
+          >Remove</ZenButton
+        >
       </div>
     </template>
-
   </div>
 </template>
 
@@ -445,7 +670,12 @@ export interface Selection {
   shotIndex: number;
 }
 
-const props = defineProps<{ project: Project; sel: Selection; currentScene: number; compiled: Compiled | null }>();
+const props = defineProps<{
+  project: Project;
+  sel: Selection;
+  currentScene: number;
+  compiled: Compiled | null;
+}>();
 const emit = defineEmits<{
   select: [target: { kind: Selection["kind"]; id: string }];
   seconds: [scene: number, seconds: number];
@@ -460,22 +690,30 @@ const scene = computed(() => props.project.scenes[props.sel.sceneIndex]);
 // --- scene panel ---------------------------------------------------------------------------------
 // Selecting a shot opens its card; selecting the scene opens its settings (and keeps whichever
 // card you last had open). Cards are opened by selecting the shot, so the timeline follows.
-/** The one open section of the scene panel; picking the scene opens its settings, a shot its shots. */
-const section = ref<"film" | "scene" | "shots">(props.sel.kind === "scene" ? "scene" : "shots");
+/** What the scene panel shows: its shots, or its settings (this scene's, or the whole film's).
+ *  Picking a shot shows the shots; picking the scene, its settings. */
+const view = ref<"shots" | "settings">(props.sel.kind === "scene" ? "settings" : "shots");
+const level = ref<"scene" | "film">("scene");
 /** The film-wide settings: the project itself, edited in place like a scene. */
 const film = computed(() => props.project);
 const lastOpenShot = ref<string | null>(props.sel.kind === "shot" ? props.sel.id : null);
 watch(
   () => [props.sel.kind, props.sel.id] as const,
   ([kind, id]) => {
-    if (kind === "scene") section.value = "scene";
-    else if (kind === "shot") {
-      section.value = "shots";
+    if (kind === "scene") {
+      view.value = "settings";
+      level.value = "scene";
+    } else if (kind === "shot") {
+      view.value = "shots";
       lastOpenShot.value = id;
     }
   },
 );
-const openShot = computed(() => scene.value?.shots.find((s) => s.id === (props.sel.kind === "shot" ? props.sel.id : lastOpenShot.value)));
+const openShot = computed(() =>
+  scene.value?.shots.find(
+    (s) => s.id === (props.sel.kind === "shot" ? props.sel.id : lastOpenShot.value),
+  ),
+);
 function openShotCard(id: string) {
   emit("select", { kind: "shot", id });
 }
@@ -494,11 +732,18 @@ function setShotStart(i: number, v: number) {
 const refNames = computed(() => new Set(sceneRefs.value.map((r) => r.name.toLowerCase())));
 function mentionParts(text: string) {
   const line = text.replace(/\s+/g, " ").trim();
-  return line.split(/(@[\w-]+)/).map((t) => ({ text: t, ref: t.startsWith("@"), known: refNames.value.has(t.slice(1).toLowerCase()) }));
+  return line
+    .split(/(@[\w-]+)/)
+    .map((t) => ({
+      text: t,
+      ref: t.startsWith("@"),
+      known: refNames.value.has(t.slice(1).toLowerCase()),
+    }));
 }
 const keyframe = computed(() => scene.value?.keyframes.find((k) => k.id === props.sel.id));
 const colors = computed(() => (scene.value ? shotColors(scene.value) : []));
-const transitionOf = (sh: Shot) => TRANSITIONS.find((t) => t.value === (sh.transition ?? "cut")) ?? TRANSITIONS[0]!;
+const transitionOf = (sh: Shot) =>
+  TRANSITIONS.find((t) => t.value === (sh.transition ?? "cut")) ?? TRANSITIONS[0]!;
 function setContinuation(value: string) {
   const found = CONTINUATIONS.find((c) => c.value === value);
   if (found && scene.value) scene.value.continuation.mode = found.value;
@@ -529,7 +774,12 @@ function startShotDrag(e: PointerEvent, id: string) {
     };
     const above = mid(cards[at - 1]);
     const below = mid(cards[at + 1]);
-    const to = above !== null && m.clientY < above ? at - 1 : below !== null && m.clientY > below ? at + 1 : at;
+    const to =
+      above !== null && m.clientY < above
+        ? at - 1
+        : below !== null && m.clientY > below
+          ? at + 1
+          : at;
     if (to !== at) reorderShot(props.project, props.sel.sceneIndex, at, to);
   };
   const up = () => {
@@ -544,9 +794,18 @@ function startShotDrag(e: PointerEvent, id: string) {
 // --- LoRA lane ----------------------------------------------------------------------------------
 const lane = computed(() => props.project.loras?.find((l) => l.id === props.sel.id));
 const laneScenes = computed(() =>
-  lane.value ? props.project.scenes.map((_, i) => (lane.value!.enabled ? sceneLoraStrength(props.project, lane.value!, i) : 0)) : [],
+  lane.value
+    ? props.project.scenes.map((_, i) =>
+        lane.value!.enabled ? sceneLoraStrength(props.project, lane.value!, i) : 0,
+      )
+    : [],
 );
-const ownCount = computed(() => Object.keys(lane.value?.scenes ?? {}).filter((id) => props.project.scenes.some((s) => s.id === id)).length);
+const ownCount = computed(
+  () =>
+    Object.keys(lane.value?.scenes ?? {}).filter((id) =>
+      props.project.scenes.some((s) => s.id === id),
+    ).length,
+);
 /** Give a scene its own strength, or (null) let it follow the lane's again. */
 function setSceneStrength(sceneId: string, v: number | null) {
   const l = lane.value;
@@ -557,18 +816,24 @@ function setSceneStrength(sceneId: string, v: number | null) {
   l.scenes = scenes;
 }
 /** Scenes (by index) with their own shape over the steps. */
-const shapedScenes = computed(() => props.project.scenes.flatMap((sc, i) => (lane.value?.steps?.[sc.id] ? [i] : [])));
+const shapedScenes = computed(() =>
+  props.project.scenes.flatMap((sc, i) => (lane.value?.steps?.[sc.id] ? [i] : [])),
+);
 function unshape(sceneId: string) {
   const l = lane.value;
   if (l) l.steps = Object.fromEntries(Object.entries(l.steps ?? {}).filter(([k]) => k !== sceneId));
 }
-const hasShapes = computed(() => !!lane.value && (isShaped(lane.value.sampling) || shapedScenes.value.length > 0));
+const hasShapes = computed(
+  () => !!lane.value && (isShaped(lane.value.sampling) || shapedScenes.value.length > 0),
+);
 function clearShapes() {
   if (!lane.value) return;
   lane.value.sampling = [];
   lane.value.steps = {};
 }
-const stepsOpen = ref(lane.value ? isShaped(lane.value.sampling) || shapedScenes.value.length > 0 : false);
+const stepsOpen = ref(
+  lane.value ? isShaped(lane.value.sampling) || shapedScenes.value.length > 0 : false,
+);
 /** The lane's curve over the steps, as the editor's x/y points. */
 const samplingCurve = computed({
   get: () => (lane.value?.sampling ?? []).map((p) => ({ x: p.p, y: p.v })),
@@ -577,21 +842,49 @@ const samplingCurve = computed({
   },
 });
 const SAMPLING_PRESETS: CurvePreset[] = [
-  { label: "Constant", icon: "mdi mdi-minus", title: "The same strength at every step", points: [] },
+  {
+    label: "Constant",
+    icon: "mdi mdi-minus",
+    title: "The same strength at every step",
+    points: [],
+  },
   {
     label: "Early only",
     icon: "mdi mdi-arrow-collapse-left",
     title: "High noise only: shapes composition and motion, leaves detail to the base model",
-    points: [{ x: 0, y: 1 }, { x: 0.4, y: 1 }, { x: 0.5, y: 0 }],
+    points: [
+      { x: 0, y: 1 },
+      { x: 0.4, y: 1 },
+      { x: 0.5, y: 0 },
+    ],
   },
   {
     label: "Late only",
     icon: "mdi mdi-arrow-collapse-right",
     title: "Low noise only: keeps the base model's composition, adds the LoRA's look and detail",
-    points: [{ x: 0.4, y: 0 }, { x: 0.5, y: 1 }],
+    points: [
+      { x: 0.4, y: 0 },
+      { x: 0.5, y: 1 },
+    ],
   },
-  { label: "Fade in", icon: "mdi mdi-trending-up", title: "From nothing to full over the steps", points: [{ x: 0, y: 0 }, { x: 1, y: 1 }] },
-  { label: "Fade out", icon: "mdi mdi-trending-down", title: "From full to nothing over the steps", points: [{ x: 0, y: 1 }, { x: 1, y: 0 }] },
+  {
+    label: "Fade in",
+    icon: "mdi mdi-trending-up",
+    title: "From nothing to full over the steps",
+    points: [
+      { x: 0, y: 0 },
+      { x: 1, y: 1 },
+    ],
+  },
+  {
+    label: "Fade out",
+    icon: "mdi mdi-trending-down",
+    title: "From full to nothing over the steps",
+    points: [
+      { x: 0, y: 1 },
+      { x: 1, y: 0 },
+    ],
+  },
 ];
 const keyframeRole = computed(() => {
   const k = keyframe.value;
@@ -621,7 +914,9 @@ const tagOf = (id: string) => props.compiled?.refs.find((r) => r.id === id)?.tag
 const mentionItems = computed<MentionItem[]>(() =>
   sceneRefs.value.map((r) => ({
     key: r.name,
-    detail: [tagOf(r.id), r.note].filter(Boolean).join(" · ") || (r.kind === "image" ? "picture" : r.kind),
+    detail:
+      [tagOf(r.id), r.note].filter(Boolean).join(" · ") ||
+      (r.kind === "image" ? "picture" : r.kind),
   })),
 );
 const mediaOf = (name: string) => props.project.refs.find((r) => r.name === name)?.media ?? "";
@@ -631,7 +926,6 @@ function mention(name: string) {
   if (!s) return;
   s.text = `${s.text.trimEnd()}${s.text.trim() ? " " : ""}@${name} `;
 }
-
 </script>
 
 <style scoped>
@@ -980,30 +1274,56 @@ function mention(name: string) {
   gap: 8px;
   min-height: 0;
 }
-.acc {
+.pane {
   display: flex;
-  flex: none;
+  flex: 1 1 auto;
   flex-direction: column;
   min-height: 0;
 }
-.acc.open {
-  flex: 1 1 auto;
+.viewpick,
+.levelpick {
+  flex: none;
+}
+.scenebody .away {
+  display: none;
+}
+.lbl.own {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.lbl .ownmark {
+  color: var(--zen-accent, #6366f1);
+  font-weight: 600;
+}
+.lbl .reset {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--h3-muted);
+  cursor: pointer;
+}
+.lbl .reset:hover {
+  background: color-mix(in srgb, var(--h3-text) 10%, transparent);
+  color: var(--h3-text);
 }
 .accbody {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
-.acc.open > .accbody {
+.pane > .accbody {
   flex: 1;
   min-height: 0;
   margin-right: -4px;
   padding-right: 4px;
   overflow-y: auto;
   scrollbar-gutter: stable;
-}
-.shots:not(.open) > .shotlist {
-  display: none;
 }
 /* Settings text is as tall as what's written in it. */
 .inspector textarea.fits {
@@ -1329,12 +1649,20 @@ function mention(name: string) {
     grid-row: 1;
     margin: 0;
   }
-  .filmsec {
+  /* Wide: settings on the left, the shots beside them, so there's nothing to switch between. */
+  .scenebody .viewpick {
+    display: none;
+  }
+  .scenebody .levelpick.away,
+  .scenebody .setpane.away,
+  .scenebody .shots.away {
+    display: flex;
+  }
+  .levelpick {
     grid-column: 1;
     grid-row: 2;
-    max-height: 100%;
   }
-  .scenesec {
+  .setpane {
     grid-column: 1;
     grid-row: 3;
     align-self: start;
@@ -1346,9 +1674,6 @@ function mention(name: string) {
     grid-row: 1 / span 3;
     min-height: 0;
     max-height: 100%;
-  }
-  .shotshead {
-    display: none;
   }
   .shots > .shotlist {
     display: flex;
