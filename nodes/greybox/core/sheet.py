@@ -61,12 +61,31 @@ def shot_frames(
     t0 = shot.start if start is None else start
     n = count or max(1, round((shot.end - shot.start) * rate))
     out = torch.empty(n, height, width, 3)
+    depths = []
     for i in range(n):
         t = t0 + i / rate
         o, d = camera_rays(scene.camera(shot, t), width, height, device)
         f = render(shapes_at(scene, t), o, d, width, height)
-        out[i] = (depth_image(f.depth) if depth else f.image).cpu()
+        if depth:
+            depths.append(f.depth.to("cpu", torch.float16))
+        else:
+            out[i] = f.image.cpu()
+    if depth:
+        # One near and far for the whole shot: per frame, the greys pumped as things moved, which
+        # a ControlNet reads as the geometry changing.
+        near, far = _depth_range(depths)
+        for i, dd in enumerate(depths):
+            out[i] = depth_image(dd.float(), near, far)
     return out
+
+
+def _depth_range(depths: list[torch.Tensor]) -> tuple[float, float]:
+    """Near and far over a run of depth frames: the 2nd and 98th percentile distances, so the road
+    right under a low camera doesn't take the whole range."""
+    sample = torch.cat([d[torch.isfinite(d)].float()[::97] for d in depths])
+    if sample.numel() == 0:
+        return 0.0, 1.0
+    return float(sample.quantile(0.02)), float(sample.quantile(0.98))
 
 
 def scene_frames(

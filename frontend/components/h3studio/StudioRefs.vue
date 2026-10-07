@@ -17,133 +17,146 @@
     </div>
 
     <div class="strip">
-    <section
-      v-for="sec in sections"
-      :key="sec.id"
-      class="sec"
-      :class="{ vacant: !sec.refs.length, slim: isFolded(sec) }"
-      :style="{ '--n': Math.max(1, sec.refs.length) }"
-      :title="isFolded(sec) ? `${sec.label}${sec.hint ? ` (${sec.hint})` : ''}: ${sec.empty}` : undefined"
-      @dragover="onSectionDragOver(sec.id, $event)"
-      @drop="onSectionDrop(sec.id, $event)"
-    >
-      <header class="sechead">
-        <button
-          type="button"
-          class="secname"
-          :title="isFolded(sec) ? 'Show this section' : 'Fold this section away'"
-          @click="toggleFold(sec)"
-        >
-          <i class="mdi" :class="sec.icon" />
-          <span>{{ cardPx ? sec.short : sec.label }}</span>
-        </button>
-        <span v-if="sec.hint && !cardPx" class="sechint">{{ sec.hint }}</span>
-        <span class="grow" />
-        <span class="count">{{ sec.count }}</span>
-        <ZenIconButton
-          v-if="sec.kind"
-          icon="mdi mdi-text-box-plus-outline"
-          :title="`Add a placeholder ${PLACEHOLDER[sec.kind].noun} — described in words until you drop one in`"
-          @click="emit('addProxy', sec.kind)"
-        />
-        <ZenIconButton
-          v-if="sec.accept"
-          icon="mdi mdi-plus"
-          :title="`Add ${sec.noun}`"
-          :disabled="sec.full"
-          @click="emit('add', sec.accept)"
-        />
-      </header>
-
-      <div v-show="!isFolded(sec)" class="grid">
-        <div
-          v-for="r in sec.refs"
-          :key="r.id"
-          class="card"
-          :data-ref="r.id"
-          :class="{
-            on: selected === r.id,
-            off: !inScene(r),
-            proxy: !r.media,
-            dragging: dragId === r.id,
-            over: overId === r.id && dragId !== r.id,
-            filling: fileCardId === r.id,
-          }"
-          @click="emit('select', r.id)"
-          @contextmenu.prevent.stop="emit('menu', r.id, $event)"
-          @dragover="onCardDragOver(r.id, sec.id, $event)"
-          @dragleave="onCardDragLeave(r.id, $event)"
-          @drop="onCardDrop(r.id, sec.id, $event)"
-          @dragend="endDrag"
-        >
-          <div
-            class="thumb"
-            draggable="true"
-            title="Drag to reorder · hold Shift to see it large"
-            @dragstart="startDrag(r.id, $event)"
+      <section
+        v-for="sec in sections"
+        :key="sec.id"
+        class="sec"
+        :class="{ vacant: !sec.refs.length, slim: isFolded(sec) }"
+        :style="{ '--n': Math.max(1, sec.refs.length) }"
+        :title="
+          isFolded(sec)
+            ? `${sec.label}${sec.hint ? ` (${sec.hint})` : ''}: ${sec.empty}`
+            : undefined
+        "
+        @dragover="onSectionDragOver(sec.id, $event)"
+        @drop="onSectionDrop(sec.id, $event)"
+      >
+        <header class="sechead">
+          <button
+            type="button"
+            class="secname"
+            :title="isFolded(sec) ? 'Show this section' : 'Fold this section away'"
+            @click="toggleFold(sec)"
           >
-            <MediaThumb :media="r.media" :badge="false" :label="r.name" />
-            <span class="num" :title="tagOf(r.id)">{{ numberOf(r.id) }}</span>
-            <span
-              v-if="r.kind === 'image'"
-              class="role"
-              :class="r.role"
-              :title="
-                r.role === 'reference'
-                  ? 'Look + meaning: H3 sees the pixels'
-                  : 'Meaning only: just the text encoder'
-              "
+            <i class="mdi" :class="sec.icon" />
+            <span>{{ cardPx ? sec.short : sec.label }}</span>
+          </button>
+          <span v-if="sec.hint && !cardPx" class="sechint">{{ sec.hint }}</span>
+          <span class="grow" />
+          <span class="count">{{ sec.count }}</span>
+          <ZenIconButton
+            v-if="sec.kind"
+            icon="mdi mdi-text-box-plus-outline"
+            :title="`Add a placeholder ${PLACEHOLDER[sec.kind].noun} — described in words until you drop one in`"
+            @click="emit('addProxy', sec.kind)"
+          />
+          <ZenIconButton
+            v-if="sec.accept"
+            icon="mdi mdi-plus"
+            :title="`Add ${sec.noun}`"
+            :disabled="sec.full"
+            @click="emit('add', sec.accept)"
+          />
+        </header>
+
+        <div v-show="!isFolded(sec)" class="grid">
+          <div
+            v-for="r in sec.refs"
+            :key="r.id"
+            class="card"
+            :data-ref="r.id"
+            :class="{
+              on: selected === r.id,
+              off: !inScene(r),
+              proxy: !r.media,
+              dragging: dragId === r.id,
+              over: overId === r.id && dragId !== r.id,
+              filling: fileCardId === r.id,
+            }"
+            @click="emit('select', r.id)"
+            @contextmenu.prevent.stop="emit('menu', r.id, $event)"
+            @dragover="onCardDragOver(r.id, sec.id, $event)"
+            @dragleave="onCardDragLeave(r.id, $event)"
+            @drop="onCardDrop(r.id, sec.id, $event)"
+            @dragend="endDrag"
+          >
+            <div
+              class="thumb"
+              draggable="true"
+              title="Drag to reorder · hold Shift to see it large"
+              @dragstart="startDrag(r.id, $event)"
             >
-              <i class="mdi" :class="r.role === 'reference' ? 'mdi-eye' : 'mdi-text-box-outline'" />
-            </span>
-            <span v-else class="role kind" :title="r.kind">
-              <i class="mdi" :class="r.kind === 'video' ? 'mdi-video' : 'mdi-music-note'" />
-            </span>
-            <span
-              v-if="soundtrackOf(r.id)"
-              class="sound"
-              :title="`Its own sound is ${soundtrackOf(r.id)}`"
-            >
-              <i class="mdi mdi-volume-high" />
-            </span>
-            <span v-if="!inScene(r)" class="outmark" title="Not used in this scene"
-              ><i class="mdi mdi-eye-off"
-            /></span>
-            <div class="meta">
-              <span class="name">@{{ r.name }}</span>
-            </div>
-            <div v-if="fileCardId === r.id" class="replacing">
-              <i class="mdi" :class="r.media ? 'mdi-swap-horizontal' : 'mdi-image-plus-outline'" />
-              <span>{{ r.media ? "Replace" : "Fill" }}</span>
+              <MediaThumb :media="r.media" :badge="false" :label="r.name" />
+              <span class="num" :title="tagOf(r.id)">{{ numberOf(r.id) }}</span>
+              <span
+                v-if="r.kind === 'image'"
+                class="role"
+                :class="r.role"
+                :title="
+                  r.role === 'reference'
+                    ? 'Look + meaning: H3 sees the pixels'
+                    : 'Meaning only: just the text encoder'
+                "
+              >
+                <i
+                  class="mdi"
+                  :class="r.role === 'reference' ? 'mdi-eye' : 'mdi-text-box-outline'"
+                />
+              </span>
+              <span v-else class="role kind" :title="r.kind">
+                <i class="mdi" :class="r.kind === 'video' ? 'mdi-video' : 'mdi-music-note'" />
+              </span>
+              <span
+                v-if="soundtrackOf(r.id)"
+                class="sound"
+                :title="`Its own sound is ${soundtrackOf(r.id)}`"
+              >
+                <i class="mdi mdi-volume-high" />
+              </span>
+              <span v-if="!inScene(r)" class="outmark" title="Not used in this scene"
+                ><i class="mdi mdi-eye-off"
+              /></span>
+              <div class="meta">
+                <span class="name">@{{ r.name }}</span>
+              </div>
+              <div v-if="fileCardId === r.id" class="replacing">
+                <i
+                  class="mdi"
+                  :class="r.media ? 'mdi-swap-horizontal' : 'mdi-image-plus-outline'"
+                />
+                <span>{{ r.media ? "Replace" : "Fill" }}</span>
+              </div>
             </div>
           </div>
+          <div v-if="!sec.refs.length" class="empty" @click="sec.accept && emit('add', sec.accept)">
+            {{ sec.empty }}
+          </div>
         </div>
-        <div v-if="!sec.refs.length" class="empty" @click="sec.accept && emit('add', sec.accept)">
-          {{ sec.empty }}
-        </div>
-      </div>
-    </section>
-    <!-- The wide strip hides empty sections, so adding goes through one tile at its end. -->
-    <ZenPopover v-if="cardPx" placement="bottom-start">
-      <template #trigger="{ toggle }">
-        <button type="button" class="addtile" title="Add a reference" @click="toggle">
-          <i class="mdi mdi-plus" /><span>Add</span>
-        </button>
-      </template>
-      <template #default="{ close }">
-        <div class="addmenu">
-          <button
-            v-for="item in addItems"
-            :key="item.label"
-            type="button"
-            :disabled="item.disabled"
-            @click="item.run(); close()"
-          >
-            <i class="mdi" :class="item.icon" /> {{ item.label }}
+      </section>
+      <!-- The wide strip hides empty sections, so adding goes through one tile at its end. -->
+      <ZenPopover v-if="cardPx" placement="bottom-start">
+        <template #trigger="{ toggle }">
+          <button type="button" class="addtile" title="Add a reference" @click="toggle">
+            <i class="mdi mdi-plus" /><span>Add</span>
           </button>
-        </div>
-      </template>
-    </ZenPopover>
+        </template>
+        <template #default="{ close }">
+          <div class="addmenu">
+            <button
+              v-for="item in addItems"
+              :key="item.label"
+              type="button"
+              :disabled="item.disabled"
+              @click="
+                item.run();
+                close();
+              "
+            >
+              <i class="mdi" :class="item.icon" /> {{ item.label }}
+            </button>
+          </div>
+        </template>
+      </ZenPopover>
     </div>
 
     <!-- the selected reference -->
@@ -160,8 +173,8 @@
         <div class="proxytext">
           <b>Placeholder {{ PLACEHOLDER[current.kind].noun }}</b>
           <span
-            >H3 reads the description below until you drop a {{ PLACEHOLDER[current.kind].noun }}
-            here or on its card.</span
+            >H3 reads the description below until you drop a
+            {{ PLACEHOLDER[current.kind].noun }} here or on its card.</span
           >
         </div>
         <ZenButton sm variant="primary" icon="mdi mdi-plus" @click="emit('pick', current.id)"
@@ -223,10 +236,46 @@
             title:
               'Only the staging, timing and camera — none of its look. For grey-box renders and rough animatics',
           },
+          {
+            value: 'control',
+            label: 'Control',
+            icon: 'mdi mdi-vector-square',
+            title:
+              'Steers the layout and camera through the H3 Fun ControlNet (picked on H3 Studio Setup); H3 never sees the video itself. Best with a depth render',
+          },
         ]"
       />
+      <template v-if="current.kind === 'video' && current.role === 'control'">
+        <div class="erow">
+          <span class="lbl" title="How hard the video steers the scene">strength</span>
+          <ZenNumber
+            size="sm"
+            :model-value="current.controlStrength ?? 0.7"
+            :min="0"
+            :max="2"
+            :step="0.05"
+            :precision="2"
+            @update:model-value="(v: number) => (current!.controlStrength = v)"
+          />
+          <span
+            class="lbl"
+            title="How far through the sampling it steers; after that, H3 draws the detail on its own"
+            >until</span
+          >
+          <ZenNumber
+            size="sm"
+            :model-value="Math.round((current.controlUntil ?? 0.5) * 100)"
+            :min="5"
+            :max="100"
+            :step="5"
+            :precision="0"
+            @update:model-value="(v: number) => (current!.controlUntil = v / 100)"
+          />
+          <span class="soft">%</span>
+        </div>
+      </template>
       <ZenCheckbox
-        v-if="current.kind === 'video' && current.media && current.role !== 'blocking'"
+        v-if="current.kind === 'video' && current.media && current.role === 'reference'"
         :model-value="current.soundtrack !== false"
         :label="`Use the video's own sound${soundtrackOf(current.id) ? ` (${soundtrackOf(current.id)})` : ''}`"
         @update:model-value="(v: boolean) => (current!.soundtrack = v)"
@@ -264,7 +313,11 @@
           type="button"
           class="chip every"
           :class="{ on: current.scenes === 'all' }"
-          :title="current.scenes === 'all' ? 'Shown in every scene — click for only where used or marked' : 'Show it in every scene, used or not (a style picture, a soundtrack)'"
+          :title="
+            current.scenes === 'all'
+              ? 'Shown in every scene — click for only where used or marked'
+              : 'Show it in every scene, used or not (a style picture, a soundtrack)'
+          "
           @click="current.scenes = current.scenes === 'all' ? [] : 'all'"
         >
           all
@@ -303,6 +356,7 @@ import {
   ZenButton,
   ZenCheckbox,
   ZenIconButton,
+  ZenNumber,
   ZenPopover,
   ZenToggleGroup,
 } from "@nynxz/zenkit-ui";
@@ -349,8 +403,7 @@ const PLACEHOLDER = {
   audio: { noun: "sound", icon: "mdi-music-note-outline" },
 } as const;
 const scene = computed(() => props.project.scenes[props.sceneIndex]);
-const inScene = (r: Ref) =>
-  scene.value ? refInScene(props.project, r, scene.value) : false;
+const inScene = (r: Ref) => (scene.value ? refInScene(props.project, r, scene.value) : false);
 const sectionOf = (r: Ref): SectionId =>
   r.kind === "image" ? (r.role === "semantic" ? "meaning" : "look") : r.kind;
 
@@ -358,7 +411,8 @@ const sections = computed(() => {
   const of = (id: SectionId) => props.project.refs.filter((r) => sectionOf(r) === id);
   // Against H3's limits only what it is shown counts: placeholders have no media to show, and one
   // file under several names is shown once.
-  const shown = (refs: Ref[]) => new Set(refs.filter((r) => r.media && inScene(r)).map((r) => `${r.media}|${r.role}`)).size;
+  const shown = (refs: Ref[]) =>
+    new Set(refs.filter((r) => r.media && inScene(r)).map((r) => `${r.media}|${r.role}`)).size;
   const pictures = shown(props.project.refs.filter((r) => r.kind === "image"));
   const count = (id: SectionId, kind: "image" | "video" | "audio") =>
     `${shown(props.project.refs.filter((r) => sectionOf(r) === id))}${kind === "image" ? "" : `/${LIMITS[kind]}`}`;
@@ -435,17 +489,49 @@ onMounted(() => {
 });
 onBeforeUnmount(() => resizes?.disconnect());
 const cardPx = computed(() =>
-  props.strip && box.value.w >= 600 ? `${Math.round(Math.min(200, Math.max(64, box.value.h - 48)))}px` : null,
+  props.strip && box.value.w >= 600
+    ? `${Math.round(Math.min(200, Math.max(64, box.value.h - 48)))}px`
+    : null,
 );
 const addItems = computed(() => {
   const full = (id: SectionId) => sections.value.find((s) => s.id === id)?.full ?? false;
   return [
-    { label: "Pictures…", icon: "mdi-image-plus-outline", disabled: full("look"), run: () => emit("add", "image/*") },
-    { label: "Video…", icon: "mdi-video-plus-outline", disabled: full("video"), run: () => emit("add", "video/*") },
-    { label: "Audio…", icon: "mdi-music-note-plus", disabled: full("audio"), run: () => emit("add", "audio/*") },
-    { label: "Placeholder picture", icon: "mdi-image-outline", disabled: false, run: () => emit("addProxy", "image") },
-    { label: "Placeholder video", icon: "mdi-video-outline", disabled: false, run: () => emit("addProxy", "video") },
-    { label: "Placeholder sound", icon: "mdi-music-note-outline", disabled: false, run: () => emit("addProxy", "audio") },
+    {
+      label: "Pictures…",
+      icon: "mdi-image-plus-outline",
+      disabled: full("look"),
+      run: () => emit("add", "image/*"),
+    },
+    {
+      label: "Video…",
+      icon: "mdi-video-plus-outline",
+      disabled: full("video"),
+      run: () => emit("add", "video/*"),
+    },
+    {
+      label: "Audio…",
+      icon: "mdi-music-note-plus",
+      disabled: full("audio"),
+      run: () => emit("add", "audio/*"),
+    },
+    {
+      label: "Placeholder picture",
+      icon: "mdi-image-outline",
+      disabled: false,
+      run: () => emit("addProxy", "image"),
+    },
+    {
+      label: "Placeholder video",
+      icon: "mdi-video-outline",
+      disabled: false,
+      run: () => emit("addProxy", "video"),
+    },
+    {
+      label: "Placeholder sound",
+      icon: "mdi-music-note-outline",
+      disabled: false,
+      run: () => emit("addProxy", "audio"),
+    },
   ];
 });
 
@@ -453,7 +539,8 @@ const addItems = computed(() => {
 type Section = (typeof sections.value)[number];
 const viewDoc = computed(() => props.view);
 const folds = ref<Record<string, "open" | "folded">>({ ...(props.view?.refsFold ?? {}) });
-const isFolded = (sec: Section) => (folds.value[sec.id] ?? (sec.refs.length ? "open" : "folded")) === "folded";
+const isFolded = (sec: Section) =>
+  (folds.value[sec.id] ?? (sec.refs.length ? "open" : "folded")) === "folded";
 function toggleFold(sec: Section) {
   folds.value = { ...folds.value, [sec.id]: isFolded(sec) ? "open" : "folded" };
   if (viewDoc.value) viewDoc.value.refsFold = folds.value;
@@ -559,7 +646,8 @@ function onCardDragOver(id: string, section: SectionId, e: DragEvent) {
 }
 function onCardDragLeave(id: string, e: DragEvent) {
   const to = e.relatedTarget as Node | null;
-  if (fileCardId.value === id && !(e.currentTarget as HTMLElement).contains(to)) fileCardId.value = null;
+  if (fileCardId.value === id && !(e.currentTarget as HTMLElement).contains(to))
+    fileCardId.value = null;
 }
 function onCardDrop(id: string, section: SectionId, e: DragEvent) {
   if (isFileDrag(e)) {

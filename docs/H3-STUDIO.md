@@ -48,6 +48,23 @@ it as new entries, picking their kind (a placeholder with a voice in the cast st
 character). Either way the reference stays tied to its entry, so filling again brings the entry's
 latest picture and description — give Ren a new picture in the Codex once, and every act gets it.
 
+### Control videos (the H3 Fun ControlNet)
+
+A video reference can be **Control** instead of Look + motion or Blocking. H3 never sees a control
+video: it steers the scene through the MiniMax H3 Fun ControlNet, so the layout, staging and camera
+follow it while H3 draws everything else itself. That fixes blocking's catch — shown to H3 as a
+reference, a grey-box render tends to come back looking like a grey box.
+
+- Put the ControlNet in `models/model_patches/` and pick it on **H3 Studio Setup** (`controlnet`);
+  Setup needs the `model` wired. It loads only when a scene that renders has a control video.
+- **Strength** (0–2, default 0.7) is how hard it steers; **until** (default 50%) is how far
+  through the sampling: after that, H3 draws the detail on its own.
+- One control video per scene. Show it in its scene with the scene chips (or `with:` in a script:
+  `@depth: … (video, control)`).
+- The ControlNet takes depth, edges (canny, HED, MLSD), pose, scribbles, layout boxes or a
+  grayscale video. From Grey Box Studio: **Render → Depth, the whole scene** for depth, or a plain
+  render as a grayscale video.
+
 ### Keyframes
 
 | Keyframe | Effect | H3 task |

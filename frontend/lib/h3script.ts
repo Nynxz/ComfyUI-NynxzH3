@@ -86,7 +86,7 @@ export function toScript(project: Project): string {
     out.push("## References");
     for (const r of project.refs)
       out.push(
-        `- @${r.name}${r.note.trim() ? `: ${r.note.trim()}` : ""} (${r.kind === "image" ? "picture" : r.kind}${r.role === "blocking" ? ", blocking" : ""}${r.scenes === "all" ? ", every scene" : ""})`,
+        `- @${r.name}${r.note.trim() ? `: ${r.note.trim()}` : ""} (${r.kind === "image" ? "picture" : r.kind}${r.role === "blocking" || r.role === "control" ? `, ${r.role}` : ""}${r.scenes === "all" ? ", every scene" : ""})`,
       );
     out.push("");
   }
@@ -354,7 +354,7 @@ export function parseProjectScript(project: Project, text: string): ScriptResult
     }
     if (section === "refs") {
       const r =
-        /^[-*]?\s*@([\w-]+)\s*(?::\s*(.*?))?\s*(?:\(((?:\s*(?:picture|image|video|audio|blocking|placeholder|every scene|all scenes)\s*,?)+)\))?\s*$/i.exec(
+        /^[-*]?\s*@([\w-]+)\s*(?::\s*(.*?))?\s*(?:\(((?:\s*(?:picture|image|video|audio|blocking|control|placeholder|every scene|all scenes)\s*,?)+)\))?\s*$/i.exec(
           row,
         );
       if (r) {
@@ -363,16 +363,24 @@ export function parseProjectScript(project: Project, text: string): ScriptResult
         const opts = (r[3] ?? "").toLowerCase();
         if (/every scene|all scenes/.test(opts)) result.every.push(r[1]!.toLowerCase());
         const word = /video|audio/.exec(opts)?.[0] ?? "";
-        // "blocking" is a video's: its staging, timing and camera, none of its look.
-        const blocking = /blocking/.test(opts);
+        // "blocking" and "control" are a video's: its staging, timing and camera, none of its look
+        // (blocking shows it to H3; control steers through the ControlNet instead).
+        const role: Ref["role"] = /control/.test(opts)
+          ? "control"
+          : /blocking/.test(opts)
+            ? "blocking"
+            : "reference";
         const kind: Ref["kind"] =
-          word === "video" || blocking ? "video" : word === "audio" ? "audio" : "image";
+          word === "video" || role !== "reference" ? "video" : word === "audio" ? "audio" : "image";
         const known = refByName.get(r[1]!.toLowerCase());
         if (known) {
           if (note && note !== known.note) result.notes.push({ id: known.id, note });
-          if (known.kind === "video" && blocking !== (known.role === "blocking"))
-            result.roles.push({ id: known.id, role: blocking ? "blocking" : "reference" });
-        } else placeholder(r[1]!, note, kind, blocking ? "blocking" : "reference");
+          if (
+            known.kind === "video" &&
+            role !== (known.role === "semantic" ? "reference" : known.role)
+          )
+            result.roles.push({ id: known.id, role });
+        } else placeholder(r[1]!, note, kind, role);
       }
       continue;
     }
@@ -562,7 +570,7 @@ export function importJson(text: string): Project {
 export function llmInstructions(project: Project): string {
   const refs = project.refs.map(
     (r) =>
-      `- @${r.name} (${r.kind ?? "image"}${r.role === "blocking" ? ", blocking" : ""})${r.note.trim() ? `: ${r.note.trim()}` : ""}`,
+      `- @${r.name} (${r.kind ?? "image"}${r.role === "blocking" || r.role === "control" ? `, ${r.role}` : ""})${r.note.trim() ? `: ${r.note.trim()}` : ""}`,
   );
   const cast = (project.cast ?? []).map((v) => `- ${v.name}${v.voice ? `: ${v.voice}` : ""}`);
   return `You are writing a short film for MiniMax H3, a model that makes video with sound from text. Write it in the H3 Studio script format below, and reply with only the script.

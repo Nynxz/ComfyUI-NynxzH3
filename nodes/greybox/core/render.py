@@ -288,7 +288,9 @@ def _edges(img: torch.Tensor, depth: torch.Tensor, owner: torch.Tensor) -> torch
 def depth_image(
     depth: torch.Tensor, near: float | None = None, far: float | None = None
 ) -> torch.Tensor:
-    """Depth as a picture: near is white, far is black (nothing hit is black). `[H, W, 3]`."""
+    """Depth as a picture: near is white, far is black (nothing hit is black). `[H, W, 3]`.
+    Inverse depth, as monocular depth models (and the ControlNets trained on them) draw it: close
+    things keep their shading instead of washing out to white."""
     finite = depth[torch.isfinite(depth)]
     if finite.numel() == 0:
         return torch.zeros(*depth.shape, 3, device=depth.device)
@@ -300,7 +302,9 @@ def depth_image(
         if finite.numel() < 16_000_000
         else float(finite.max())
     )
-    v = 1 - ((depth - lo) / max(hi - lo, 1e-6)).clamp(0, 1)
+    lo = max(lo, 0.3)
+    hi = max(hi, lo + 1e-3)
+    v = ((1 / depth.clamp(min=lo) - 1 / hi) / (1 / lo - 1 / hi)).clamp(0, 1)
     v = torch.where(torch.isfinite(depth), v, torch.zeros_like(v))
     return v.unsqueeze(-1).expand(*depth.shape, 3).contiguous()
 

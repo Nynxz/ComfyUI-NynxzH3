@@ -85,7 +85,7 @@ def frames_key(frames, audio: dict | None) -> str:
 
 
 #: What H3 Studio Setup brings that decides a render's pixels: the models, not the scene it's on.
-SETUP_MODELS = ("model", "clip", "vae", "audio_vae")
+SETUP_MODELS = ("model", "clip", "vae", "audio_vae", "controlnet")
 
 
 def chain_key(dynprompt, node_id: str, inputs: tuple[str, ...], models: bool = False) -> str:

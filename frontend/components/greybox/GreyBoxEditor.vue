@@ -164,6 +164,17 @@
                 >Every shot
                 <template #hint>a video each, for H3</template>
               </ZenMenuItem>
+              <ZenMenuSeparator />
+              <ZenMenuItem
+                icon="mdi mdi-layers-triple-outline"
+                :disabled="!s.doc.scene.shots.length"
+                @select="
+                  close();
+                  renderVideo('depth');
+                "
+                >Depth, the whole scene
+                <template #hint>for H3 Studio's ControlNet (a Control reference)</template>
+              </ZenMenuItem>
             </div>
           </template>
         </ZenPopover>
@@ -720,7 +731,7 @@ async function still() {
   }
 }
 /** Render grey video: the current shot, the whole scene as it cuts, or every shot on its own. */
-async function renderVideo(what: "shot" | "cut" | "each") {
+async function renderVideo(what: "shot" | "cut" | "each" | "depth") {
   busy.value = true;
   const w = props.width ?? 832;
   const h = props.height ?? 480;
@@ -744,13 +755,20 @@ async function renderVideo(what: "shot" | "cut" | "each") {
       s.state.message = `Rendered ${shots.length} shots.`;
       return;
     }
-    const shot = what === "cut" ? "*" : currentShot.value;
-    s.state.message = what === "cut" ? "Rendering the whole scene…" : `Rendering shot ${shot}…`;
-    const ref = await renderShot(s, shot, w, h);
+    const whole = what === "cut" || what === "depth";
+    const shot = whole ? "*" : currentShot.value;
+    s.state.message =
+      what === "depth"
+        ? "Rendering the scene's depth…"
+        : whole
+          ? "Rendering the whole scene…"
+          : `Rendering shot ${shot}…`;
+    const ref = await renderShot(s, shot, w, h, what === "depth");
     overlay.value = {
       kind: "video",
       src: mediaRefUrl(ref),
-      title: what === "cut" ? "The whole scene" : `Shot ${shot}`,
+      title:
+        what === "depth" ? "The whole scene, depth" : whole ? "The whole scene" : `Shot ${shot}`,
       note: `Saved as ${ref}`,
     };
     s.state.message = `Rendered ${ref}`;

@@ -134,7 +134,11 @@ const audioOptions = computed(() => [
 /** References that could speak and have no voice yet. Blocking only stages a scene. */
 const unvoiced = computed(() =>
   props.project.refs.filter(
-    (r) => r.kind !== "audio" && r.role !== "blocking" && !cast.value.some((v) => v.ref === r.id),
+    (r) =>
+      r.kind !== "audio" &&
+      r.role !== "blocking" &&
+      r.role !== "control" &&
+      !cast.value.some((v) => v.ref === r.id),
   ),
 );
 
@@ -172,7 +176,12 @@ function startDrag(e: PointerEvent, id: string) {
     const cards = [...(root.value?.querySelectorAll<HTMLElement>(":scope > .voice") ?? [])];
     const above = mid(cards[at - 1]);
     const below = mid(cards[at + 1]);
-    const to = above !== null && m.clientY < above ? at - 1 : below !== null && m.clientY > below ? at + 1 : at;
+    const to =
+      above !== null && m.clientY < above
+        ? at - 1
+        : below !== null && m.clientY > below
+          ? at + 1
+          : at;
     if (to === at) return;
     const next = [...voices];
     const [moved] = next.splice(at, 1);

@@ -428,6 +428,8 @@ def render_scene(setup: dict, project, scene: int | None) -> dict:
     model, positive = apply_loras(
         setup.get("model"), positive, plan.loras, plan.warnings, plan.settings
     )
+    if plan.controls:
+        model = _apply_control(setup, model, vae, plan.controls[0], trim, plan.warnings)
     if plan.settings.get("verbose"):
         LOG.info(
             "H3 Studio scene %d (%s, %d frames) prompt:\n%s",
@@ -536,6 +538,15 @@ class NynxzH3StudioSetup(NynxzNode):
                     tooltip="The H3 model, for the studio's LoRA lanes. H3 Studio Outputs gives it back with "
                     "the scene's LoRAs applied — sample with that model.",
                 ),
+                io.Combo.Input(
+                    "controlnet",
+                    options=_controlnets(),
+                    default="none",
+                    optional=True,
+                    tooltip="The MiniMax H3 Fun ControlNet, from models/model_patches. Loaded only when a "
+                    "scene has a control video (a video reference used as Control), which then steers its "
+                    "layout and camera. Needs the model wired.",
+                ),
             ],
             outputs=[H3StudioSetupType.Output(display_name="setup")],
         )
@@ -551,6 +562,7 @@ class NynxzH3StudioSetup(NynxzNode):
         previous=None,
         scene=None,
         model=None,
+        controlnet="none",
     ):
         previous_key = previous_latent = previous_scene = None
         if previous_frames is None and previous is not None:
@@ -566,6 +578,7 @@ class NynxzH3StudioSetup(NynxzNode):
                 "previous_scene": previous_scene,
                 "scene": scene,
                 "model": model,
+                "controlnet": controlnet if controlnet and controlnet != "none" else None,
                 "clip": clip,
                 "vae": vae,
                 "audio_vae": audio_vae,
@@ -573,6 +586,65 @@ class NynxzH3StudioSetup(NynxzNode):
                 "previous_audio": previous_audio,
             }
         )
+
+
+def _controlnets() -> list[str]:
+    try:
+        import folder_paths
+
+        return ["none", *folder_paths.get_filename_list("model_patches")]
+    except Exception:  # noqa: BLE001 - no ComfyUI (tests)
+        return ["none"]
+
+
+#: The loaded Fun ControlNet, kept between scenes: (file name, model patch).
+_control_cache: tuple[str, object] | None = None
+
+
+def _control_patch(name: str):
+    global _control_cache
+    if _control_cache is None or _control_cache[0] != name:
+        from comfy_extras.nodes_model_patch import ModelPatchLoader
+
+        _control_cache = (name, ModelPatchLoader().load_model_patch(name)[0])
+    return _control_cache[1]
+
+
+def _apply_control(setup: dict, model, vae, control: dict, trim: int, warnings: list[str]):
+    """The scene's model steered by its control video through H3's Fun ControlNet — core's Apply
+    MiniMax H3 Fun ControlNet, done here so it follows each scene's own video."""
+    if not setup.get("controlnet"):
+        warnings.append(
+            f"@{control['name']} is a control video, but no ControlNet is picked on H3 Studio Setup; "
+            "it's left out."
+        )
+        return model
+    if model is None:
+        warnings.append(
+            f"@{control['name']} needs the model wired into H3 Studio Setup; it's left out."
+        )
+        return model
+    import torch
+    from comfy_extras.nodes_minimax_h3 import MiniMaxH3FunControlPatch
+
+    frames, _ = load_video(control["media"], FPS)
+    if trim:
+        # A continuation's carried head comes first in the latent: hold the video's first frame
+        # under it, so the video lines up with the scene's own frames.
+        frames = torch.cat([frames[:1].repeat(trim, 1, 1, 1), frames])
+    patched = model.clone()
+    sampling = patched.get_model_object("model_sampling")
+    MiniMaxH3FunControlPatch(
+        _control_patch(setup["controlnet"]),
+        vae,
+        frames[..., :3].movedim(-1, 1),
+        None,
+        None,
+        control["strength"],
+        float(sampling.percent_to_sigma(0.0)),
+        float(sampling.percent_to_sigma(control["until"])),
+    ).register(patched)
+    return patched
 
 
 def _linked_project(dynprompt, studio: str):

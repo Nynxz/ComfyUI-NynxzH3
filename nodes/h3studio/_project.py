@@ -57,10 +57,10 @@ CONTINUATIONS = ("cut", "guide", "first_frame", "reference", "sound")
 PREVIOUS_FRAME = "previous:last"
 RETENTION = ("fully_preserved", "partially_preserved", "attribute_transfer", "weak_reference")
 AUDIO_RETENTION = ("fully_copy", "partially_copy", "reference", "weak_reference")
-ROLES = ("reference", "semantic", "blocking")
+ROLES = ("reference", "semantic", "blocking", "control")
 #: What each kind of reference may be used as: a picture for its look (or only its meaning); a
 #: video for its look and motion, or only as blocking — its staging, timing and camera.
-ROLES_FOR = {"image": ("reference", "semantic"), "video": ("reference", "blocking")}
+ROLES_FOR = {"image": ("reference", "semantic"), "video": ("reference", "blocking", "control")}
 KINDS = ("image", "video", "audio")
 #: H3's reference limits per generation.
 LIMITS = {"image": 9, "video": 3, "audio": 3}
@@ -165,6 +165,10 @@ def normalize(raw: Any) -> dict[str, Any]:
                 # A video brings its own sound unless told not to.
                 "soundtrack": ref.get("soundtrack") is not False,
                 "size": ref.get("size") if ref.get("size") in REF_SIZES else 1.0,
+                # A control video steers the scene through H3's Fun ControlNet: how hard, and until
+                # how far through the sampling (the rest is left to H3 for detail).
+                "control_strength": _num(ref.get("controlStrength"), 0.7, 0.0, 2.0),
+                "control_until": _num(ref.get("controlUntil"), 0.5, 0.05, 1.0),
                 # Scenes that show it without using it (see `refs_in_scene`): a list of scene ids, or
                 # "all". Before version 2 every reference was "all" by default, so that is read as none.
                 "scenes": scenes
@@ -401,6 +405,9 @@ class Compiled:
     #: The project's render settings (`normalize_settings`).
     settings: dict[str, Any] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
+    #: `[{id, name, media, strength, until}]`: videos that steer the scene through the Fun
+    #: ControlNet (role `control`). H3 never sees them as references.
+    controls: list[dict[str, Any]] = field(default_factory=list)
 
     def as_dict(self) -> dict[str, Any]:
         return dict(self.__dict__)
@@ -561,6 +568,24 @@ def compile_scene(project: dict[str, Any], index: int, has_audio=None) -> Compil
             "scenes": "all",
         }
         in_scene = [*in_scene, setting]
+    # Control videos go to the ControlNet, not into H3's references or its prompt.
+    controls = [
+        {
+            "id": r["id"],
+            "name": r["name"],
+            "media": r["media"],
+            "strength": r["control_strength"],
+            "until": r["control_until"],
+        }
+        for r in in_scene
+        if r["role"] == "control" and r["media"]
+    ]
+    if len(controls) > 1:
+        warnings.append(
+            f"One control video per scene: @{controls[0]['name']} steers it, the others are left out."
+        )
+        controls = controls[:1]
+    in_scene = [r for r in in_scene if r["role"] != "control"]
     # Proxies (no media yet) aren't shown to H3; where they are mentioned, their description is
     # written instead, so a script cast with placeholders still renders — from words alone.
     proxies = [r for r in in_scene if not r["media"]]
@@ -844,6 +869,7 @@ def compile_scene(project: dict[str, Any], index: int, has_audio=None) -> Compil
         keyframes=keyframes,
         continuation=dict(scene["continuation"]) if index > 0 else {"mode": "cut", "frames": 0},
         warnings=list(dict.fromkeys(warnings)),
+        controls=controls,
     )
 
 

@@ -172,8 +172,12 @@ export interface Ref {
   name: string;
   note: string;
   /** A picture: its look ("reference") or only its meaning ("semantic"). A video: its look and
-   *  motion ("reference"), or only as blocking — staging, timing and camera, none of its look. */
-  role: "reference" | "semantic" | "blocking";
+   *  motion ("reference"), only as blocking — staging, timing and camera, none of its look — or
+   *  as control: never shown to H3, it steers the scene through the Fun ControlNet. */
+  role: "reference" | "semantic" | "blocking" | "control";
+  /** A control video: how hard it steers (0–2), and until how far through the sampling (0–1). */
+  controlStrength?: number;
+  controlUntil?: number;
   retain: string;
   /** Scenes that show it without using it — a scene that @mentions it (or where its voice speaks)
    *  always does. A list of scene ids, or "all". */
