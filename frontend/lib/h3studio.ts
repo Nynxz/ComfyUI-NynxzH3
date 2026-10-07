@@ -487,8 +487,9 @@ export function pictureAt(
 }
 /** Whether a scene uses a reference: a shot @mentions it, or a voice it gives a face or a timbre to
  *  speaks there (as nodes/h3studio/_project.py's `mentions_ref`). */
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\-]/g, "\\$&");
 export function refUsedIn(project: Project, ref: Ref, scene: Scene): boolean {
-  const mention = new RegExp(`@${ref.name.replace(/[-]/g, "\\-")}(?![\\w-])`, "i");
+  const mention = new RegExp(`@${escapeRegExp(ref.name)}(?![\\w-])`, "i");
   if (scene.shots.some((s) => mention.test(s.text))) return true;
   const voices = new Set(
     (project.cast ?? []).filter((v) => v.ref === ref.id || v.timbre === ref.id).map((v) => v.id),

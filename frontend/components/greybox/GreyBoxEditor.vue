@@ -559,7 +559,10 @@ const slug = (v: string) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
 const canCreate = computed(
-  () => !!slug(newName.value) && (newSet.value !== NEW_SET || !!slug(newSetName.value)),
+  () =>
+    !!slug(newName.value) &&
+    !s.state.scenes.includes(slug(newName.value)) &&
+    (newSet.value !== NEW_SET || !!slug(newSetName.value)),
 );
 async function create() {
   if (!canCreate.value) return;

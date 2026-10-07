@@ -59,6 +59,13 @@ export function duplicateScene(project: Project, i: number): Scene {
     for (const l of sh.lines ?? []) l.id = uid("d");
   }
   for (const k of copy.keyframes) k.id = uid("k");
+  const from = project.scenes[i]!.id;
+  for (const r of project.refs)
+    if (Array.isArray(r.scenes) && r.scenes.includes(from)) r.scenes.push(copy.id);
+  for (const lane of project.loras ?? []) {
+    if (lane.scenes?.[from] !== undefined) lane.scenes[copy.id] = lane.scenes[from];
+    if (lane.steps?.[from]) lane.steps[copy.id] = JSON.parse(JSON.stringify(lane.steps[from]));
+  }
   project.scenes.splice(i + 1, 0, copy);
   return copy;
 }
