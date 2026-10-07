@@ -1,4 +1,4 @@
-![Nynxz H3 Studio](docs/images/banner.jpg)
+![Nynxz H3 Studio](docs/images/banner.webp)
 
 Make short films with [MiniMax H3](https://github.com/MiniMax-AI/MiniMax-H3) in ComfyUI. Write the
 film as scenes, block it out in 3D, keep your characters and places in one place, and render the
@@ -10,7 +10,7 @@ One node holds the whole film. Each **scene** is one H3 generation (about 5–15
 **shots** are the beats inside it. Mention a reference as `@counter` and the studio writes it into
 H3's prompt for you; give a line to a character and they say it.
 
-![H3 Studio](docs/images/studio.jpg)
+![H3 Studio](docs/images/studio.webp)
 
 - Pictures, videos and audio as references, each used only in the scenes that need it
 - Dialogue with a voice per character
@@ -25,7 +25,7 @@ Block a scene before you spend a render on it: a set made of simple shapes, char
 between marks, and a camera for each shot. The grey video goes into H3 Studio as a **blocking**
 reference, so H3 keeps the layout and camera move while the look comes from your other references.
 
-![Grey box blocking next to the reference picture for the same room](docs/images/greybox.jpg)
+![Grey box blocking next to the reference picture for the same room](docs/images/greybox.webp)
 
 → [How Grey Box works](docs/GREYBOX.md)
 
@@ -34,7 +34,7 @@ reference, so H3 keeps the layout and camera move while the look comes from your
 Your show's bible: every character, place and prop once, with its pictures, a description, a voice
 and LoRAs. In H3 Studio, the **Codex** button fills a film's `@references` from it by name.
 
-![The Codex](docs/images/codex.jpg)
+![The Codex](docs/images/codex.webp)
 
 ## Install
 

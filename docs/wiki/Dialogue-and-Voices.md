@@ -10,7 +10,7 @@ Two places matter:
 
 ## The cast
 
-<img src="images/cast-panel.png" alt="The Cast tab with two voices, Ren and Mika" width="360" align="right">
+<img src="images/cast-panel.webp" alt="The Cast tab with two voices, Ren and Mika" width="360" align="right">
 
 Open the **Cast** tab in the sidebar. Each card is one voice:
 
@@ -37,7 +37,7 @@ Voices belong to the whole film, so Mika sounds the same in every scene.
 
 Select a shot and scroll to **dialogue** under its text.
 
-<img src="images/dialogue-editor.png" alt="A line of dialogue: speaker, words, delivery, and its continuation over the cut" width="420">
+<img src="images/dialogue-editor.webp" alt="A line of dialogue: speaker, words, delivery, and its continuation over the cut" width="420">
 
 From the top:
 
@@ -72,7 +72,7 @@ some room.
 
 Every voice has a lane on the timeline, under the shots:
 
-![Voice lanes on the timeline: Ren's and Mika's lines under the shots that hold them](images/voice-lanes.png)
+![Voice lanes on the timeline: Ren's and Mika's lines under the shots that hold them](images/voice-lanes.webp)
 
 - **Drag a line** along its lane to move it. Dropped in a gap, it's said at that moment. Dropped
   on another line, it goes before that line (front half) or straight after it (back half). A placed line shows its time with an **×** in the editor;

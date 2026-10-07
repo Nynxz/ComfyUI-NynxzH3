@@ -18,7 +18,7 @@ There are two ways to teach an LLM the format:
 
 Open **Script** in the studio's toolbar and go to **Write with an LLM**.
 
-<img src="images/script-llm-tab.png" alt="The Write with an LLM tab: instructions to copy into a chat" width="560">
+<img src="images/script-llm-tab.webp" alt="The Write with an LLM tab: instructions to copy into a chat" width="560">
 
 1. **Copy instructions** and paste them into a new chat.
 2. Describe the film: what happens, how long, how it should look. A paragraph is enough.
@@ -38,7 +38,7 @@ say you have them.
 
 ## Pasting it in
 
-<img src="images/script-paste-tab.png" alt="The Paste tab with a script, its summary and what replacing would remove" width="560">
+<img src="images/script-paste-tab.webp" alt="The Paste tab with a script, its summary and what replacing would remove" width="560">
 
 Under the text the studio says what it read (scenes, shots, lines of dialogue, new placeholders)
 and anything wrong with it, such as a shot that starts after its scene ends. Fix those before
