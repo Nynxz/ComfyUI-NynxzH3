@@ -34,13 +34,15 @@ import node_helpers
 from comfy_api.latest import io
 
 from .. import _core
-from .._base import PackNode
+from .._base import CATEGORY, PackNode
 from ..inputs import _payload
 from ..inputs.types import H3InputData
 from . import _encode
 
 
 class H3Encode(PackNode):
+    CATEGORY = f"{CATEGORY}/Conditioning"
+
     @classmethod
     def define_schema(cls):
         return cls.make_schema(

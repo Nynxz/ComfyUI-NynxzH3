@@ -31,7 +31,7 @@ from __future__ import annotations
 
 from comfy_api.latest import io
 
-from .._base import PackNode
+from .._base import CATEGORY, PackNode
 from . import _payload, _rows
 from .types import H3InputData
 
@@ -53,6 +53,8 @@ def _slots(prefix: str, count: int) -> list[str]:
 
 
 class H3Inputs(PackNode):
+    CATEGORY = f"{CATEGORY}/Conditioning"
+
     @classmethod
     def define_schema(cls):
         return cls.make_schema(

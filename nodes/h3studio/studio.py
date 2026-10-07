@@ -477,7 +477,7 @@ def _announce(unique_id, dynprompt, render: dict) -> None:
 
 
 class NynxzH3StudioSetup(NynxzNode):
-    CATEGORY = f"{NynxzNode.CATEGORY}/H3"
+    CATEGORY = f"{NynxzNode.CATEGORY}/H3/Studio"
 
     @classmethod
     def define_schema(cls):
@@ -585,7 +585,7 @@ def _linked_project(dynprompt, studio: str):
 
 
 class NynxzH3StudioScenes(NynxzNode):
-    CATEGORY = f"{NynxzNode.CATEGORY}/H3"
+    CATEGORY = f"{NynxzNode.CATEGORY}/H3/Studio"
 
     @classmethod
     def define_schema(cls):
@@ -648,7 +648,7 @@ class NynxzH3StudioScenes(NynxzNode):
 
 
 class NynxzH3Studio(NynxzNode):
-    CATEGORY = f"{NynxzNode.CATEGORY}/H3"
+    CATEGORY = f"{NynxzNode.CATEGORY}/H3/Studio"
 
     @classmethod
     def define_schema(cls):
@@ -715,7 +715,7 @@ def _samples_on_every_pass(dynprompt) -> bool:
 
 
 class NynxzH3StudioOutputs(NynxzNode):
-    CATEGORY = f"{NynxzNode.CATEGORY}/H3"
+    CATEGORY = f"{NynxzNode.CATEGORY}/H3/Studio"
 
     @classmethod
     def define_schema(cls):
@@ -791,7 +791,7 @@ _UNWIRED = object()
 
 
 class NynxzH3StudioClip(NynxzNode):
-    CATEGORY = f"{NynxzNode.CATEGORY}/H3"
+    CATEGORY = f"{NynxzNode.CATEGORY}/H3/Studio"
 
     @classmethod
     def define_schema(cls):
@@ -987,7 +987,7 @@ def _save_clip(video, render: dict) -> str:
 
 
 class NynxzH3StudioJoin(NynxzNode):
-    CATEGORY = f"{NynxzNode.CATEGORY}/H3"
+    CATEGORY = f"{NynxzNode.CATEGORY}/H3/Studio"
 
     @classmethod
     def define_schema(cls):

@@ -8,4 +8,4 @@ from .._base import NynxzNode
 class H3Node(NynxzNode):
     """MiniMax H3 reference conditioning."""
 
-    CATEGORY = f"{NynxzNode.CATEGORY}/H3"
+    CATEGORY = f"{NynxzNode.CATEGORY}/H3/References"

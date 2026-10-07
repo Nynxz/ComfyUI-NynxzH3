@@ -15,13 +15,13 @@ Restart ComfyUI. Requires ComfyUI 0.30.0 or newer.
 
 | node | category | purpose |
 |---|---|---|
-| H3 Canvas | `Nynxz/H3` | Canvas size and duration |
-| H3 Inputs | `Nynxz/H3` | Keyframes and several references on one node |
-| H3 Image | `Nynxz/H3` | Image reference or keyframe |
-| H3 Video | `Nynxz/H3` | Video reference, with soundtrack |
-| H3 Audio | `Nynxz/H3` | Audio reference |
-| H3 Encode | `Nynxz/H3` | Conditioning and AV latent |
-| H3 Extras | `Nynxz/H3` | Canvas values from the wire |
+| H3 Canvas | `Nynxz/H3/Conditioning` | Canvas size and duration |
+| H3 Inputs | `Nynxz/H3/Conditioning` | Keyframes and several references on one node |
+| H3 Image | `Nynxz/H3/Conditioning` | Image reference or keyframe |
+| H3 Video | `Nynxz/H3/Conditioning` | Video reference, with soundtrack |
+| H3 Audio | `Nynxz/H3/Conditioning` | Audio reference |
+| H3 Encode | `Nynxz/H3/Conditioning` | Conditioning and AV latent |
+| H3 Extras | `Nynxz/H3/Conditioning` | Canvas values from the wire |
 | H3 Edit | `Nynxz/H3/Prompt` | Edit or restyle a still: instruction + `@named` references → prompt and assets (experimental) |
 | H3 Rewrite Prompt | `Nynxz/H3/Prompt` | Build the prompt the rewriter LoRA was trained on |
 | H3 Rewrite Clean | `Nynxz/H3/Prompt` | Trim a rewriter response to the production prompt |

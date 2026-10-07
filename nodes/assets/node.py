@@ -22,7 +22,7 @@ from __future__ import annotations
 from comfy_api.latest import io
 
 from .. import _core
-from .._base import PackNode
+from .._base import CATEGORY, PackNode
 from ..inputs import _assets, _payload, _rows
 from ..inputs.types import H3InputData
 
@@ -30,6 +30,8 @@ CHAIN = "Another H3 node upstream. Its assets come first, then this one's."
 
 
 class H3Image(PackNode):
+    CATEGORY = f"{CATEGORY}/Conditioning"
+
     @classmethod
     def define_schema(cls):
         return cls.make_schema(
@@ -83,6 +85,8 @@ class H3Image(PackNode):
 
 
 class H3Video(PackNode):
+    CATEGORY = f"{CATEGORY}/Conditioning"
+
     @classmethod
     def define_schema(cls):
         return cls.make_schema(
@@ -169,6 +173,8 @@ class H3Video(PackNode):
 
 
 class H3Audio(PackNode):
+    CATEGORY = f"{CATEGORY}/Conditioning"
+
     @classmethod
     def define_schema(cls):
         return cls.make_schema(

@@ -22,13 +22,15 @@ from __future__ import annotations
 from comfy_api.latest import io
 
 from .. import _core
-from .._base import PackNode
+from .._base import CATEGORY, PackNode
 from ..encode import _encode
 from ..inputs import _payload
 from ..inputs.types import H3InputData
 
 
 class H3Extras(PackNode):
+    CATEGORY = f"{CATEGORY}/Conditioning"
+
     @classmethod
     def define_schema(cls):
         return cls.make_schema(

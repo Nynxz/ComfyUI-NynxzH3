@@ -33,7 +33,7 @@ from ..inputs.types import H3InputData
 
 
 class H3Canvas(PackNode):
-    CATEGORY = CATEGORY
+    CATEGORY = f"{CATEGORY}/Conditioning"
 
     @classmethod
     def define_schema(cls):
