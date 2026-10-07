@@ -99,6 +99,8 @@ def _mesh(s: Shape):
         return _box(s)
     if s.kind == "sphere":
         return _sphere_mesh(s.at, s.radius)
+    if s.kind == "rod":
+        return _tube(s.a, s.b, s.radius, caps=True)
     if s.kind == "cylinder":
         x, y, z = s.at
         return _tube((x, y, z), (x, y + s.height, z), s.radius, caps=True)

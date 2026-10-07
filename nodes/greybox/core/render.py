@@ -166,7 +166,41 @@ def _cylinder(o, d, s: Shape):
     return t, n
 
 
-_HIT = {"box": _box, "sphere": _sphere, "capsule": _capsule, "cylinder": _cylinder}
+def _rod(o, d, s: Shape):
+    """A cylinder from `a` to `b`, any way round, with flat ends."""
+    a = torch.tensor(s.a, device=o.device)
+    axis = torch.tensor(s.b, device=o.device) - a
+    length = float(axis.norm())
+    if length < 1e-9:
+        return torch.full(o.shape[:1], math.inf, device=o.device), torch.zeros_like(o)
+    u = axis / length
+    r = s.radius
+    w = o - a
+    wu = w @ u
+    du = d @ u
+    wp = w - wu.unsqueeze(-1) * u
+    dp = d - du.unsqueeze(-1) * u
+    qa = (dp * dp).sum(-1)
+    qb = (wp * dp).sum(-1)
+    qc = (wp * wp).sum(-1) - r * r
+    disc = qb * qb - qa * qc
+    safe = torch.where(qa < 1e-12, torch.full_like(qa, 1e-12), qa)
+    ts = (-qb - disc.clamp(min=0).sqrt()) / safe
+    along = wu + du * ts
+    side = (disc >= 0) & (qa > 1e-12) & (ts > EPS) & (along >= 0) & (along <= length)
+    t = torch.where(side, ts, torch.full_like(ts, math.inf))
+    n = (wp + dp * ts.unsqueeze(-1)) / r
+    safe_du = torch.where(du.abs() < 1e-9, torch.full_like(du, 1e-9), du)
+    for plane, sign in ((length, 1.0), (0.0, -1.0)):
+        tp = (plane - wu) / safe_du
+        q = wp + dp * tp.unsqueeze(-1)
+        cap = (tp > EPS) & ((q * q).sum(-1) <= r * r) & (tp < t)
+        t = torch.where(cap, tp, t)
+        n = torch.where(cap.unsqueeze(-1), (u * sign).expand_as(n), n)
+    return t, n
+
+
+_HIT = {"box": _box, "sphere": _sphere, "capsule": _capsule, "cylinder": _cylinder, "rod": _rod}
 
 
 def trace(o: torch.Tensor, d: torch.Tensor, shapes: list[Shape]):
@@ -281,7 +315,7 @@ def bounds(
             r = math.hypot(s.size[0], s.size[2]) / 2
             xs += [s.at[0] - r, s.at[0] + r]
             zs += [s.at[2] - r, s.at[2] + r]
-        elif s.kind == "capsule":
+        elif s.kind in ("capsule", "rod"):
             xs += [s.a[0] - s.radius, s.b[0] + s.radius, s.a[0] + s.radius, s.b[0] - s.radius]
             zs += [s.a[2] - s.radius, s.b[2] + s.radius, s.a[2] + s.radius, s.b[2] - s.radius]
         else:

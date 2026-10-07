@@ -33,8 +33,9 @@ class SceneError(ValueError):
 
 @dataclass
 class Shape:
-    """A plain shape: `box` (size), `cylinder` (radius, height; stands on `at`), `sphere`
-    (radius), or `capsule` (radius, from `a` to `b`). `tone` is its grey, 0 to 1."""
+    """A plain shape: `box` (size), `cylinder` (radius, height; stands on `at`), `rod` (a
+    cylinder from `a` to `b`, any way round: a wheel, a pipe), `sphere` (radius), or `capsule`
+    (radius, from `a` to `b`). `tone` is its grey, 0 to 1."""
 
     kind: str
     at: Vec = (0.0, 0.0, 0.0)
@@ -77,6 +78,16 @@ def _shape(raw: dict, where: str) -> Shape:
             id=sid,
             owner=sid,
         )
+    if kind == "cylinder" and ("a" in raw or "b" in raw):
+        return Shape(
+            "rod",
+            a=_vec(raw.get("a"), f"{label}: a"),
+            b=_vec(raw.get("b"), f"{label}: b"),
+            radius=_num(raw.get("radius"), 0.5, 0.001),
+            tone=tone,
+            id=sid,
+            owner=sid,
+        )
     if kind == "cylinder":
         return Shape(
             "cylinder",
@@ -106,7 +117,76 @@ def _shape(raw: dict, where: str) -> Shape:
             id=sid,
             owner=sid,
         )
-    raise SceneError(f"{label}: type should be box, cylinder, sphere or capsule, not {kind!r}.")
+    raise SceneError(
+        f"{label}: type should be box, cylinder, sphere, capsule or prop, not {kind!r}."
+    )
+
+
+# --- props: shapes built once and placed many times --------------------------------------------
+
+#: A prop's shapes, by prop name: what a set's `{"type": "prop", "prop": name}` places.
+Props = dict[str, dict]
+
+
+def load_props(folder: Path | None) -> Props:
+    """Every `props/<name>.json` in a project's grey box folder."""
+    if folder is None or not folder.is_dir():
+        return {}
+    return {p.stem: _read(p) for p in sorted(folder.glob("*.json"))}
+
+
+def _placed(local: Shape, at: Vec, yaw: float, scale: float, owner: str, prefix: str) -> Shape:
+    """A prop's shape, from the prop's own frame (origin on the floor, +z its front) to where
+    the prop stands: scaled, turned by `yaw` (as a box turns) and moved to `at`."""
+    rad = math.radians(yaw)
+    cy, sy = math.cos(rad), math.sin(rad)
+
+    def move(p: Vec) -> Vec:
+        x, y, z = (v * scale for v in p)
+        return (at[0] + cy * x + sy * z, at[1] + y, at[2] - sy * x + cy * z)
+
+    return Shape(
+        local.kind,
+        at=move(local.at),
+        size=tuple(v * scale for v in local.size),
+        radius=local.radius * scale,
+        height=local.height * scale,
+        a=move(local.a),
+        b=move(local.b),
+        yaw=local.yaw + yaw,
+        tone=local.tone,
+        id=f"{prefix}/{local.id}" if local.id else prefix,
+        owner=owner,
+    )
+
+
+def _prop(raw: dict, where: str, props: Props, depth: int = 0) -> list[Shape]:
+    sid = str(raw.get("id", ""))
+    name = raw.get("prop")
+    label = f"{where} prop {sid or name}"
+    if not isinstance(name, str) or name not in props:
+        known = ", ".join(props) or "none yet"
+        raise SceneError(f"{label}: there's no prop called {name!r} (props: {known}).")
+    if depth > 3:
+        raise SceneError(f"{label}: props are placed inside each other too deeply (or in a loop).")
+    at = _vec(raw.get("at"), f"{label}: at")
+    yaw = _num(raw.get("yaw"), 0.0)
+    scale = _num(raw.get("scale"), 1.0, 0.01, 100)
+    out = []
+    for local in _shapes(props[name].get("shapes", []), f"prop {name}", props, depth + 1):
+        out.append(_placed(local, at, yaw, scale, sid or name, sid or name))
+    return out
+
+
+def _shapes(raws: list, where: str, props: Props, depth: int = 0) -> list[Shape]:
+    """A list of shapes, with any placed props opened into theirs."""
+    out: list[Shape] = []
+    for raw in raws:
+        if isinstance(raw, dict) and raw.get("type") == "prop":
+            out += _prop(raw, where, props, depth)
+        else:
+            out.append(_shape(raw, where))
+    return out
 
 
 # --- sets and cast ---------------------------------------------------------------------------
@@ -131,8 +211,11 @@ class Member:
     tone: float = 0.88
 
 
-def load_set(path: Path) -> Set:
-    return set_from(_read(path), path.stem)
+def load_set(path: Path, props: Props | None = None) -> Set:
+    """A set file; its props come from `props/` beside its `sets/` folder unless given."""
+    if props is None:
+        props = load_props(Path(path).parent.parent / "props")
+    return set_from(_read(path), path.stem, props)
 
 
 def load_cast(path: Path | None) -> dict[str, Member]:
@@ -440,12 +523,12 @@ class Scene:
         return at, self.target(look_ref, t, f"{what} at {k.t}s: look"), lens
 
 
-def set_from(raw: dict, name: str) -> Set:
-    """A set from its JSON (`name` is used when it gives none)."""
+def set_from(raw: dict, name: str, props: Props | None = None) -> Set:
+    """A set from its JSON (`name` is used when it gives none); placed props become their shapes."""
     where = f"set {name}"
     return Set(
         name=str(raw.get("name", name)),
-        shapes=[_shape(s, where) for s in raw.get("shapes", [])],
+        shapes=_shapes(raw.get("shapes", []), where, props or {}),
         marks={str(k): _vec(v, f"{where}: mark {k}") for k, v in raw.get("marks", {}).items()},
         cameras={str(k): v for k, v in raw.get("cameras", {}).items() if isinstance(v, dict)},
     )

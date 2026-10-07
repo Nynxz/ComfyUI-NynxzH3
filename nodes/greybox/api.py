@@ -37,7 +37,7 @@ except Exception:  # noqa: BLE001 - no server (import-time checks, tests)
 HERE = Path(__file__).parent
 EXAMPLE = HERE / "examples" / "midnight-spoon"
 NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$")
-KINDS = {"scene": "scenes", "set": "sets"}
+KINDS = {"scene": "scenes", "set": "sets", "prop": "props"}
 
 
 class Bad(Exception):
@@ -82,12 +82,18 @@ def listing(pdir: Path) -> dict:
     return {
         "scenes": sorted(p.stem for p in (pdir / "scenes").glob("*.json")),
         "sets": sorted(p.stem for p in (pdir / "sets").glob("*.json")),
+        "props": sorted(p.stem for p in (pdir / "props").glob("*.json")),
         "hasCast": (pdir / "cast.json").exists(),
     }
 
 
 def stamps(pdir: Path) -> dict[str, int]:
-    files = [pdir / "cast.json", *(pdir / "scenes").glob("*.json"), *(pdir / "sets").glob("*.json")]
+    files = [
+        pdir / "cast.json",
+        *(pdir / "scenes").glob("*.json"),
+        *(pdir / "sets").glob("*.json"),
+        *(pdir / "props").glob("*.json"),
+    ]
     return {str(f.relative_to(pdir)): f.stat().st_mtime_ns for f in files if f.exists()}
 
 
@@ -95,15 +101,18 @@ def scene_from(body: dict, pdir: Path) -> gscene.Scene:
     """The scene to render: the editor's own copy (saved or not) when it sends one, else the file."""
     raw = body.get("scene")
     if isinstance(raw, dict):
+        props = gscene.load_props(pdir / "props")
+        if isinstance(body.get("props"), dict):
+            props.update({str(k): v for k, v in body["props"].items() if isinstance(v, dict)})
         set_raw = body.get("set")
         the_set = (
-            gscene.set_from(set_raw, str(raw.get("set", "set")))
+            gscene.set_from(set_raw, str(raw.get("set", "set")), props)
             if isinstance(set_raw, dict)
             else None
         )
         if the_set is None and isinstance(raw.get("set"), str):
             found = file_of(pdir, "set", raw["set"])
-            the_set = gscene.load_set(found) if found.exists() else None
+            the_set = gscene.load_set(found, props) if found.exists() else None
         cast_raw = body.get("cast")
         cast = (
             gscene.cast_from(cast_raw)
@@ -166,6 +175,7 @@ if _routes is not None:
                 "set": the_set,
                 "setName": set_name if isinstance(set_name, str) else None,
                 "cast": _read(pdir / "cast.json") or {},
+                "propShapes": {p.stem: _read(p) for p in sorted((pdir / "props").glob("*.json"))},
                 **listing(pdir),
                 "stamps": stamps(pdir),
             }
@@ -203,6 +213,17 @@ if _routes is not None:
             ]
             if users:
                 raise Bad(f"Scenes still use the set {name}: {', '.join(users)}.")
+        if kind == "prop":
+            users = [
+                p.stem
+                for p in sorted((pdir / "sets").glob("*.json"))
+                if any(
+                    isinstance(s, dict) and s.get("type") == "prop" and s.get("prop") == name
+                    for s in (_read(p) or {}).get("shapes", [])
+                )
+            ]
+            if users:
+                raise Bad(f"Sets still place the prop {name}: {', '.join(users)}.")
         if path.exists():
             path.unlink()
         return web.json_response({"ok": True, **listing(pdir), "stamps": stamps(pdir)})
