@@ -1,12 +1,8 @@
 name: Publish to Comfy registry
+# Manual only for now: the editors in web/ are built from frontend/ and aren't committed, and this
+# job doesn't build them yet, so an automatic publish would ship the pack without its UI.
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-      - master
-    paths:
-      - "pyproject.toml"
 
 permissions:
   issues: write
