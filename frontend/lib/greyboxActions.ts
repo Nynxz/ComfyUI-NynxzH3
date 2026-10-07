@@ -407,13 +407,22 @@ export const ACTIONS: ActionInfo[] = [
   {
     name: "cast.set",
     touches: "cast",
-    help: 'Set a character\'s figure for every scene. {id: "@ren", height?: metres, build?: width scale, tone?: grey 0-1}.',
+    help: 'Set a character\'s figure for every scene. {id: "@ren", height?: metres, build?: width scale, tone?: grey 0-1, prop?: a prop\'s name to be drawn as instead (a vehicle that moves with keys; "" for a person again)}.',
     run: (doc, a) => {
       const id = mention(a.id);
       const m = (doc.cast[id] ??= {});
       if ("height" in a) m.height = Math.min(Math.max(num(a.height, "`height`"), 0.3), 3);
       if ("build" in a) m.build = Math.min(Math.max(num(a.build, "`build`"), 0.4), 2.5);
       if ("tone" in a) m.tone = Math.min(Math.max(num(a.tone, "`tone`"), 0), 1);
+      if ("prop" in a) {
+        const prop = typeof a.prop === "string" ? a.prop.trim() : "";
+        if (prop && !doc.props[prop])
+          throw new ActionError(
+            `No prop ${prop} (props: ${Object.keys(doc.props).join(", ") || "none yet"}).`,
+          );
+        if (prop) m.prop = prop;
+        else delete m.prop;
+      }
       return `${id}'s figure set.`;
     },
   },

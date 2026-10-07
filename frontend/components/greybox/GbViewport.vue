@@ -366,7 +366,7 @@ function buildLive() {
     const pick: Selection = { type: "actor", id: a.id };
     const selected =
       isSel(pick) || (selection.value?.type === "key" && selection.value.id === a.id);
-    for (const part of figure(a)) {
+    for (const part of figure(a, props.session.doc.props)) {
       const m = shapeMesh(part, selected);
       picks.set(m, pick);
       liveGroup.add(m);

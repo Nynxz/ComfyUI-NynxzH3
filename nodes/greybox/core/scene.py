@@ -200,15 +200,19 @@ class Set:
     marks: dict[str, Vec]
     #: Named camera set-ups ("wide": at, look, lens) a shot can start from.
     cameras: dict[str, dict]
+    #: The project's props, for cast members that are one (a van that drives through the scene).
+    props: dict = field(default_factory=dict)
 
 
 @dataclass
 class Member:
-    """A cast member's figure: how tall, how broad, and its grey."""
+    """A cast member's figure: how tall, how broad, and its grey — or a prop it is drawn as, so a
+    vehicle can move through a scene with keys like anyone else."""
 
     height: float = DEFAULT_HEIGHT
     build: float = 1.0
     tone: float = 0.88
+    prop: str | None = None
 
 
 def load_set(path: Path, props: Props | None = None) -> Set:
@@ -233,6 +237,7 @@ def _member(raw: dict) -> Member:
         height=_num(raw.get("height"), DEFAULT_HEIGHT, 0.3, 3.0),
         build=_num(raw.get("build"), 1.0, 0.4, 2.5),
         tone=_num(raw.get("tone"), 0.88, 0, 1),
+        prop=raw["prop"] if isinstance(raw.get("prop"), str) and raw["prop"] else None,
     )
 
 
@@ -531,6 +536,7 @@ def set_from(raw: dict, name: str, props: Props | None = None) -> Set:
         shapes=_shapes(raw.get("shapes", []), where, props or {}),
         marks={str(k): _vec(v, f"{where}: mark {k}") for k, v in raw.get("marks", {}).items()},
         cameras={str(k): v for k, v in raw.get("cameras", {}).items() if isinstance(v, dict)},
+        props=props or {},
     )
 
 
@@ -609,10 +615,20 @@ def load(path: str | Path, search: list[Path] | None = None) -> Scene:
 # --- figures ---------------------------------------------------------------------------------
 
 
-def figure(state: ActorState) -> list[Shape]:
+def figure(state: ActorState, props: Props | None = None) -> list[Shape]:
     """An actor as plain shapes: a body and a head, and a small block on the face so which way it
-    faces reads at a glance. Seated, it's lower and its legs reach forward."""
+    faces reads at a glance. Seated, it's lower and its legs reach forward. A cast member that is
+    a prop is that prop, standing where the actor is and facing its way."""
     m = state.member
+    if m.prop:
+        props = props or {}
+        if m.prop not in props:
+            known = ", ".join(props) or "none yet"
+            raise SceneError(
+                f"{state.id} is the prop {m.prop!r}, but there's no such prop ({known})."
+            )
+        local = _shapes(props[m.prop].get("shapes", []), f"prop {m.prop}", props, 1)
+        return [_placed(s, state.at, state.yaw, 1.0, state.id, state.id) for s in local]
     h = m.height * (0.72 if state.pose == "sit" else 1.0)
     r = 0.17 * m.build * m.height / DEFAULT_HEIGHT
     x, y, z = state.at
@@ -662,5 +678,5 @@ def shapes_at(scene: Scene, t: float) -> list[Shape]:
     """Everything visible at `t`: the set, the scene's own shapes, and every actor's figure."""
     out = [*scene.set.shapes, *scene.extra]
     for state in scene.at(t):
-        out.extend(figure(state))
+        out.extend(figure(state, scene.set.props))
     return out

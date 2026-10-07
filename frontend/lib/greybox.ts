@@ -86,6 +86,8 @@ export interface MemberData {
   height?: number;
   build?: number;
   tone?: number;
+  /** Drawn as this prop instead of a figure: a vehicle that moves with keys. */
+  prop?: string;
 }
 export type CastData = Record<string, MemberData>;
 
@@ -129,6 +131,7 @@ export interface Member {
   height: number;
   build: number;
   tone: number;
+  prop?: string;
 }
 export const member = (cast: CastData, id: string): Member => {
   const m = cast[id] ?? cast[id.replace(/^@/, "")] ?? {};
@@ -136,6 +139,7 @@ export const member = (cast: CastData, id: string): Member => {
     height: clamp(m.height ?? DEFAULT_HEIGHT, 0.3, 3),
     build: clamp(m.build ?? 1, 0.4, 2.5),
     tone: clamp(m.tone ?? 0.88, 0, 1),
+    ...(m.prop ? { prop: m.prop } : {}),
   };
 };
 
@@ -405,8 +409,17 @@ export class Evaluator {
 }
 
 /** An actor as the renderer draws it: body, head and the small block that shows which way it faces. */
-export function figure(s: ActorState): (ShapeData & { owner: string })[] {
+export function figure(s: ActorState, props: Props = {}): (ShapeData & { owner: string })[] {
   const m = s.member;
+  // A cast member that is a prop is that prop, where the actor stands and facing its way.
+  if (m.prop) {
+    const prop = props[m.prop];
+    if (!prop) return [];
+    return expandShapes(prop.shapes, props, 1).map((local) => ({
+      ...placed(local, s.at, s.yaw, 1),
+      owner: s.id,
+    }));
+  }
   const k = m.height / DEFAULT_HEIGHT;
   const h = m.height * (s.pose === "sit" ? 0.72 : 1);
   const r = 0.17 * m.build * k;

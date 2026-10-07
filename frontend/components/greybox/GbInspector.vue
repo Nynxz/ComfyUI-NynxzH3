@@ -206,8 +206,19 @@
     <template v-else-if="(sel?.type === 'actor' || sel?.type === 'key') && actor">
       <header>
         <i class="mdi mdi-account-outline" /><b>{{ actor.id }}</b
-        ><span class="kind">character</span>
+        ><span class="kind">{{ member.prop ? `prop · ${member.prop}` : "character" }}</span>
       </header>
+      <ZenField v-if="propNames.length || member.prop" label="Drawn as" stack>
+        <ZenSelect
+          size="sm"
+          :model-value="member.prop ?? ''"
+          :options="[
+            { value: '', label: 'A person' },
+            ...propNames.map((p) => ({ value: p, label: `The prop ${p}` })),
+          ]"
+          @update:model-value="run('cast.set', { id: actor.id, prop: $event })"
+        />
+      </ZenField>
       <div class="row3">
         <ZenField label="Height" stack>
           <ZenNumber
@@ -220,7 +231,7 @@
             @update:model-value="run('cast.set', { id: actor.id, height: $event })"
           />
         </ZenField>
-        <ZenField label="Build" stack>
+        <ZenField v-if="!member.prop" label="Build" stack>
           <ZenNumber
             size="sm"
             :model-value="member.build"
@@ -231,7 +242,7 @@
             @update:model-value="run('cast.set', { id: actor.id, build: $event })"
           />
         </ZenField>
-        <ZenField label="Grey" stack>
+        <ZenField v-if="!member.prop" label="Grey" stack>
           <ZenNumber
             size="sm"
             :model-value="member.tone"
@@ -243,7 +254,13 @@
           />
         </ZenField>
       </div>
-      <p class="soft small">Height, build and grey are the cast's: every scene uses them.</p>
+      <p class="soft small">
+        {{
+          member.prop
+            ? "Drawn as the prop wherever it is, facing its way. Height is where a camera looking at it aims."
+            : "Height, build and grey are the cast's: every scene uses them."
+        }}
+      </p>
       <h4>Keys</h4>
       <div class="keys">
         <button
@@ -581,6 +598,7 @@ const shape = computed(() =>
   props.sel?.type === "shape" ? shapesOf(doc.value).find((s) => s.id === props.sel!.id) : undefined,
 );
 const rod = computed(() => !!shape.value && isRod(shape.value));
+const propNames = computed(() => Object.keys(doc.value.props).sort());
 const openProp = computed(() => (doc.value.focus ? doc.value.props[doc.value.focus] : undefined));
 const placedTimes = computed(
   () => doc.value.set.shapes.filter((s) => s.type === "prop" && s.prop === doc.value.focus).length,

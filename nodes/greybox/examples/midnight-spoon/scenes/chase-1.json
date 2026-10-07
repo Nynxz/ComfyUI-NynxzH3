@@ -1,0 +1,189 @@
+{
+ "name": "Chase 1 \u2014 Headlights",
+ "set": "night-street",
+ "fps": 24,
+ "notes": "Rain night. The Midnight Spoon van comes down the street fast; a black sedan waiting in the first alley pulls out behind it and gives chase.",
+ "actors": [
+  {
+   "id": "@van",
+   "keys": [
+    {
+     "t": 0,
+     "at": [
+      -1.8,
+      0,
+      -22
+     ],
+     "face": "path"
+    },
+    {
+     "t": 7,
+     "at": [
+      -1.8,
+      0,
+      50
+     ],
+     "face": "path"
+    }
+   ]
+  },
+  {
+   "id": "@sedan",
+   "keys": [
+    {
+     "t": 0,
+     "at": [
+      -15,
+      0,
+      13
+     ],
+     "face": 90
+    },
+    {
+     "t": 3.6,
+     "at": [
+      -10.5,
+      0,
+      13
+     ],
+     "face": 90
+    },
+    {
+     "t": 4.6,
+     "at": [
+      -5.5,
+      0,
+      12.4
+     ],
+     "face": "path"
+    },
+    {
+     "t": 5.4,
+     "at": [
+      -1.4,
+      0,
+      16
+     ],
+     "face": "path"
+    },
+    {
+     "t": 7,
+     "at": [
+      -1.8,
+      0,
+      33
+     ],
+     "face": "path"
+    }
+   ]
+  }
+ ],
+ "shots": [
+  {
+   "name": "1A",
+   "start": 0,
+   "end": 2.5,
+   "camera": [
+    {
+     "t": 0,
+     "at": [
+      0.6,
+      0.45,
+      15
+     ],
+     "look": "@van",
+     "lens": 34,
+     "ease": "smooth"
+    },
+    {
+     "t": 2.5,
+     "at": [
+      0.6,
+      0.45,
+      15
+     ],
+     "look": "@van",
+     "lens": 24,
+     "ease": "smooth"
+    }
+   ]
+  },
+  {
+   "name": "1B",
+   "start": 2.5,
+   "end": 4.5,
+   "camera": [
+    {
+     "t": 2.5,
+     "at": [
+      -17.5,
+      1.9,
+      13.4
+     ],
+     "look": [
+      -3,
+      1.0,
+      13
+     ],
+     "lens": 30,
+     "ease": "linear"
+    },
+    {
+     "t": 4.5,
+     "at": [
+      -14,
+      1.8,
+      13.4
+     ],
+     "look": [
+      -3,
+      1.1,
+      15
+     ],
+     "lens": 30,
+     "ease": "linear"
+    }
+   ]
+  },
+  {
+   "name": "1C",
+   "start": 4.5,
+   "end": 7,
+   "camera": [
+    {
+     "t": 4.5,
+     "at": [
+      -6,
+      2.2,
+      4
+     ],
+     "look": "@van",
+     "lens": 26,
+     "ease": "linear"
+    },
+    {
+     "t": 5.5,
+     "at": [
+      -0.6,
+      2.0,
+      8
+     ],
+     "look": "@van",
+     "lens": 28,
+     "ease": "linear"
+    },
+    {
+     "t": 7,
+     "at": [
+      -1.2,
+      1.9,
+      24
+     ],
+     "look": "@van",
+     "lens": 32,
+     "ease": "linear"
+    }
+   ]
+  }
+ ]
+}

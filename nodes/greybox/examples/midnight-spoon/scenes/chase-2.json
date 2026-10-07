@@ -1,0 +1,205 @@
+{
+ "name": "Chase 2 \u2014 Left. Now.",
+ "set": "night-street",
+ "fps": 24,
+ "notes": "The sedan is right behind them. Ren drives, Mika looks back, Lumi in the cargo bay calls the turn; the van swerves into the second alley and the sedan overshoots, sliding past the mouth.",
+ "actors": [
+  {
+   "id": "@van",
+   "keys": [
+    {
+     "t": 0,
+     "at": [
+      -1.8,
+      0,
+      10
+     ],
+     "face": "path"
+    },
+    {
+     "t": 4.5,
+     "at": [
+      -1.8,
+      0,
+      50
+     ],
+     "face": "path"
+    },
+    {
+     "t": 5.2,
+     "at": [
+      -3.0,
+      0,
+      55.5
+     ],
+     "face": "path"
+    },
+    {
+     "t": 5.9,
+     "at": [
+      -6.5,
+      0,
+      58
+     ],
+     "face": "path"
+    },
+    {
+     "t": 7,
+     "at": [
+      -17,
+      0,
+      58
+     ],
+     "face": "path"
+    }
+   ]
+  },
+  {
+   "id": "@sedan",
+   "keys": [
+    {
+     "t": 0,
+     "at": [
+      -1.8,
+      0,
+      -4
+     ],
+     "face": "path"
+    },
+    {
+     "t": 4.5,
+     "at": [
+      -1.8,
+      0,
+      41
+     ],
+     "face": "path"
+    },
+    {
+     "t": 5.6,
+     "at": [
+      -0.8,
+      0,
+      54
+     ],
+     "face": "path"
+    },
+    {
+     "t": 6.3,
+     "at": [
+      1.2,
+      0,
+      60
+     ],
+     "face": 25
+    },
+    {
+     "t": 7,
+     "at": [
+      2.2,
+      0,
+      63.5
+     ],
+     "face": 55
+    }
+   ]
+  }
+ ],
+ "shots": [
+  {
+   "name": "2A",
+   "start": 0,
+   "end": 2.5,
+   "camera": [
+    {
+     "t": 0,
+     "at": [
+      -1.8,
+      1.75,
+      14.8
+     ],
+     "look": "@van",
+     "lens": 30,
+     "ease": "linear"
+    },
+    {
+     "t": 2.5,
+     "at": [
+      -1.8,
+      1.75,
+      37.022
+     ],
+     "look": "@van",
+     "lens": 30,
+     "ease": "linear"
+    }
+   ]
+  },
+  {
+   "name": "2B",
+   "start": 2.5,
+   "end": 4.5,
+   "camera": [
+    {
+     "t": 2.5,
+     "at": [
+      -1.8,
+      1.45,
+      29.622
+     ],
+     "look": "@sedan",
+     "lens": 30,
+     "ease": "linear"
+    },
+    {
+     "t": 4.5,
+     "at": [
+      -1.8,
+      1.45,
+      47.4
+     ],
+     "look": "@sedan",
+     "lens": 34,
+     "ease": "linear"
+    }
+   ]
+  },
+  {
+   "name": "2C",
+   "start": 4.5,
+   "end": 7,
+   "camera": [
+    {
+     "t": 4.5,
+     "at": [
+      5.8,
+      4.5,
+      51.5
+     ],
+     "look": [
+      -3,
+      1,
+      55
+     ],
+     "lens": 22,
+     "ease": "smooth"
+    },
+    {
+     "t": 7,
+     "at": [
+      5.8,
+      4.2,
+      53
+     ],
+     "look": [
+      -6,
+      1,
+      59
+     ],
+     "lens": 24,
+     "ease": "smooth"
+    }
+   ]
+  }
+ ]
+}

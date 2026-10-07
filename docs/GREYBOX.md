@@ -182,6 +182,17 @@ Placed in a set:
 A figure is a body, a head and a small block on the face — which way it faces reads at a glance.
 `build` scales its width; `tone` tells characters apart. A scene can override with its own `cast`.
 
+A cast member can be a **prop** instead — a vehicle that moves through the scene with keys like
+anyone else, facing where it's going:
+
+```json
+{ "@van": { "prop": "van", "height": 1.75 } }
+```
+
+`height` is then where a camera told to look at it aims (for a van, about the windscreen). The
+example ships a van, a sedan and a street lamp (`build_props.py`), a night street
+(`build_street.py`) and a two-scene chase on it (`build_chase.py`).
+
 ## Scenes — `scenes/<name>.json`
 
 ```json
