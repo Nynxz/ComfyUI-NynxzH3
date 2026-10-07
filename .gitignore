@@ -7,3 +7,10 @@ tests
 
 # Packaging artifact from the registry pack step — regenerated, never source.
 node.zip
+
+# Node / frontend tooling — NOT shipped. No trailing slash: node_modules can be a symlink.
+node_modules
+*.tsbuildinfo
+
+# The built frontend (pnpm build) — generated, not source.
+web/

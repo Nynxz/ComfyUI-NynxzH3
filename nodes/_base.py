@@ -41,3 +41,25 @@ class PackNode(io.ComfyNode):
             category=cls.CATEGORY,
             **kwargs,
         )
+
+
+#: The id namespace H3 Studio, Grey Box and the H3 reference nodes shipped under, in NynxzNodes.
+LEGACY_NAMESPACE = "nynxz"
+
+
+class NynxzNode(io.ComfyNode):
+    """Base for the nodes that moved here from NynxzNodes: their ids stay `nynxz.<id>`, because a
+    saved workflow names a node by its id and these are already in workflows. Their menu category
+    is the pack's."""
+
+    NAMESPACE = LEGACY_NAMESPACE
+    CATEGORY = "Nynxz"
+
+    @classmethod
+    def make_schema(cls, node_id: str, display_name: str, **kwargs) -> io.Schema:
+        return io.Schema(
+            node_id=f"{cls.NAMESPACE}.{node_id}",
+            display_name=display_name,
+            category=cls.CATEGORY,
+            **kwargs,
+        )

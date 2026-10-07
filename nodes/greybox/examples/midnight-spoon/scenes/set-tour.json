@@ -1,0 +1,86 @@
+{
+ "name": "Set tour",
+ "set": "midnight-spoon",
+ "fps": 24,
+ "notes": "One still shot from each of the set's cameras \u2014 the reference sheet's angles. Empty shop.",
+ "actors": [],
+ "shots": [
+  {
+   "name": "exterior-front",
+   "start": 0.0,
+   "end": 1.0,
+   "camera": [
+    {
+     "t": 0.0,
+     "at": "exterior-front"
+    }
+   ]
+  },
+  {
+   "name": "counter-main",
+   "start": 1.0,
+   "end": 2.0,
+   "camera": [
+    {
+     "t": 1.0,
+     "at": "counter-main"
+    }
+   ]
+  },
+  {
+   "name": "from-kitchen",
+   "start": 2.0,
+   "end": 3.0,
+   "camera": [
+    {
+     "t": 2.0,
+     "at": "from-kitchen"
+    }
+   ]
+  },
+  {
+   "name": "entrance-angle",
+   "start": 3.0,
+   "end": 4.0,
+   "camera": [
+    {
+     "t": 3.0,
+     "at": "entrance-angle"
+    }
+   ]
+  },
+  {
+   "name": "kitchen",
+   "start": 4.0,
+   "end": 5.0,
+   "camera": [
+    {
+     "t": 4.0,
+     "at": "kitchen"
+    }
+   ]
+  },
+  {
+   "name": "rear-service",
+   "start": 5.0,
+   "end": 6.0,
+   "camera": [
+    {
+     "t": 5.0,
+     "at": "rear-service"
+    }
+   ]
+  },
+  {
+   "name": "cutaway",
+   "start": 6.0,
+   "end": 7.0,
+   "camera": [
+    {
+     "t": 6.0,
+     "at": "cutaway"
+    }
+   ]
+  }
+ ]
+}

@@ -116,6 +116,103 @@ is_keyframes, is_references, summary`
 
 Reads the canvas back off the wire, including the frame count it snapped up to.
 
+## Per-reference roles (H3 Reference, H3 Mood Board, H3 Reference to Video)
+
+> Experimental. The nodes work and the plumbing is verified against core, but the *result* is
+> untested on a GPU — see the honest limit at the end.
+
+H3 conditions on a reference image through two independent channels: its **vision tokens**, which
+enter the Qwen3-VL-32B conditioning behind a `<Picture i>` label, and its **pixels**, as a VAE
+latent packed into the DiT sequence. Core's `MiniMax H3 Reference to Video` couples them with one
+check — wire a VAE and *every* reference becomes a latent, leave it out and *none* does.
+
+These two nodes decouple it per reference:
+
+- **H3 Reference** — takes up to 9 images and tags them `reference` (both channels) or `semantic`
+  (vision tokens only). Chain several nodes to mix roles in one run.
+- **H3 Reference to Video** — core's ref2va node, honouring those roles. Outputs the usual
+  `positive` + `latent`, plus a `picture_map` string telling you which `<Picture i>` each
+  reference became.
+
+- **H3 Mood Board** — several images that share a *look* but not a subject, collapsed into
+  **one** `<Picture>`. Each is encoded by the vision tower separately, then their token spans are
+  blended position by position and the spare brackets are cut out. Chains like an H3 Reference.
+
+So a hero shot can carry its identity as pixels while a board of style images steers the look:
+
+```
+H3 Mood Board [3 refs, average, 384] ─┐
+H3 Reference  [hero.png, reference]  ─┴→ H3 Reference to Video → positive, latent
+```
+
+This is the same technique as the mood board in
+[ComfyUI-QI21Remix](https://github.com/nynxz/ComfyUI-QI21Remix), ported — the blend engine is
+shared, only the span-finding differs. It ports *better* here: 2.1's encoder deletes vision
+tokens so the surgery needs `image_slots`, while H3 keeps them and hands over a map
+(`minimax_token_tags`), so a run of vision tags simply *is* a picture.
+
+- `average` — a weighted mean at every grid position. Where the images agree the vectors
+  reinforce; where they differ they partly cancel, and the residual is the shared look.
+- `mosaic` — each cell taken whole from one source, checkerboard-style, with `block_size`,
+  `feather` and `jitter`. Keeps each image's local coherence instead of averaging it away.
+
+`weights` (e.g. `1, 0.5, 2`) biases both, but means different things: under `average` it is how
+much of the mix a source carries; under `mosaic`, which never mixes, how many *cells* it claims.
+They are normalised, so raising all of them changes nothing.
+
+### `semantic` does not mean "abstract" — resolution does
+
+This is the part worth understanding, and it is the one thing that will surprise you: a
+`semantic` reference can still transfer almost exactly.
+
+Qwen3-VL patches at 16px and merges 2×2 — **one vision token per 32×32 pixels** — and it never
+downscales what it is handed (its cap is 12.8M pixels, far above any reference). DeepStack then
+injects multi-level ViT features at those same positions. So a generation-sized reference is
+**1008 tokens** of dense, spatially-resolved encoding: enough to reproduce the image closely with
+no latent at all. Dropping the VAE latent removes one transfer channel; it does not abstract the
+other.
+
+What buys abstraction is the token budget, and it falls with the square of resolution:
+
+| reference size | vision tokens |
+|---|---|
+| 1344×768 (a full `match`-sized reference) | 1008 |
+| 512×512 | 256 |
+| 384×384 | 144 |
+| 256×256 | 64 |
+
+Two ways to spend less:
+
+- **`vision_size`** on H3 Reference caps what the *text encoder* sees, independently of the VAE
+  latent — so a `reference` can keep full-detail pixels while its vision tokens stay coarse.
+- **H3 Mood Board**'s `resolution` sets the grid every board image is fitted to, which is both
+  what makes them blendable and the board's whole cost. 384 is 144 tokens for the lot.
+
+The encode node reports what each picture cost in its `picture_map`, so you can see what you are
+spending rather than guess.
+
+> Collapsing a board leaves **gaps** in the picture numbering — the surviving `<Picture i>` label
+> was written by the tokenizer's counter before the cut. The `picture_map` is the authoritative
+> list of what to prompt with; do not assume pictures run 1..N.
+
+**Read the `picture_map` before you write the prompt.** Nothing tells H3 which `<Picture i>` a
+latent belongs to except order — the tokenizer labels from a plain counter and the DiT reads
+`refs[k]` as the k-th picture. Latent-bearing references are therefore emitted first, so
+`<Picture 1>` is always a `reference`, and the numbering is *not* chain order.
+
+A `semantic` reference costs no latent slot: core's `PackedLayout` gives reference image k the
+time position `text_len + k`, packed as a run after the whole text rather than spliced at its tag,
+so dropping one simply closes the gap.
+
+Images only. Reference videos and audio carry their own timeline spans and soundtrack pairing —
+chain core's node for those.
+
+**Honest limit:** a `<Picture N>` that has vision tokens but no latent is a shape H3 was probably
+never trained on, so `semantic` is an extrapolation, not a documented mode. Both endpoints of it
+are supported by core (all-latent, and no-VAE-at-all), and the equivalent split demonstrably does
+something on Qwen Image 2.1 — but whether the middle is *useful* here is exactly what this group
+exists to find out.
+
 ## Editing a still
 
 ### H3 Edit (experimental)

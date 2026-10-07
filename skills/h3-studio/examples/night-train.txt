@@ -1,0 +1,47 @@
+# Night Train
+style: Live-action, cinematic, 35mm film, soft tungsten and sodium light, shallow depth of field
+canvas: 1344x768
+ambience: steady rain, distant traffic, the hum of an idling train
+music: sparse piano at a slow tempo, joined by a low sustained cello
+
+## References
+- @anna: a woman in her early thirties with shoulder-length dark hair, a mustard raincoat over a grey knit sweater, a small leather satchel
+- @conductor: a heavy-set man in his sixties with a white moustache, navy uniform and peaked cap
+- @platform: a long covered railway platform at night, wet concrete, orange sodium lamps, a waiting train with lit windows
+- @carriage: an old train carriage interior, green upholstered seats, rain-streaked windows, warm overhead lights
+- @letter: a folded cream-coloured letter, creased and soft at the edges
+
+## Cast
+- Anna (@anna): a quiet, low young female voice
+- Conductor (@conductor): a gruff, warm older male voice
+
+## Scene 1: The platform (7s, cut)
+
+### 0:00
+A wide static shot of @platform. @anna hurries out of the rain onto the platform, shaking water from her hood, the satchel bumping at her hip.
+
+### 0:03 (no cut)
+The camera trucks right with small amplitude at slow speed as she slows beside the train and takes @letter from her satchel, reading it under a lamp.
+ANNA (under her breath): Platform four. Last train.
+
+### 0:05.5
+The camera cuts to @conductor leaning from the carriage door, one hand on the rail, looking down the platform.
+CONDUCTOR: Last call!
+
+## Scene 2: Boarding (6s, continues)
+
+### 0:00
+@anna steps up into the train past @conductor, who nods and touches his cap. The camera pushes in with small amplitude at slow speed on the door as it slides shut.
+CONDUCTOR (warmly): Mind the step, miss.
+
+### 0:03.5 (dissolve)
+Inside @carriage, @anna sits by the window and smooths @letter on her knee. Rain runs down the glass beside her face.
+
+## Scene 3: Leaving (6s, continues)
+
+### 0:00
+A close-up of the reflection of @anna in the window as the platform lights begin to slide past outside. The camera holds a static shot.
+ANNA (V.O.): I said I'd never come back. >> And here I am, on the last train home.
+
+### 0:03
+The camera cuts to the back of the train pulling away down the track into the dark, its red lights shrinking in the rain.

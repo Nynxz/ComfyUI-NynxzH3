@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "paths": {
+      "@/*": ["./frontend/*"]
+    },
+    "typeRoots": ["node_modules/@types"]
+  },
+  // `files`, not `include`: an `include` entry is still filtered by `exclude`, so listing this
+  // there while excluding node_modules silently dropped it from the program — and nothing noticed
+  // until the first `@comfy/api` import failed to resolve. Entries in `files` survive `exclude`.
+  // It stays nodekit's single shared declaration rather than a local copy; see the head of that
+  // file for what happened last time this shim was duplicated.
+  "files": ["./node_modules/@nynxz/zenkit-nodekit/comfy.d.ts"],
+  "include": ["frontend/**/*.ts", "frontend/**/*.vue"],
+  "exclude": ["node_modules", "web", "reference"]
+}

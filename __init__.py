@@ -4,9 +4,10 @@
     nodes/<group>/   the nodes, grouped by what they do to a run
     NODES            every node in the pack, listed below
 
-**No frontend and no build step.** Every node is a model passthrough, a conditioning builder or a
-text report, so there is nothing to draw and nothing to compile — drop the folder in
-`custom_nodes/` and restart.
+The production side — **H3 Studio**, **Grey Box Studio** and the **Codex** — has a Vue frontend
+built on ZenKit's nodekit into `web/` (`pnpm build`); the building-block nodes need none of it.
+Those three moved here from NynxzNodes and keep their `nynxz.*` node ids and `/nynxz/...` routes,
+so workflows and projects made there still open.
 
 Adding a node is: write it, then add it to `NODES`. The list is deliberately explicit rather than
 discovered by walking the tree — at this size a reader can see the whole pack in one screen, and a
@@ -15,11 +16,15 @@ node cannot go missing because a file was named wrong.
 
 from comfy_api.latest import ComfyExtension, io
 
+# The production side. Importing these packages also registers their routes
+# (/nynxz/h3studio/*, /nynxz/greybox/*).
+from .nodes import _zenkit
 from .nodes.assets.node import H3Audio, H3Image, H3Video
 from .nodes.canvas.node import H3Canvas
 from .nodes.edit.node import H3Edit
 from .nodes.encode.node import H3Encode
 from .nodes.extras.node import H3Extras
+from .nodes.greybox.greybox import NynxzGreyBoxShot, NynxzGreyBoxStudio
 from .nodes.h3.cache import H3BlockCache
 from .nodes.h3.decode import H3DecodeFrames
 from .nodes.h3.depthskip import H3DepthSkip
@@ -29,8 +34,22 @@ from .nodes.h3.schedule import H3DetailSchedule
 from .nodes.h3.scheduled import H3ScheduledSampler
 from .nodes.h3.slice import H3LatentSlice
 from .nodes.h3.window import H3SlidingWindow
+from .nodes.h3studio.studio import (
+    NynxzH3Studio,
+    NynxzH3StudioClip,
+    NynxzH3StudioJoin,
+    NynxzH3StudioOutputs,
+    NynxzH3StudioScenes,
+    NynxzH3StudioSetup,
+)
 from .nodes.inputs.node import H3Inputs
+from .nodes.references.encode import NynxzH3ReferenceToVideo
+from .nodes.references.moodboard import NynxzH3MoodBoard
+from .nodes.references.reference import NynxzH3Reference
 from .nodes.rewrite.node import H3ClipLora, H3RewriteClean, H3RewritePrompt
+
+#: The built Vue frontend (H3 Studio, Grey Box Studio, the Codex), served at /extensions/<pack>/.
+WEB_DIRECTORY = "./web"
 
 #: Every node this pack registers.
 NODES: list[type[io.ComfyNode]] = [
@@ -59,11 +78,26 @@ NODES: list[type[io.ComfyNode]] = [
     # Latent — what comes back out.
     H3DecodeFrames,
     H3LatentSlice,
+    # Production — a film planned, blocked and rendered (ids kept from NynxzNodes: nynxz.*).
+    NynxzH3StudioSetup,
+    NynxzH3Studio,
+    NynxzH3StudioOutputs,
+    NynxzH3StudioScenes,
+    NynxzH3StudioClip,
+    NynxzH3StudioJoin,
+    NynxzGreyBoxShot,
+    NynxzGreyBoxStudio,
+    # Reference conditioning from NynxzNodes (ids kept: nynxz.H3.*).
+    NynxzH3Reference,
+    NynxzH3MoodBoard,
+    NynxzH3ReferenceToVideo,
 ]
 
 
 class PackExtension(ComfyExtension):
     async def get_node_list(self) -> list[type[io.ComfyNode]]:
+        # The media routes the frontend's picker and thumbnails call (/nynxzh3/media).
+        _zenkit.setup()
         return NODES
 
 
@@ -71,4 +105,4 @@ async def comfy_entrypoint() -> ComfyExtension:
     return PackExtension()
 
 
-__all__ = ["NODES", "PackExtension", "comfy_entrypoint"]
+__all__ = ["NODES", "WEB_DIRECTORY", "PackExtension", "comfy_entrypoint"]

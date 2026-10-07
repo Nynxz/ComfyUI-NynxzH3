@@ -1,0 +1,159 @@
+{
+ "name": "Mika arrives",
+ "set": "midnight-spoon",
+ "fps": 24,
+ "notes": "Rain night. Mika comes in from the street, crosses the dining room and takes the middle stool; Ren clocks her from the line and comes to the counter; Kai keeps cooking, then turns.",
+ "actors": [
+  {
+   "id": "@kai",
+   "keys": [
+    {
+     "t": 0,
+     "at": "stove",
+     "face": 180
+    },
+    {
+     "t": 5.5,
+     "at": "stove",
+     "face": 180
+    },
+    {
+     "t": 6.5,
+     "at": "stove",
+     "face": "@mika"
+    }
+   ]
+  },
+  {
+   "id": "@ren",
+   "keys": [
+    {
+     "t": 0,
+     "at": "line",
+     "face": 180
+    },
+    {
+     "t": 2.8,
+     "at": "line",
+     "face": "@mika"
+    },
+    {
+     "t": 5.0,
+     "at": "behind-counter",
+     "face": "@mika"
+    }
+   ]
+  },
+  {
+   "id": "@mika",
+   "keys": [
+    {
+     "t": 0,
+     "at": "sidewalk",
+     "face": "path"
+    },
+    {
+     "t": 1.6,
+     "at": "door"
+    },
+    {
+     "t": 2.7,
+     "at": [
+      -4.1,
+      0,
+      0.9
+     ]
+    },
+    {
+     "t": 4.5,
+     "at": [
+      -0.3,
+      0,
+      0.4
+     ]
+    },
+    {
+     "t": 5.5,
+     "at": "seat-3",
+     "face": 180,
+     "pose": "sit"
+    }
+   ]
+  }
+ ],
+ "shots": [
+  {
+   "name": "1A",
+   "start": 0,
+   "end": 2.5,
+   "camera": [
+    {
+     "t": 0,
+     "at": "from-kitchen",
+     "look": "door",
+     "lens": 34
+    },
+    {
+     "t": 2.5,
+     "at": "from-kitchen",
+     "look": "@mika",
+     "lens": 30
+    }
+   ]
+  },
+  {
+   "name": "1B",
+   "start": 2.5,
+   "end": 4.5,
+   "camera": [
+    {
+     "t": 2.5,
+     "at": [
+      2.4,
+      1.5,
+      0.7
+     ],
+     "look": "@ren",
+     "lens": 38
+    },
+    {
+     "t": 4.5,
+     "at": [
+      2.1,
+      1.5,
+      0.5
+     ],
+     "look": "@ren",
+     "lens": 45
+    }
+   ]
+  },
+  {
+   "name": "1C",
+   "start": 4.5,
+   "end": 7.0,
+   "camera": [
+    {
+     "t": 4.5,
+     "at": [
+      -0.5,
+      1.35,
+      -2.0
+     ],
+     "look": "@mika",
+     "lens": 30
+    },
+    {
+     "t": 7.0,
+     "at": [
+      -0.3,
+      1.3,
+      -1.8
+     ],
+     "look": "@mika",
+     "lens": 45
+    }
+   ]
+  }
+ ]
+}

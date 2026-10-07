@@ -1,0 +1,6 @@
+# Not ours to format
+node_modules
+web
+dist
+reference
+pnpm-lock.yaml

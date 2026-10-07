@@ -1,0 +1,6 @@
+{
+  "@kai": { "height": 1.82, "build": 1.2, "tone": 0.84 },
+  "@ren": { "height": 1.74, "build": 1.0, "tone": 0.9 },
+  "@mika": { "height": 1.6, "build": 0.9, "tone": 0.95 },
+  "@lumi": { "height": 1.55, "build": 0.9, "tone": 0.92 }
+}

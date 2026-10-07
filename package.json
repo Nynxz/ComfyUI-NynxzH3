@@ -1,0 +1,42 @@
+{
+  "name": "comfyui-nynxzh3",
+  "private": true,
+  "type": "module",
+  "peerDependencies": {
+    "primevue": "5.0.1",
+    "vue": "3.5.42",
+    "vue-i18n": "11.4.10"
+  },
+  "devDependencies": {
+    "@comfyorg/comfyui-frontend-types": "1.22.1",
+    "@eslint/js": "^10.0.1",
+    "@nynxz/zenkit-nodekit": "^0.2.0",
+    "@types/node": "^26.4.1",
+    "@types/three": "0.184.1",
+    "@vitejs/plugin-vue": "6.0.8",
+    "eslint": "^10.9.1",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-vue": "^10.10.0",
+    "globals": "^17.12.0",
+    "prettier": "^3.9.6",
+    "typescript": "5.9.3",
+    "typescript-eslint": "^8.69.0",
+    "vite": "8.2.2",
+    "vue-tsc": "^3.3.11"
+  },
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite build --watch",
+    "typecheck": "vue-tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write \"frontend/**/*.{ts,vue}\" \"*.{js,mts,json}\"",
+    "format:check": "prettier --check \"frontend/**/*.{ts,vue}\" \"*.{js,mts,json}\"",
+    "sync": "zenkit-nodekit sync",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && ruff check . && ruff format --check . && zenkit-nodekit sync --check && zenkit-nodekit check-widgets && pnpm build"
+  },
+  "dependencies": {
+    "@nynxz/zenkit-ui": "^0.2.0",
+    "three": "0.184.0"
+  }
+}
