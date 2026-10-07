@@ -75,7 +75,6 @@
               <span class="lbl">music</span>
               <textarea class="fits" v-model="film.music" rows="2" placeholder="leave empty for none" />
             </label>
-            <span class="soft">Every scene opens with the style and direction; scenes can set their own direction, ambience and music.</span>
           </div>
         </section>
 
@@ -90,13 +89,13 @@
             </span>
           </button>
           <div v-if="section === 'scene'" class="accbody">
-            <label class="row">
+            <label class="row" title="H3 renders in steps of 17 frames, so the length rounds up a little">
               <span class="lbl">length</span>
               <ZenNumber :model-value="scene.seconds" :min="1" :max="30" :step="0.5" :precision="2" @update:model-value="(v: number) => emit('seconds', sel.sceneIndex, v)" />
-              <span class="soft">s · snaps to 17k+5 frames</span>
+              <span class="soft">s</span>
             </label>
             <div class="row">
-              <span class="lbl">seed</span>
+              <span class="lbl" title="This scene's noise seed. The workflow uses it when H3 Studio Outputs' seed is wired to Random Noise.">seed</span>
               <ZenNumber
                 class="seed"
                 :model-value="scene.seed"
@@ -111,7 +110,6 @@
                 title="Re-roll: a new seed for this scene — only it (and scenes continuing from it) render again"
                 @click="scene!.seed = randomSeed()"
               />
-              <span class="soft">wire H3 Studio Outputs' seed to Random Noise</span>
             </div>
             <div v-if="sel.sceneIndex > 0" class="row">
               <span class="lbl">from previous</span>
@@ -148,7 +146,7 @@
                 <i v-else class="mdi" :class="edge === 'first' ? 'mdi-page-first' : 'mdi-page-last'" />
                 <span class="kfl">{{ edge }}</span>
               </button>
-              <span class="hintline">{{ keyframeHint }}</span>
+              <span v-if="keyframeHint" class="hintline">{{ keyframeHint }}</span>
             </div>
             <label class="col">
               <span class="lbl">direction</span>
@@ -294,7 +292,7 @@
       </div>
       <div class="col">
         <span class="lbl">per scene — a scene renders all its frames at one strength</span>
-        <div class="lscenes">
+        <div class="lscenes" title="Or drag each scene's bar on the timeline. Dashed bars follow the lane's strength.">
           <label
             v-for="(sc, i) in project.scenes"
             :key="sc.id"
@@ -322,7 +320,6 @@
             </button>
           </label>
         </div>
-        <span class="hintline">Or drag each scene's bar on the timeline. Dashed bars follow the lane's strength.</span>
       </div>
       <p v-if="!stepShapesWork(project) && hasShapes" class="shapenote">
         <i class="mdi mdi-information-outline" />
@@ -615,7 +612,7 @@ const keyframeHint = computed(() => {
   if (first && last) return "The scene travels from the first picture to the last.";
   if (first) return "The scene starts exactly on this picture.";
   if (last) return "The scene ends exactly on this picture.";
-  return "Optional: pin the exact first and/or last frame of this scene.";
+  return "";
 });
 
 /** Every reference: mentioning one in a shot is what brings it into the scene. */
