@@ -9,9 +9,9 @@
     </header>
 
     <div class="scroll zen-scroll">
-      <section>
+      <section v-if="now">
         <h4>Now</h4>
-        <div v-if="now" class="now">
+        <div class="now">
           <div class="nowthumb">
             <video v-if="now.frame?.video" :src="now.frame.url" autoplay muted loop playsinline />
             <img v-else-if="now.frame?.url" :src="now.frame.url" alt="" />
@@ -30,12 +30,10 @@
             </div>
           </div>
         </div>
-        <p v-else class="soft small">Nothing rendering.</p>
       </section>
 
-      <section>
+      <section v-if="queued.length">
         <h4>Up next</h4>
-        <p v-if="!queued.length" class="soft small">Nothing queued for this studio.</p>
         <div v-for="(q, i) in queued" :key="q.id" class="qrow" :class="{ running: q.running }">
           <i class="mdi" :class="q.running ? 'mdi-play-circle-outline' : 'mdi-timer-sand'" />
           <span class="ellipsis"
@@ -49,7 +47,7 @@
         <h4>History</h4>
         <p v-if="loading && !groups.length" class="soft small">Looking…</p>
         <p v-else-if="!groups.length" class="soft small">
-          No renders yet. Every clip a scene renders is kept here.
+          No renders yet. Each clip a scene renders is kept here, so you can go back to it.
         </p>
         <div v-for="g in groups" :key="g.id" class="group">
           <button type="button" class="ghead" @click="toggle(g.id)">
@@ -93,7 +91,7 @@
         </div>
       </section>
       <p v-if="note" class="note" :class="{ bad: note.bad }">{{ note.text }}</p>
-      <p class="soft small hint">Hold Shift over a take to see it large.</p>
+      <p v-if="groups.length" class="soft small hint">Hold Shift over a take to see it large.</p>
     </div>
   </aside>
 </template>

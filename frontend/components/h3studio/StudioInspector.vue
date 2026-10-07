@@ -234,7 +234,7 @@
               </ZenMentionInput>
               <StudioDraft :project="project" :scene-index="sel.sceneIndex" :shot-index="i" part="box" />
               <label v-if="i > 0" class="row" :title="transitionOf(sh).title">
-                <span class="lbl">from the shot before</span>
+                <span class="lbl">transition</span>
                 <ZenSelect
                   class="transition"
                   :model-value="sh.transition ?? 'cut'"
