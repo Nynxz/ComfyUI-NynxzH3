@@ -1,6 +1,6 @@
 {
   "namespace": "nynxzh3",
-  "displayName": "Nynxz H3",
+  "displayName": "Nynxz H3 Studio",
   "category": "Nynxz/H3",
-  "python": { "logPrefix": "[NynxzH3]" }
+  "python": { "logPrefix": "[NynxzH3Studio]" }
 }

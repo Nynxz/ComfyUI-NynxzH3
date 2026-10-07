@@ -3,9 +3,9 @@
 # linting.
 
 [project]
-name = "comfyui-nynxzh3"
+name = "comfyui-nynxzh3studio"
 version = "0.0.2"
-description = "MiniMax H3 for ComfyUI: one drag-and-drop input node covering t2va/fl2va/ref2va, plus step caching, partial decode and profiling."
+description = "A production pack for MiniMax H3 in ComfyUI: H3 Studio (write a film as scenes, render it in one loop), Grey Box Studio (block scenes in 3D), the Codex (a show's characters and places), and the H3 conditioning, prompt and sampling nodes underneath."
 authors = [{ name = "Nynxz", email = "contact@nynxz.com" }]
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -14,17 +14,17 @@ classifiers = []
 dependencies = []
 
 [project.urls]
-Repository = "https://github.com/Nynxz/ComfyUI-NynxzH3"
-BugTracker = "https://github.com/Nynxz/ComfyUI-NynxzH3/issues"
+Repository = "https://github.com/Nynxz/ComfyUI-NynxzH3Studio"
+BugTracker = "https://github.com/Nynxz/ComfyUI-NynxzH3Studio/issues"
 
 [tool.comfy]
 PublisherId = "nynxz"
-DisplayName = "Nynxz H3"
+DisplayName = "Nynxz H3 Studio"
 Icon = "https://avatars.githubusercontent.com/u/60878743?v=4"
-Tags = ["video", "minimax", "h3", "conditioning", "reference", "optimization", "cache"]
-Repository = "https://github.com/Nynxz/ComfyUI-NynxzH3"
-# The frontend ships as-is. There is no build step, so `web/` is both the source and what
-# runs — nothing to compile, and nothing to keep in sync with a bundle.
+Tags = ["video", "minimax", "h3", "studio", "storyboard", "3d", "conditioning", "reference"]
+Repository = "https://github.com/Nynxz/ComfyUI-NynxzH3Studio"
+# `web/` is built from `frontend/` (`pnpm build`) and gitignored, so a publish must build first;
+# this ships the built bundle with the pack.
 includes = ["web"]
 
 

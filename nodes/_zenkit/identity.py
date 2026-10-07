@@ -22,13 +22,13 @@ __all__ = [
 ]
 
 NAMESPACE = "nynxzh3"
-DISPLAY_NAME = "Nynxz H3"
+DISPLAY_NAME = "Nynxz H3 Studio"
 CATEGORY = "Nynxz/H3"
 #: Every HTTP route of the pack sits under this.
 ROUTE_PREFIX = "/nynxzh3"
 #: Start of every widget io type: "LoraStack" -> "NYNXZH3_LORA_STACK".
 WIDGET_IO_PREFIX = "NYNXZH3_"
-LOG_PREFIX = "[NynxzH3]"
+LOG_PREFIX = "[NynxzH3Studio]"
 #: The pack's own route modules (pack.json python.routes), imported by setup().
 ROUTE_MODULES: tuple[str, ...] = ()
 NODEKIT_VERSION = "0.2.0"

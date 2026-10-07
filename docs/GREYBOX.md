@@ -58,11 +58,11 @@ Build a set and a scene, look, fix, look again:
 
 ```bash
 cd ComfyUI
-.venv/bin/python custom_nodes/ComfyUI-NynxzH3/nodes/greybox/cli.py check  path/to/scenes/scene.json
-.venv/bin/python custom_nodes/ComfyUI-NynxzH3/nodes/greybox/cli.py sheet  path/to/scenes/scene.json
-.venv/bin/python custom_nodes/ComfyUI-NynxzH3/nodes/greybox/cli.py frame  path/to/scenes/scene.json --shot 1A --at 2.4
-.venv/bin/python custom_nodes/ComfyUI-NynxzH3/nodes/greybox/cli.py plan   path/to/scenes/scene.json --at 3
-.venv/bin/python custom_nodes/ComfyUI-NynxzH3/nodes/greybox/cli.py video  path/to/scenes/scene.json --shot 1A
+.venv/bin/python custom_nodes/ComfyUI-NynxzH3Studio/nodes/greybox/cli.py check  path/to/scenes/scene.json
+.venv/bin/python custom_nodes/ComfyUI-NynxzH3Studio/nodes/greybox/cli.py sheet  path/to/scenes/scene.json
+.venv/bin/python custom_nodes/ComfyUI-NynxzH3Studio/nodes/greybox/cli.py frame  path/to/scenes/scene.json --shot 1A --at 2.4
+.venv/bin/python custom_nodes/ComfyUI-NynxzH3Studio/nodes/greybox/cli.py plan   path/to/scenes/scene.json --at 3
+.venv/bin/python custom_nodes/ComfyUI-NynxzH3Studio/nodes/greybox/cli.py video  path/to/scenes/scene.json --shot 1A
 ```
 
 - `check` validates and summarises: shapes, marks, set cameras, actors, shots.
