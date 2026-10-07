@@ -850,7 +850,19 @@ class NynxzH3StudioClip(NynxzNode):
         if render.get("hold"):
             return render.get("hold_key"), render["hold"]
         key = cls._key(render)
-        return key, (_reuse.lookup(key) if key and keep and reuse else None)
+        if not (key and keep and reuse):
+            return key, None
+        return key, _reuse.lookup(key, cls._models(render))
+
+    @classmethod
+    def _models(cls, render) -> str | None:
+        """The models the clip is rendered with (H3 Studio Setup's), noted beside it."""
+        if not render.get("scene_key") or cls.hidden.dynprompt is None:
+            return None
+        chain = _reuse.chain_key(
+            cls.hidden.dynprompt, cls.hidden.unique_id, ("images", "audio"), models=True
+        )
+        return chain[:32]
 
     @classmethod
     def check_lazy_status(
@@ -925,7 +937,7 @@ class NynxzH3StudioClip(NynxzNode):
             ref = _save_clip(video, render)
             _carry.save_sidecar(path_of(ref), video.h3_latent, head)
             if key:
-                _reuse.remember(key, ref)
+                _reuse.remember(key, ref, cls._models(render))
             _reuse.remember_scene(render.get("scene_id"), ref, key, render.get("scene_key"))
             _reuse.add_take(
                 render.get("scene_id"),

@@ -84,8 +84,16 @@ def frames_key(frames, audio: dict | None) -> str:
     return digest.hexdigest()
 
 
-def chain_key(dynprompt, node_id: str, inputs: tuple[str, ...]) -> str:
-    """The render half: the structure and widget values upstream of `node_id`'s `inputs`."""
+#: What H3 Studio Setup brings that decides a render's pixels: the models, not the scene it's on.
+SETUP_MODELS = ("model", "clip", "vae", "audio_vae")
+
+
+def chain_key(dynprompt, node_id: str, inputs: tuple[str, ...], models: bool = False) -> str:
+    """The render half: the structure and widget values upstream of `node_id`'s `inputs`.
+
+    The walk stops at H3 Studio, whose scene half covers the request — but not the models wired
+    into its Setup, which the sampler gets back through H3 Studio Outputs. With `models`, the walk
+    goes through the studio into Setup's model inputs instead, for `models_key`."""
     memo: dict[str, str] = {}
 
     def node_key(nid: str) -> str:
@@ -97,6 +105,18 @@ def chain_key(dynprompt, node_id: str, inputs: tuple[str, ...]) -> str:
             memo[nid] = "missing"
             return memo[nid]
         kind = node["class_type"]
+        if models and kind == "nynxz.H3.Studio":
+            setup = node["inputs"].get("setup")
+            setup_node = (
+                dynprompt.get_node(str(setup[0]))
+                if _is_link(setup) and dynprompt.has_node(str(setup[0]))
+                else None
+            )
+            given = (setup_node or {}).get("inputs", {})
+            memo[nid] = digest(
+                [kind, [[name, value_key(given[name])] for name in SETUP_MODELS if name in given]]
+            )
+            return memo[nid]
         if kind in COVERED:
             memo[nid] = kind
             return kind
@@ -138,11 +158,20 @@ def _read_index() -> dict[str, str]:
         return {}
 
 
-def lookup(key: str) -> str | None:
-    """The saved clip (a media ref) rendered under this fingerprint, if it's still there."""
-    ref = _read_index().get(key)
+def lookup(key: str, models: str | None = None) -> str | None:
+    """The saved clip (a media ref) rendered under this fingerprint, if it's still there — and,
+    given `models`, made with the same models (an older entry, saved before models were noted, is
+    taken as made with these and noted so)."""
+    entry = _read_index().get(key)
+    ref = entry.get("ref") if isinstance(entry, dict) else entry
     if not ref:
         return None
+    if models is not None:
+        made_with = entry.get("models") if isinstance(entry, dict) else None
+        if made_with is None:
+            remember(key, ref, models)
+        elif made_with != models:
+            return None
     try:
         path_of(ref)
     except ValueError:
@@ -150,10 +179,10 @@ def lookup(key: str) -> str | None:
     return ref
 
 
-def remember(key: str, ref: str) -> None:
+def remember(key: str, ref: str, models: str | None = None) -> None:
     with _lock:
         index = _read_index()
-        index[key] = ref
+        index[key] = {"ref": ref, "models": models} if models else ref
         path = _index_path()
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path + ".part", "w", encoding="utf-8") as f:
