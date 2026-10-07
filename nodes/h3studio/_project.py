@@ -235,7 +235,7 @@ def normalize(raw: Any) -> dict[str, Any]:
             }
         )
     if not scenes:
-        scenes = [dict(DEFAULT_PROJECT["scenes"][0])]
+        return normalize({**raw, "scenes": DEFAULT_PROJECT["scenes"]})
 
     loras = []
     for i, lane in enumerate(raw.get("loras") or []):
@@ -290,6 +290,13 @@ def _render_only(raw: Any, ids: set[str]) -> list[str] | None:
     if not isinstance(raw, list):
         return None
     chosen = [x for x in raw if isinstance(x, str) and x in ids]
+    if raw and not chosen:
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "H3 Studio: none of the scenes picked to render (%s) exist any more; rendering all.",
+            ", ".join(map(str, raw)),
+        )
     return chosen or None
 
 

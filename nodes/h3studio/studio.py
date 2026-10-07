@@ -363,15 +363,20 @@ def render_scene(setup: dict, project, scene: int | None) -> dict:
     noise_carry = None
     carried = last_key
     mode = plan.continuation.get("mode")
+    context = 0
     if mode in ("guide", "sound") and previous_frames is not None:
-        # "guide" carries the picture and the sound; "sound" only the sound: the picture cuts, and
-        # its first `context` frames (unguided) are cut off with the regenerated sound under them.
-        picture = mode == "guide"
-        context = min(plan.continuation["frames"], previous_frames.shape[0])
+        # The carried head is cut off after decoding, so at least one grid step stays new.
+        context = min(plan.continuation["frames"], previous_frames.shape[0], frame_count - 17)
         while context > 5 and context % 17 != 5:
             context -= 1
         if context < 5:
-            context = 1
+            plan.warnings.append(
+                "This scene or the previous clip is too short to carry anything over, so it cuts."
+            )
+    if context >= 5:
+        # "guide" carries the picture and the sound; "sound" only the sound: the picture cuts, and
+        # its first `context` frames (unguided) are cut off with the regenerated sound under them.
+        picture = mode == "guide"
         carried_latent = setup.get("previous_latent")
         tail = (
             _carry.latent_tail(carried_latent, context, width=width, height=height)
@@ -431,6 +436,8 @@ def render_scene(setup: dict, project, scene: int | None) -> dict:
             frame_count,
             plan.prompt,
         )
+    for warning in dict.fromkeys(plan.warnings):
+        LOG.warning("H3 Studio scene %d: %s", index + 1, warning)
     return {
         "model": model,
         "positive": positive,

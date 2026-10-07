@@ -41,6 +41,8 @@ def latent_tail(latent: tuple[torch.Tensor, torch.Tensor], frames: int, height: 
     """The tokens of a scene's last `frames` frames, video and audio, or None when the latent
     doesn't fit this canvas (it was rendered at another size) or is too short."""
     video, audio = latent
+    if frames < 5:
+        return None
     tokens = context_tokens(frames)
     if video.shape[2] < tokens or tuple(video.shape[-2:]) != (height // 16, width // 16):
         return None
