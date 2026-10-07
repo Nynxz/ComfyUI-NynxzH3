@@ -89,6 +89,23 @@ export function rendersInALoop(studioNodeId: string): boolean {
   return setup?.inputs?.find((i) => i.name === "scene")?.link != null;
 }
 
+/** Tell the H3 Studio Scenes nodes that follow this studio which scenes the run renders: they list
+ *  only those for the loop, and their value changing is what tells ComfyUI's cache to ask again. */
+function markScenesNodes(studioNodeId: string, only: string[] | undefined) {
+  const graph = (app as unknown as { graph: { nodes?: GraphNodeWidgets[] } }).graph;
+  for (const node of graph.nodes ?? []) {
+    if (node.type !== "nynxz.H3.StudioScenes") continue;
+    const widget = node.widgets?.find((w) => w.name === "link");
+    const link = widget?.value as { studio?: string } | undefined;
+    if (!widget || String(link?.studio ?? "") !== studioNodeId) continue;
+    widget.value = { ...(link ?? {}), only: only?.join(",") ?? "" };
+  }
+}
+interface GraphNodeWidgets {
+  type: string;
+  widgets?: { name: string; value: unknown }[];
+}
+
 const queue = () =>
   (app as unknown as { queuePrompt(n: number, count: number): Promise<unknown> }).queuePrompt(0, 1);
 
@@ -99,6 +116,7 @@ export async function renderScenes(project: Project, studioNodeId: string, ids: 
   if (!chosen.length) return;
   if (rendersInALoop(studioNodeId)) {
     project.renderOnly = ids ? chosen : undefined;
+    markScenesNodes(studioNodeId, project.renderOnly);
     await nextTick();
     try {
       await queue();

@@ -126,6 +126,17 @@ def _needed(proj: dict, only: list[str]) -> set[int]:
     return needed
 
 
+def scenes_to_run(proj: dict) -> list[int]:
+    """The scenes a run samples, in order: every one, or for a partial render the picked scenes and
+    those `_needed` to continue from. A loop in List mode over these runs one pass per scene that
+    actually renders, instead of passing through every scene up to it."""
+    only = proj.get("render_only")
+    if not only:
+        return list(range(len(proj["scenes"])))
+    picked = {i for i, sc in enumerate(proj["scenes"]) if sc["id"] in only}
+    return sorted(picked | _needed(proj, only))
+
+
 def _blank(plan, index: int, scene_id: str, setup: dict) -> dict:
     """A scene left out of a partial render that has never been rendered (and no picked scene
     continues from): black frames and silence for its length, so the film keeps its timing."""
@@ -224,6 +235,20 @@ def render_scene(setup: dict, project, scene: int | None) -> dict:
             return _held(plan, index, scene_id, record, setup)
         if index not in _needed(proj, only):
             return _blank(plan, index, scene_id, setup)
+    if only and setup.get("previous_frames") is not None:
+        # A loop over only the scenes that render carries the clip of the pass before, which is
+        # the previous scene only when that one rendered too; otherwise continue from its latest.
+        run = scenes_to_run(proj)
+        before = run[run.index(index) - 1] if index in run and run.index(index) > 0 else None
+        if before != index - 1:
+            setup = {
+                **setup,
+                "previous_frames": None,
+                "previous_audio": None,
+                "previous_key": None,
+                "previous_latent": None,
+            }
+            previous_frames = previous_audio = None
     if (
         index > 0
         and setup.get("previous_frames") is None
@@ -597,14 +622,18 @@ class NynxzH3StudioScenes(NynxzNode):
         link = link if isinstance(link, dict) else {}
         studio, count = str(link.get("studio") or ""), int(link.get("count") or 1)
         project = _linked_project(cls.hidden.dynprompt, str(studio).strip())
+        scenes = None
         if project is not None:
-            count = len(normalize(project)["scenes"])
+            proj = normalize(project)
+            count = len(proj["scenes"])
+            # Only the scenes that render this run: the rest keep their latest clips.
+            scenes = scenes_to_run(proj)
         elif studio:
             LOG.warning(
                 "H3 Studio Scenes: no H3 Studio #%s in this workflow; using count %d", studio, count
             )
         count = max(1, int(count))
-        return io.NodeOutput(list(range(count)), count)
+        return io.NodeOutput(scenes or list(range(count)), count)
 
 
 class NynxzH3Studio(NynxzNode):
