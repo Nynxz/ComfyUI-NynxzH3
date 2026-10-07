@@ -33,7 +33,7 @@ the references and cast, writes the shots and dialogue, checks its own work, and
 placeholders you'll want to give pictures to.
 
 The skill knows about the rest of the pack too. It names references after your Codex entries, so
-the Codex button can fill them later, and it uses Grey Box renders as **blocking** videos when you
+**Fill from Codex** can fill them in later, and it uses Grey Box renders as **blocking** videos when you
 say you have them.
 
 ## Pasting it in

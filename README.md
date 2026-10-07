@@ -32,7 +32,7 @@ reference, so H3 keeps the layout and camera move while the look comes from your
 ## The Codex
 
 Your show's bible: every character, place and prop once, with its pictures, a description, a voice
-and LoRAs. In H3 Studio, the **Codex** button fills a film's `@references` from it by name.
+and LoRAs. In H3 Studio, the References tab's **Fill from Codex** button fills a film's `@references` from it by name.
 
 ![The Codex](docs/images/codex.webp)
 

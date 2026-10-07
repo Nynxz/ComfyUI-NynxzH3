@@ -40,7 +40,7 @@ model, sampler, decode, save — is ordinary ComfyUI.
 
 Mention a reference in a shot as `@name`; the studio turns it into the right tag.
 
-**From the Codex.** The References tab's **Codex** button matches references to a show's entries
+**From the Codex.** The References tab's **Fill from Codex** button matches references to a show's entries
 by name — `@spoon_interior` is the entry `spoon-interior` — and **Fill from the Codex** brings each
 entry's picture (over a placeholder, never over one you dropped in), its prompt line as the
 description, and a character's voice and LoRAs. Placeholders the show doesn't have can be added to
