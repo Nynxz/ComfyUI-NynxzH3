@@ -993,6 +993,14 @@ function mention(name: string) {
   margin-left: auto;
   font-weight: 400;
 }
+.sechead .soft.ellipsis {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-align: right;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
 .shots {
   display: flex;
   flex-direction: column;

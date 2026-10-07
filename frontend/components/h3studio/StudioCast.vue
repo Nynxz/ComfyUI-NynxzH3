@@ -33,10 +33,12 @@
           @click="remove(v.id)"
         />
       </div>
-      <input
+      <textarea
         v-model="v.voice"
-        class="field"
+        class="field grows"
+        rows="1"
         placeholder="sounds like — a quiet, breathy young female voice"
+        @keydown.enter.prevent
       />
       <div class="row">
         <label
@@ -241,6 +243,13 @@ function remove(id: string) {
   font: inherit;
   font-size: 12px;
   outline: none;
+}
+/* A voice description wraps instead of running off the card, as tall as its text. */
+.field.grows {
+  min-height: 26px;
+  resize: none;
+  line-height: 1.4;
+  field-sizing: content;
 }
 .name {
   flex: 1;

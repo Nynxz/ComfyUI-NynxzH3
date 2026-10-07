@@ -235,7 +235,7 @@
                         },
                       ]"
                     />
-                    <div class="sidebody">
+                    <div ref="sideBody" class="sidebody">
                       <!-- Both stay mounted: switching tabs mustn't rebuild every thumbnail. -->
                       <StudioInspector
                         v-show="tab === 'edit'"
@@ -415,7 +415,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from "vue";
 import {
   LoraBrowser,
   ZenButton,
@@ -782,6 +782,19 @@ function showVoice(id: string) {
   tab.value = "cast";
 }
 watch(tab, (t) => (view.tab = t));
+// The tabs share one scroll area: each keeps where it was, instead of opening part-way down at
+// wherever the last tab was left.
+const sideBody = ref<HTMLElement | null>(null);
+const tabScroll: Partial<Record<typeof tab.value, number>> = {};
+watch(
+  tab,
+  async (t, before) => {
+    if (sideBody.value) tabScroll[before] = sideBody.value.scrollTop;
+    await nextTick();
+    if (sideBody.value) sideBody.value.scrollTop = tabScroll[t] ?? 0;
+  },
+  { flush: "pre" },
+);
 function select(kind: Selection["kind"], id: string) {
   explicit.value = { kind, id };
   tab.value = kind === "ref" ? "refs" : "edit";
@@ -1502,10 +1515,16 @@ onBeforeUnmount(() => ro?.disconnect());
 .tabs :deep(.zen-tg-b) {
   flex: 1;
 }
+/* The scrollbar's room is kept whether or not it shows, so nothing shifts when it appears, and
+   the area reaches 4px into the panel's padding: an overlay scrollbar leaves the content in line
+   with the tabs, a classic one sits with an even gap either side. */
 .sidebody {
   flex: 1;
   min-height: 0;
+  margin-right: -4px;
+  padding-right: 4px;
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 .divider {
   width: 1px;

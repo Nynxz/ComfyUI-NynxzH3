@@ -60,6 +60,7 @@
           v-for="r in sec.refs"
           :key="r.id"
           class="card"
+          :data-ref="r.id"
           :class="{
             on: selected === r.id,
             off: !inScene(r),
@@ -296,7 +297,7 @@
 // sees (look + meaning) first, then pictures it only reads about, then videos, then audio — as
 // cards you drag to reorder. Dragging a picture between the two picture sections changes its role,
 // which is the same thing as changing where H3 numbers it.
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import {
   ZenButton,
   ZenCheckbox,
@@ -467,6 +468,20 @@ const tagOf = (id: string) => {
 const numberOf = (id: string) => compiledRef(id)?.tag.replace(/\D/g, "") || "–";
 const soundtrackOf = (id: string) => compiledRef(id)?.soundtrack_tag ?? null;
 const current = computed(() => props.project.refs.find((r) => r.id === props.selected) ?? null);
+// A reference picked elsewhere (the timeline, a shot) comes into view — after its highlight has
+// been drawn, so the card is already lit when it slides in, and only as far as it needs to.
+watch(
+  () => props.selected,
+  async (id) => {
+    if (!id) return;
+    await nextTick();
+    requestAnimationFrame(() =>
+      rootEl.value
+        ?.querySelector<HTMLElement>(`.card[data-ref="${CSS.escape(id)}"]`)
+        ?.scrollIntoView({ block: "nearest", behavior: "smooth" }),
+    );
+  },
+);
 
 const SIZE_HINT =
   "How big H3 is shown this reference, against the canvas. A full-size picture costs about as much as one of a 5-second scene's 37 latent frames; ½ costs a quarter of that, at some cost to likeness — fine for a setting or a loose hint, less so for a face.";
