@@ -57,7 +57,7 @@ reference, a grey-box render tends to come back looking like a grey box.
 
 - Put the ControlNet in `models/model_patches/` and pick it on **H3 Studio Setup** (`controlnet`);
   Setup needs the `model` wired. It loads only when a scene that renders has a control video.
-- **Strength** (0–2, default 0.7) is how hard it steers; **until** (default 50%) is how far
+- **Strength** (0–2, default 1) is how hard it steers; **until** (default 75%) is how far
   through the sampling: after that, H3 draws the detail on its own.
 - One control video per scene. Show it in its scene with the scene chips (or `with:` in a script:
   `@depth: … (video, control)`).

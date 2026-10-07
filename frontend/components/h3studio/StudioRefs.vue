@@ -248,7 +248,7 @@
           <span class="lbl" title="How hard the video steers the scene">strength</span>
           <ZenNumber
             size="sm"
-            :model-value="current.controlStrength ?? 0.7"
+            :model-value="current.controlStrength ?? 1"
             :min="0"
             :max="2"
             :step="0.05"
@@ -262,7 +262,7 @@
           >
           <ZenNumber
             size="sm"
-            :model-value="Math.round((current.controlUntil ?? 0.5) * 100)"
+            :model-value="Math.round((current.controlUntil ?? 0.75) * 100)"
             :min="5"
             :max="100"
             :step="5"

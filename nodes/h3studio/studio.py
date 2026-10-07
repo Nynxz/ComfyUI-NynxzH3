@@ -634,6 +634,15 @@ def _apply_control(setup: dict, model, vae, control: dict, trim: int, warnings: 
         frames = torch.cat([frames[:1].repeat(trim, 1, 1, 1), frames])
     patched = model.clone()
     sampling = patched.get_model_object("model_sampling")
+    LOG.info(
+        "H3 Studio: @%s steers the scene through %s (strength %.2f until %d%%, %d frames). "
+        "Sample with H3 Studio Outputs' model, or it does nothing.",
+        control["name"],
+        setup["controlnet"],
+        control["strength"],
+        round(control["until"] * 100),
+        frames.shape[0],
+    )
     MiniMaxH3FunControlPatch(
         _control_patch(setup["controlnet"]),
         vae,
