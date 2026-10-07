@@ -67,7 +67,7 @@ In H3 Studio, the References tab's **Codex** button matches `@names` to entries 
 placeholders the show doesn't have yet can be added to it. Give a character a new picture in the
 Codex and the next fill brings it to every film.
 
-<img src="docs/images/studio-codex-fill.png" alt="Filling a film's references from the Codex" width="360">
+<img src="docs/images/studio-codex-fill.png" alt="Filling a film's references from the Codex" width="320">
 
 The pictures in these screenshots are grey box stills standing in for real references.
 
