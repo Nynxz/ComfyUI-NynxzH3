@@ -29,7 +29,7 @@ from .._base import NynxzNode
 from . import _carry, _reuse
 from ._loras import apply as apply_loras
 from ._media import has_audio, load_audio, load_image, load_video, path_of
-from ._project import FPS, PREVIOUS_FRAME, compile_scene, normalize
+from ._project import FPS, PREVIOUS_FRAME, compile_scene, frames_for, normalize
 from .io_types import H3StudioLinkType, H3StudioRenderType, H3StudioSetupType, H3StudioType
 
 LOG = logging.getLogger(__name__)
@@ -1084,6 +1084,89 @@ def _save_clip(video, render: dict) -> str:
     file = f"{name}_{counter:05}_.mp4"
     video.save_to(os.path.join(folder, file))
     return "/".join(p for p in ("output", subfolder, file) if p)
+
+
+class NynxzH3StudioFilm(NynxzNode):
+    CATEGORY = f"{NynxzNode.CATEGORY}/H3/Studio"
+
+    @classmethod
+    def define_schema(cls):
+        return cls.make_schema(
+            node_id="H3.StudioFilm",
+            display_name="H3 Studio Film",
+            description="The film as it's rendered so far: every scene's current take (its latest "
+            "render, or the take you made current), joined like H3 Studio Join — without a loop "
+            "and without sampling anything. A scene never rendered plays as black for its length. "
+            "Pick the studio on the node; feed Save Video.",
+            search_aliases=["h3 film", "join takes", "export film", "rendered scenes"],
+            inputs=[
+                H3StudioLinkType.Input(
+                    "link", optional=True, tooltip="The H3 Studio whose scenes it joins."
+                ),
+                io.Int.Input(
+                    "crossfade",
+                    default=8,
+                    min=0,
+                    max=39,
+                    tooltip="Frames each continuation fades in over, as on H3 Studio Join.",
+                ),
+                io.Audio.Input("music", optional=True, tooltip="A score under the whole film."),
+                io.Float.Input("music_volume", default=0.8, min=0.0, max=2.0, step=0.05),
+                io.Float.Input("music_fade", default=2.0, min=0.0, max=10.0, step=0.25),
+            ],
+            outputs=[io.Video.Output(display_name="video")],
+            hidden=[io.Hidden.dynprompt],
+        )
+
+    @classmethod
+    def fingerprint_inputs(
+        cls, link=None, crossfade=8, music=None, music_volume=0.8, music_fade=2.0
+    ):
+        # A new take changes the film without changing the node's inputs.
+        import os
+
+        try:
+            return os.path.getmtime(_reuse._scenes_path())
+        except OSError:
+            return 0
+
+    @classmethod
+    def execute(cls, link=None, crossfade=8, music=None, music_volume=0.8, music_fade=2.0):
+        from comfy_api.latest import InputImpl
+
+        studio = str((link if isinstance(link, dict) else {}).get("studio") or "").strip()
+        project = _linked_project(cls.hidden.dynprompt, studio)
+        if project is None:
+            raise ValueError("H3 Studio Film: pick the H3 Studio on the node.")
+        proj = normalize(project)
+        width, height = proj["canvas"]["width"], proj["canvas"]["height"]
+        videos, missing = [], []
+        for i, scene in enumerate(proj["scenes"]):
+            record = _reuse.latest(scene["id"])
+            if record:
+                video = InputImpl.VideoFromFile(path_of(record["ref"]))
+                video.h3_scene = i
+                video.h3_latent, video.h3_head = _carry.load_sidecar(path_of(record["ref"]))
+            else:
+                missing.append(i + 1)
+                video = _blank_video(
+                    {
+                        "scene": i,
+                        "frames": frames_for(scene["seconds"]),
+                        "width": width,
+                        "height": height,
+                    }
+                )
+            videos.append(video)
+        if missing:
+            LOG.warning(
+                "H3 Studio Film: scene%s %s never rendered, black",
+                "s" if len(missing) > 1 else "",
+                ", ".join(map(str, missing)),
+            )
+        return io.NodeOutput(
+            _carry.join(videos, int(crossfade), music, float(music_volume), float(music_fade))
+        )
 
 
 class NynxzH3StudioJoin(NynxzNode):

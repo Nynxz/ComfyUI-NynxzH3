@@ -23,7 +23,8 @@
     </div>
     <p class="count" :class="{ missing: value.studio && !linked }">
       <template v-if="linked">
-        <b>{{ value.count }}</b> scene{{ value.count === 1 ? "" : "s" }} · one loop pass each
+        <b>{{ value.count }}</b> scene{{ value.count === 1 ? "" : "s" }} ·
+        {{ film ? "each plays its current take" : "one loop pass each" }}
       </template>
       <template v-else-if="value.studio"
         >Studio #{{ value.studio }} isn't in this workflow</template
@@ -70,7 +71,9 @@ interface GraphNode {
 }
 const props = defineProps<{
   widget?: { value: unknown; callback?: (v: unknown) => void };
+  node?: { type?: string };
 }>();
+const film = props.node?.type === "nynxz.H3.StudioFilm";
 
 const toLink = (v: unknown): Link => {
   const o = (v && typeof v === "object" ? v : {}) as Partial<Link>;

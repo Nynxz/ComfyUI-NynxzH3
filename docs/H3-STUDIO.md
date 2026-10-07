@@ -94,7 +94,7 @@ latent (Start Loop can only take an initial value from outside the loop):
       ▶ H3 Studio Clip (render, images, audio)                (cuts the carried-over head)
           ├─▶ End Loop.next_iteration_value                   (the next scene continues from it)
           └─▶ End Loop.output_value, accumulate on
-    End Loop ▶ Concatenate Video ▶ Save Video
+    End Loop ▶ H3 Studio Join ▶ Save Video
 
 The number of passes needn't be typed in. **H3 Studio Scenes** sits outside the loop and *names*
 the studio rather than being wired to it (a wire from the studio would close a cycle round the loop):
@@ -128,6 +128,17 @@ A per-scene Save Video or preview on End Loop's terminations runs on every pass,
 **H3 Studio Clip's `video`** (a skipped scene plays its clip there), not from the decoded frames. Fed
 from the decoder it would need a skipped scene's sampler, and a partial render stops with an error
 saying so.
+
+### The film from the takes you have (H3 Studio Film)
+
+Once the scenes you want are rendered, **H3 Studio Film** joins them with no loop and no sampling:
+every scene plays its current take (its latest render, or the take you made current in the
+Render panel), joined as H3 Studio Join does, with continuations crossfaded and an optional score
+under the whole film. A scene that has never been rendered plays as black for its length, and the
+console names it. Pick the studio on the node (as on H3 Studio Scenes) and wire its `video` into
+Save Video; it runs again whenever a scene gets a new take.
+
+Use it in its own small workflow, or beside the render loop with the loop's nodes bypassed.
 
 ### Seeds, reuse and rendering part of the film
 

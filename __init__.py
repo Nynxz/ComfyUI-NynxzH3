@@ -37,6 +37,7 @@ from .nodes.h3.window import H3SlidingWindow
 from .nodes.h3studio.studio import (
     NynxzH3Studio,
     NynxzH3StudioClip,
+    NynxzH3StudioFilm,
     NynxzH3StudioJoin,
     NynxzH3StudioOutputs,
     NynxzH3StudioScenes,
@@ -84,6 +85,7 @@ NODES: list[type[io.ComfyNode]] = [
     NynxzH3StudioOutputs,
     NynxzH3StudioScenes,
     NynxzH3StudioClip,
+    NynxzH3StudioFilm,
     NynxzH3StudioJoin,
     NynxzGreyBoxShot,
     NynxzGreyBoxStudio,
