@@ -7,7 +7,7 @@
         title="Fill the references from the Codex by name, or start Codex entries from placeholders"
         @click="open(toggle)"
       >
-        Codex
+        Fill from Codex
       </ZenButton>
     </template>
     <div class="pop">

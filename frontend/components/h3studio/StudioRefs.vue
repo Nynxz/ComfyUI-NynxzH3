@@ -236,9 +236,9 @@
         <ZenToggleGroup
           :model-value="String(current.size ?? 1)"
           :options="REF_SIZES.map((s) => ({ value: String(s.value), label: s.label }))"
+          :title="`${SIZE_HINT} H3 sees it at up to ${shownAt}.`"
           @update:model-value="(v: string) => setSize(Number(v))"
         />
-        <span class="soft" :title="SIZE_HINT">H3 sees it at up to {{ shownAt }}</span>
       </div>
       <div class="erow">
         <span class="lbl">scenes</span>
@@ -269,7 +269,8 @@
         >
           all
         </button>
-        <span class="grow" />
+      </div>
+      <div class="erow actions">
         <ZenButton
           v-if="current.media"
           sm
@@ -899,6 +900,9 @@ function onEditorDrop(e: DragEvent) {
   line-height: 1.4;
   resize: none;
   field-sizing: content;
+}
+.erow.actions {
+  justify-content: flex-end;
 }
 .erow {
   display: flex;

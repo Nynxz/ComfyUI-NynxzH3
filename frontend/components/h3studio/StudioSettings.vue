@@ -11,14 +11,10 @@
       <div class="set">
         <div class="what">
           <b>LoRA step shapes</b>
-          <p>
-            Changing a LoRA's strength over the steps needs ComfyUI's hooks, and hooks sample on a
-            separate, non-dynamic copy of the model. With dynamic VRAM on (ComfyUI's default) that
-            is a second copy of H3, which runs a 32 GB card out of memory. <b>Auto</b> uses hooks
-            only when dynamic VRAM is off — launch ComfyUI with
-            <code>--disable-dynamic-vram</code> — and otherwise applies each shape at its average
-            strength. <b>Fast</b> and <b>Low VRAM</b>
-            always use hooks, caching the patched weights on the GPU or keeping them off it.
+          <p :title="'Changing strength over the steps uses ComfyUI hooks, which sample on a second, non-dynamic copy of the model. With dynamic VRAM on (the default) that copy runs a 32 GB card out of memory; start ComfyUI with --disable-dynamic-vram to avoid it.'">
+            How LoRA strength that changes over the steps is applied. <b>Auto</b> does it when ComfyUI's
+            dynamic VRAM is off, and otherwise uses each shape's average; <b>Fast</b> and
+            <b>Low VRAM</b> always do it, keeping the patched weights on or off the GPU.
           </p>
         </div>
         <ZenToggleGroup
