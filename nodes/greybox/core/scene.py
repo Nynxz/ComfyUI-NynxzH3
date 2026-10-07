@@ -329,7 +329,7 @@ class Scene:
             if name in self.set.marks:
                 return self.set.marks[name]
             if ref.startswith("@"):
-                return self.actor_at(ref, t, _depth).at
+                return self.position(ref, t, _depth)
         raise SceneError(
             f"{what}: {ref!r} isn't a point, a mark of the set "
             f"({', '.join(self.set.marks) or 'it has none'}) or an actor."
@@ -344,15 +344,23 @@ class Scene:
 
     # actors -----------------------------------------------------------------------------------
 
-    def actor_at(self, aid: str, t: float, _depth: int = 0) -> ActorState:
+    def _path(self, aid: str, _depth: int = 0):
         actor = next((a for a in self.actors if a.id == aid), None)
         if actor is None:
             raise SceneError(f"There's no actor {aid} in this scene.")
         if _depth > 4:
-            raise SceneError(f"{aid}'s keys look at or stand on each other in a loop.")
+            raise SceneError(f"{aid}'s keys stand on each other in a loop.")
         keys = actor.keys
-        times = [k.t for k in keys]
         points = [self.point(k.at, k.t, f"{aid} at {k.t}s", _depth + 1) for k in keys]
+        return actor, keys, [k.t for k in keys], points
+
+    def position(self, aid: str, t: float, _depth: int = 0) -> Vec:
+        """Where an actor stands — without which way it faces, so two actors can face each other."""
+        _, keys, times, points = self._path(aid, _depth)
+        return path_at(times, points, [k.ease for k in keys], t)
+
+    def actor_at(self, aid: str, t: float, _depth: int = 0) -> ActorState:
+        actor, keys, times, points = self._path(aid, _depth)
         at = path_at(times, points, [k.ease for k in keys], t)
         prev = [k for k in keys if k.t <= t] or keys[:1]
         pose = next((k.pose for k in reversed(prev) if k.pose), "stand")
@@ -387,7 +395,7 @@ class Scene:
                     return math.degrees(math.atan2(dx, dz))
             return 0.0
         if isinstance(face, str) and face.startswith("@"):
-            other = self.actor_at(face, t, depth + 1).at
+            other = self.position(face, t, depth + 1)
         else:
             other = self.point(face, t, f"{actor.id}'s face")
         return math.degrees(math.atan2(other[0] - here[0], other[2] - here[2]))
