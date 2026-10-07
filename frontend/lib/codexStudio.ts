@@ -3,7 +3,17 @@
 // the cast and its LoRAs as lanes. Adding the same entry again updates what it added before.
 import { app } from "@comfy/app";
 import { mediaKind } from "@/framework";
-import { coverOf, promptOf, type Entry, type Show } from "./codex";
+import {
+  coverOf,
+  freeHandle,
+  handleOf,
+  newEntry,
+  promptOf,
+  type Entry,
+  type EntryKind,
+  type Show,
+} from "./codex";
+import { withShow } from "./codexStore";
 import { freeRefName } from "./h3edits";
 import { newLoraLane, uid, useProject, type Project, type Ref } from "./h3studio";
 
@@ -81,6 +91,13 @@ export function addToStudio(
   const variant = entry.variants.find((v) => v.id === variantId);
   const media = variant?.pictures[0]?.media || coverOf(entry);
   const ref = upsertRef(project, entry, media, promptOf(entry, variantId));
+  bringCharacter(project, entry, show, ref);
+  return `@${ref.name}`;
+}
+
+/** A character's voice (and the clip of the sound linked as its "voice") into the cast, and its
+ *  LoRAs as lanes. Nothing for other kinds. */
+function bringCharacter(project: Project, entry: Entry, show: Show, ref: Ref) {
   if (entry.kind === "character") {
     const sound = show.entries.find(
       (e) => e.id === entry.links.find((l) => l.label === "voice")?.to,
@@ -114,5 +131,87 @@ export function addToStudio(
         ];
     }
   }
-  return `@${ref.name}`;
+}
+
+// --- a whole studio against a show -------------------------------------------------------------
+// A script writes @ren as a placeholder; the show already has Ren. These match the two by name
+// (`@spoon_interior` and the handle `spoon-interior` are the same), so a pasted act gets its
+// pictures and descriptions from the Codex — and placeholders the Codex lacks can start entries.
+
+const codexOf = (r: Ref) => (r as Ref & { codex?: string }).codex;
+
+export interface CodexMatch {
+  ref: Ref;
+  entry: Entry;
+  /** Already tied to this entry (by an earlier fill or an add), rather than matched by name. */
+  linked: boolean;
+}
+
+/** Each reference of `project` that has an entry in `show`: tied to it before, else same name. */
+export function matchRefs(project: Project, show: Show): { matches: CodexMatch[]; missing: Ref[] } {
+  const matches: CodexMatch[] = [];
+  const missing: Ref[] = [];
+  for (const ref of project.refs) {
+    if (ref.name === "setting") continue;
+    const tied = show.entries.find((e) => e.id === codexOf(ref));
+    const named = tied ?? show.entries.find((e) => e.handle === handleOf(ref.name));
+    if (named) matches.push({ ref, entry: named, linked: !!tied });
+    else if (!ref.media) missing.push(ref);
+  }
+  return { matches, missing };
+}
+
+/** Bring the matched references up to date from the Codex: the entry's picture (over a
+ *  placeholder, or over an earlier fill — never over a picture you dropped in yourself), its
+ *  prompt line as the description, and a character's voice and LoRAs. Returns what changed. */
+export function fillFromCodex(project: Project, show: Show): string[] {
+  const changed: string[] = [];
+  for (const { ref, entry, linked } of matchRefs(project, show).matches) {
+    const cover = coverOf(entry);
+    const before = `${ref.media}|${ref.note}`;
+    if (cover && (!ref.media || linked)) {
+      ref.media = cover;
+      ref.kind = mediaKind(cover);
+    }
+    const line = promptOf(entry);
+    if (line) ref.note = line;
+    (ref as Ref & { codex?: string }).codex = entry.id;
+    bringCharacter(project, entry, show, ref);
+    if (`${ref.media}|${ref.note}` !== before || !linked) changed.push(`@${ref.name}`);
+  }
+  return changed;
+}
+
+const nameOf = (handle: string) =>
+  handle.replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+
+/** Start Codex entries from placeholders the show doesn't have: the name from the @name, the
+ *  description as its prompt line, its picture if it has one, and — for a character with a
+ *  voice in the cast — that voice. The references are tied to the new entries. */
+export async function addToCodex(
+  project: Project,
+  showId: string,
+  rows: { ref: Ref; kind: EntryKind }[],
+): Promise<number> {
+  const made = await withShow(showId, (show) =>
+    rows.map(({ ref, kind }) => {
+      const entry = newEntry(kind, nameOf(ref.name));
+      entry.handle = freeHandle(show, handleOf(ref.name));
+      entry.prompt = ref.note.trim();
+      if (ref.media) {
+        entry.pictures = [{ media: ref.media, label: "" }];
+        entry.cover = ref.media;
+      }
+      const voice = project.cast?.find((v) => v.ref === ref.id);
+      if (kind === "character" && voice) {
+        entry.name = voice.name || entry.name;
+        entry.voice = { description: voice.voice ?? "", language: voice.language || "English" };
+      }
+      entry.updated = Date.now();
+      show.entries.push(entry);
+      return { ref, id: entry.id };
+    }),
+  );
+  for (const { ref, id } of made) (ref as Ref & { codex?: string }).codex = id;
+  return made.length;
 }

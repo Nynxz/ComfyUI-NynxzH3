@@ -40,6 +40,14 @@ model, sampler, decode, save — is ordinary ComfyUI.
 
 Mention a reference in a shot as `@name`; the studio turns it into the right tag.
 
+**From the Codex.** The References tab's **Codex** button matches references to a show's entries
+by name — `@spoon_interior` is the entry `spoon-interior` — and **Fill from the Codex** brings each
+entry's picture (over a placeholder, never over one you dropped in), its prompt line as the
+description, and a character's voice and LoRAs. Placeholders the show doesn't have can be added to
+it as new entries, picking their kind (a placeholder with a voice in the cast starts as a
+character). Either way the reference stays tied to its entry, so filling again brings the entry's
+latest picture and description — give Ren a new picture in the Codex once, and every act gets it.
+
 ### Keyframes
 
 | Keyframe | Effect | H3 task |

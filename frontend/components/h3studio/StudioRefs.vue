@@ -12,6 +12,10 @@
       <i class="mdi mdi-tray-arrow-down" /><span>Drop to add references</span>
     </div>
 
+    <div class="codexbar">
+      <StudioRefsCodex :project="project" />
+    </div>
+
     <div class="strip">
     <section
       v-for="sec in sections"
@@ -312,6 +316,7 @@ import {
   type StudioView,
 } from "@/lib/h3studio";
 import MediaThumb from "./MediaThumb.vue";
+import StudioRefsCodex from "./StudioRefsCodex.vue";
 
 const props = defineProps<{
   project: Project;
@@ -942,6 +947,10 @@ function onEditorDrop(e: DragEvent) {
   border-color: var(--zen-accent, #6366f1);
   background: color-mix(in srgb, var(--zen-accent, #6366f1) 25%, transparent);
   color: var(--zen-text, #e5e5ea);
+}
+.codexbar {
+  display: flex;
+  gap: 6px;
 }
 .strip {
   display: flex;

@@ -29,6 +29,9 @@ You don't touch the workflow, the node or any files. You write text. The full fo
    gets an `@name` in `## References`, with a concrete visual description. Until the user adds a
    picture, H3 reads that description in place of the `@name` (a *placeholder*). So make it specific
    enough to keep the character consistent across scenes: age, build, hair, clothes, colours.
+   If the user keeps a **Codex** show, name references after its entries' handles (`@ren`,
+   `@spoon_interior` for the entry `spoon-interior`): the References tab's Codex button then fills
+   their pictures and descriptions from the show, and can add the ones it lacks as new entries.
    Write each description as **one noun phrase** ("a lean young man with messy black hair, a black
    sleeveless shirt and a chrome right arm"), with no semicolons or full sentences: it's pasted into
    the shot sentence in place of the `@name`, and its first comma clause ("the lean young man with
