@@ -34,6 +34,11 @@ music: sparse piano at a slow tempo               the score for every scene unle
   renders (Grey Box Studio → Render) and rough animatics. It is named `<Video N>`, not a subject,
   and the prompt tells H3 its shapes are stand-ins. A video reference without `blocking` is the
   opposite: H3 copies its people, place and look.
+- `(video, control)` makes a video a **control video**: H3 never sees it; it steers the scene's
+  layout, staging and camera through the H3 Fun ControlNet (picked on H3 Studio Setup), so the
+  look stays H3's own. Use it instead of blocking when blocking renders come back looking like a
+  grey box. Typically a Grey Box depth render (Render → Depth, the whole scene). One per scene;
+  show it with `with:`.
 - A scene shows H3 only the references it **uses**: the ones its shots `@mention`, and the ones
   whose voices speak in it. Anything else is left out of that scene's prompt.
 - Names the project already has keep their media; a description given here replaces their note.
