@@ -375,7 +375,7 @@ h4 {
   height: 48px;
   overflow: hidden;
   border-radius: 6px;
-  background: var(--zen-media-bg, #0b0b0e);
+  background: var(--zen-media-bg, var(--h3-field));
   color: var(--h3-muted);
 }
 .nowthumb img,
@@ -418,7 +418,7 @@ h4 {
 .bar span {
   display: block;
   height: 100%;
-  background: var(--zen-accent, #6366f1);
+  background: var(--h3-accent);
 }
 .qrow {
   display: flex;
@@ -456,25 +456,28 @@ h4 {
   color: var(--h3-muted);
   font-size: 11px;
 }
+/* A take is a card like the studio's others: its field colour, line and radius. */
 .take {
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
   padding: 4px;
-  border: 1px solid transparent;
-  border-radius: 6px;
+  border: 1px solid var(--h3-line);
+  border-radius: var(--h3-radius);
+  background: var(--h3-field);
 }
 .take.current {
-  border-color: color-mix(in srgb, var(--zen-accent, #6366f1) 60%, transparent);
-  background: color-mix(in srgb, var(--zen-accent, #6366f1) 10%, transparent);
+  border-color: color-mix(in srgb, var(--h3-accent) 60%, transparent);
+  background: color-mix(in srgb, var(--h3-accent) 10%, transparent);
 }
 .tthumb {
   flex: none;
   width: 64px;
   height: 36px;
   overflow: hidden;
-  border-radius: 4px;
+  border-radius: calc(var(--h3-radius) - 3px);
+  background: var(--zen-media-bg, var(--h3-panel));
 }
 .tthumb :deep(.mt) {
   width: 100%;
@@ -494,7 +497,7 @@ h4 {
 .badge {
   padding: 1px 7px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--zen-accent, #6366f1) 25%, transparent);
+  background: color-mix(in srgb, var(--h3-accent) 25%, transparent);
   font-size: 10.5px;
 }
 .hint {
