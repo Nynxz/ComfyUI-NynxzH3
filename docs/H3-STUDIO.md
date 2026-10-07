@@ -91,16 +91,21 @@ the crosshair button pans to it. With only one studio in the workflow it's picke
 shows the studio's scene count and keeps it in step (that's what tells ComfyUI the loop changed); at
 run time the count comes from the studio's project in the same prompt.
 
-**Rendering only some scenes in a loop.** Render ▸ a scene (or several) runs just those. With the
-loop in **List mode** (H3 Studio Scenes' `scene` into Start Loop's `list`), the list holds only the
-picked scenes — plus any scene a picked one continues from that has no clip yet — so the loop makes
-one pass per scene that renders, instead of passing through every scene up to it. A scene that
-continues from one that didn't render in this run picks up that scene's latest clip. The
-accumulated output is then just those scenes; render without picking for the whole film.
+**Rendering only some scenes in a loop.** Render ▸ a scene (or several) runs the loop with the
+others held back: a scene that has a clip plays its latest one, and a scene that has never been
+rendered plays as black for its length, so the film keeps its timing. A scene that isn't picked
+still renders when a picked scene continues from it and it has no clip to continue from.
 
-In **simple mode** (`count` into `num_iterations`) the loop still makes a pass per scene, and the
-scenes that weren't picked play their latest clip (or black, if never rendered) without sampling,
-so the film keeps its timing.
+To skip the held passes altogether, loop over **`picked`** instead of `scene`: H3 Studio Scenes'
+`picked` is only the scenes the run renders (every scene for a full render), so the loop makes one
+pass per scene that renders. Wire Start Loop's **`list_item`** — not `iteration_index` — into H3
+Studio Setup's `scene`, since the passes no longer count from scene 1:
+
+    H3 Studio Scenes.picked ─▶ Start Loop (List).list
+    Start Loop.list_item ─────▶ H3 Studio Setup.scene
+
+A scene whose pass before wasn't the scene before it (that one didn't render) continues from that
+scene's latest clip. The accumulated output is then just the scenes that rendered.
 
 A per-scene Save Video or preview on End Loop's terminations runs on every pass, so feed it from
 **H3 Studio Clip's `video`** (a skipped scene plays its clip there), not from the decoded frames. Fed

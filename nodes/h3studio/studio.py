@@ -235,20 +235,18 @@ def render_scene(setup: dict, project, scene: int | None) -> dict:
             return _held(plan, index, scene_id, record, setup)
         if index not in _needed(proj, only):
             return _blank(plan, index, scene_id, setup)
-    if only and setup.get("previous_frames") is not None:
-        # A loop over only the scenes that render carries the clip of the pass before, which is
-        # the previous scene only when that one rendered too; otherwise continue from its latest.
-        run = scenes_to_run(proj)
-        before = run[run.index(index) - 1] if index in run and run.index(index) > 0 else None
-        if before != index - 1:
-            setup = {
-                **setup,
-                "previous_frames": None,
-                "previous_audio": None,
-                "previous_key": None,
-                "previous_latent": None,
-            }
-            previous_frames = previous_audio = None
+    carried = setup.get("previous_scene")
+    if setup.get("previous_frames") is not None and carried is not None and carried != index - 1:
+        # A loop over only the picked scenes carries the clip of the pass before, which isn't the
+        # previous scene when that one didn't render this run: continue from its latest clip.
+        setup = {
+            **setup,
+            "previous_frames": None,
+            "previous_audio": None,
+            "previous_key": None,
+            "previous_latent": None,
+        }
+        previous_frames = previous_audio = None
     if (
         index > 0
         and setup.get("previous_frames") is None
@@ -522,7 +520,8 @@ class NynxzH3StudioSetup(NynxzNode):
                     optional=True,
                     force_input=True,
                     tooltip="Which scene to render, counting from 0 — wire Start Loop's iteration_index to "
-                    "render the film scene by scene. Unwired, the scene selected in the studio renders.",
+                    "render the film scene by scene (or its list_item, looping over H3 Studio Scenes' "
+                    "`picked`). Unwired, the scene selected in the studio renders.",
                 ),
                 io.Model.Input(
                     "model",
@@ -546,16 +545,18 @@ class NynxzH3StudioSetup(NynxzNode):
         scene=None,
         model=None,
     ):
-        previous_key = previous_latent = None
+        previous_key = previous_latent = previous_scene = None
         if previous_frames is None and previous is not None:
             components = previous.get_components()
             previous_frames, previous_audio = components.images, previous_audio or components.audio
             previous_key = getattr(previous, "h3_key", None)
             previous_latent = getattr(previous, "h3_latent", None)
+            previous_scene = getattr(previous, "h3_scene", None)
         return io.NodeOutput(
             {
                 "previous_key": previous_key,
                 "previous_latent": previous_latent,
+                "previous_scene": previous_scene,
                 "scene": scene,
                 "model": model,
                 "clip": clip,
@@ -594,7 +595,9 @@ class NynxzH3StudioScenes(NynxzNode):
             description="How many scenes an H3 Studio has, for the loop that renders them — without a "
             "wire from the studio (which sits inside the loop, so a wire would be a cycle). Put it "
             "outside the loop: `scene` into Start Loop in List mode (one pass per scene), or `count` "
-            "into its iteration count. Pick the studio on the node.",
+            "into its iteration count. For a loop that runs only the scenes being rendered, use "
+            "`picked` instead, with Start Loop's list_item into H3 Studio Setup's scene. Pick the "
+            "studio on the node.",
             search_aliases=["h3 loop", "scene count", "number of scenes"],
             inputs=[
                 H3StudioLinkType.Input(
@@ -613,6 +616,13 @@ class NynxzH3StudioScenes(NynxzNode):
                 io.Int.Output(
                     display_name="count", tooltip="How many scenes: Start Loop's iteration count."
                 ),
+                io.Int.Output(
+                    display_name="picked",
+                    is_output_list=True,
+                    tooltip="Only the scenes a Render ▸ scene renders (every scene for a full render): "
+                    "into Start Loop's `list`, with its list_item — not iteration_index — into H3 "
+                    "Studio Setup's scene. The loop then makes one pass per scene that renders.",
+                ),
             ],
             hidden=[io.Hidden.dynprompt],
         )
@@ -622,18 +632,19 @@ class NynxzH3StudioScenes(NynxzNode):
         link = link if isinstance(link, dict) else {}
         studio, count = str(link.get("studio") or ""), int(link.get("count") or 1)
         project = _linked_project(cls.hidden.dynprompt, str(studio).strip())
-        scenes = None
+        picked = None
         if project is not None:
             proj = normalize(project)
             count = len(proj["scenes"])
             # Only the scenes that render this run: the rest keep their latest clips.
-            scenes = scenes_to_run(proj)
+            picked = scenes_to_run(proj)
         elif studio:
             LOG.warning(
                 "H3 Studio Scenes: no H3 Studio #%s in this workflow; using count %d", studio, count
             )
         count = max(1, int(count))
-        return io.NodeOutput(scenes or list(range(count)), count)
+        every = list(range(count))
+        return io.NodeOutput(every, count, picked or every)
 
 
 class NynxzH3Studio(NynxzNode):
@@ -869,6 +880,7 @@ class NynxzH3StudioClip(NynxzNode):
             if not render.get("hold"):
                 _reuse.remember_scene(render.get("scene_id"), saved, key, render.get("scene_key"))
             video = InputImpl.VideoFromFile(path_of(saved))
+            video.h3_scene = render.get("scene")
             video.h3_key = key
             video.h3_latent, video.h3_head = _carry.load_sidecar(path_of(saved))
             if render.get("studio_node") is not None:
@@ -901,6 +913,7 @@ class NynxzH3StudioClip(NynxzNode):
             Types.VideoComponents(images=frames, frame_rate=Fraction(FPS), audio=audio)
         )
         samples = latent["samples"] if latent is not None else None
+        video.h3_scene = render.get("scene")
         video.h3_key = key
         video.h3_latent = (
             tuple(t.detach().cpu() for t in samples.unbind())
@@ -953,6 +966,7 @@ def _blank_video(render: dict):
         Types.VideoComponents(images=frames, frame_rate=Fraction(FPS), audio=audio)
     )
     video.h3_key, video.h3_latent, video.h3_head = None, None, None
+    video.h3_scene = render.get("scene")
     video.h3_blank = True
     return video
 
