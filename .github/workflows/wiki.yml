@@ -1,0 +1,46 @@
+name: wiki
+
+# docs/wiki is the source; the GitHub wiki is a published copy. Edits made in the wiki UI are
+# overwritten on the next sync — that's intended, so docs go through review like code.
+on:
+  push:
+    branches: [main]
+    paths: [docs/wiki/**]
+  workflow_dispatch:
+
+concurrency: wiki
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # pushing to <repo>.wiki.git uses the repo token
+    steps:
+      - uses: actions/checkout@v4
+
+      # The wiki repo only exists once a first page has been created by hand in the UI.
+      - name: Clone wiki
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: git clone "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.wiki.git" wiki
+
+      # Pages link as `Page.md` so they also work when browsing docs/wiki in the repo; the wiki
+      # wants bare page names. Rewrite only relative .md links, never http(s) ones. Screenshots
+      # travel with the pages, so `images/…` works in both places.
+      - name: Copy pages
+        run: |
+          find wiki -maxdepth 1 -name '*.md' -delete
+          rm -rf wiki/images
+          cp docs/wiki/*.md wiki/
+          cp -r docs/wiki/images wiki/images
+          sed -i -E 's/\]\(([A-Za-z0-9_-]+)\.md(#[^)]*)?\)/](\1\2)/g' wiki/*.md
+
+      - name: Push
+        working-directory: wiki
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && { echo "wiki already up to date"; exit 0; }
+          git commit -m "Sync from ${GITHUB_SHA::7}"
+          git push
