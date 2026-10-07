@@ -3,6 +3,7 @@
 **H3 Studio**
 
 - [Dialogue and voices](Dialogue-and-Voices.md)
+- [Writing scripts with an LLM](Writing-Scripts-with-an-LLM.md)
 
 **Not moved into the wiki yet**
 

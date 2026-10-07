@@ -12,6 +12,7 @@ pack is and how to install it.
 | Page | What it covers |
 | --- | --- |
 | [Dialogue and voices](Dialogue-and-Voices.md) | The cast, writing lines, timing them, and what H3 is told |
+| [Writing scripts with an LLM](Writing-Scripts-with-an-LLM.md) | Drafting and revising a film as text, in a chat or with the agent skill |
 
 More pages are on the way. Until then, the
 [H3 Studio overview](https://github.com/Nynxz/ComfyUI-NynxzH3Studio/blob/main/docs/H3-STUDIO.md)
