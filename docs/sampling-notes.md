@@ -1,7 +1,7 @@
 # Sampling notes
 
 The reasoning behind the sampling nodes — why a schedule is shaped the way it is, where the
-measurements came from, and which claims are still hypotheses. The README gives each node its
+measurements came from, and which claims are still hypotheses. [NODES.md](NODES.md) gives each node its
 signature and the one fact you need to use it; this is the rest.
 
 ## H3 Detail Schedule — why a split schedule reads out deeper
