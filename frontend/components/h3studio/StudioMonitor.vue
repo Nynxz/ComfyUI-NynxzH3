@@ -18,7 +18,9 @@
         <div v-else class="card">
           <i class="mdi mdi-movie-open-off-outline" />
           <span class="card-shot">Scene {{ place.scene + 1 }} has no render yet</span>
-          <span class="card-hint">Run the workflow — H3 Studio Clip saves each scene's clip for this view.</span>
+          <span class="card-hint"
+            >Run the workflow — H3 Studio Clip saves each scene's clip for this view.</span
+          >
         </div>
       </template>
 
@@ -43,34 +45,59 @@
         <div v-else class="card">
           <i class="mdi" :class="rendering ? 'mdi-timer-sand' : 'mdi-image-off-outline'" />
           <span class="card-shot">
-            {{ rendering ? "Waiting for the sampler…" : `No previews for scene ${place.scene + 1} yet` }}
+            {{
+              rendering
+                ? "Waiting for the sampler…"
+                : `No previews for scene ${place.scene + 1} yet`
+            }}
           </span>
-          <span v-if="!rendering" class="card-hint">They appear here, step by step, while the scene renders.</span>
+          <span v-if="!rendering" class="card-hint"
+            >They appear here, step by step, while the scene renders.</span
+          >
         </div>
       </template>
 
       <!-- Plan: the animatic -->
       <template v-else>
-        <Transition name="cut">
-          <video
-            v-if="picture && mediaKind(picture.media) === 'video'"
-            :key="picture.media"
-            class="plan-pic"
-            :style="{ '--push': push }"
-            :src="pictureUrl"
-            muted
-            loop
-            autoplay
-            playsinline
-          />
-          <img v-else-if="picture" :key="picture.media" class="plan-pic" :style="{ '--push': push }" :src="pictureUrl" alt="" draggable="false" />
-        </Transition>
+        <video
+          v-if="picture && mediaKind(picture.media) === 'video'"
+          :key="picture.media"
+          class="plan-pic"
+          :style="{ '--push': push }"
+          :src="pictureUrl"
+          muted
+          loop
+          autoplay
+          playsinline
+        />
+        <img
+        v-else-if="picture"
+          :key="picture.media"
+          class="plan-pic"
+          :style="{ '--push': push }"
+          :src="pictureUrl"
+          alt=""
+          draggable="false"
+        />
         <div v-if="others.length" class="cast-strip" title="Also in this shot">
-          <img v-for="r in others" :key="r.id" :src="thumbUrl(r.media, 96)" :alt="`@${r.name}`" :title="`@${r.name}`" draggable="false" />
+          <img
+            v-for="r in others"
+            :key="r.id"
+            :src="thumbUrl(r.media, 96)"
+            :alt="`@${r.name}`"
+            :title="`@${r.name}`"
+            draggable="false"
+          />
         </div>
-        <div v-if="spoken" class="subtitle" :class="{ vo: spoken.line.mode === 'voiceover', sung: spoken.line.mode === 'sing' }">
+        <div
+          v-if="spoken"
+          class="subtitle"
+          :class="{ vo: spoken.line.mode === 'voiceover', sung: spoken.line.mode === 'sing' }"
+        >
           <b>{{ speakerNames(project, spoken.line) }}</b>
-          <span>{{ spoken.line.mode === "sing" ? `♪ ${spoken.line.words} ♪` : spoken.line.words }}</span>
+          <span>{{
+            spoken.line.mode === "sing" ? `♪ ${spoken.line.words} ♪` : spoken.line.words
+          }}</span>
         </div>
         <div v-if="!picture" class="card">
           <span class="card-scene">Scene {{ place.scene + 1 }}</span>
@@ -80,12 +107,15 @@
 
       <div class="tag tl">
         <b>S{{ place.scene + 1 }}</b> · shot {{ place.shot + 1 }}
-        <span v-if="view === 'plan' && picture?.kind === 'reference'" class="soft">· reference</span>
+        <span v-if="view === 'plan' && picture?.kind === 'reference'" class="soft"
+          >· reference</span
+        >
       </div>
       <div class="tag tr">{{ timecode }}</div>
       <div v-if="view === 'preview' && shown" class="tag bl" :class="{ live: rendering }">
         <i class="mdi" :class="rendering ? 'mdi-record-circle' : 'mdi-image-outline'" />
-        {{ rendering ? "Rendering" : "Last run" }} · step {{ shown.step }}{{ shown.total ? `/${shown.total}` : "" }}
+        {{ rendering ? "Rendering" : "Last run" }} · step {{ shown.step
+        }}{{ shown.total ? `/${shown.total}` : "" }}
       </div>
       <div v-if="caption && view === 'plan'" class="caption" :title="caption">
         <template v-for="(part, i) in captionParts" :key="i">
@@ -133,7 +163,17 @@ const props = withDefaults(
     volume?: number;
     muted?: boolean;
   }>(),
-  { mode: "follow", run: null, sceneSeconds: 0, rendering: false, clip: undefined, offset: 0, playing: false, volume: 0.8, muted: false },
+  {
+    mode: "follow",
+    run: null,
+    sceneSeconds: 0,
+    rendering: false,
+    clip: undefined,
+    offset: 0,
+    playing: false,
+    volume: 0.8,
+    muted: false,
+  },
 );
 const emit = defineEmits<{ context: [event: MouseEvent]; sound: [hasSound: boolean] }>();
 
@@ -163,14 +203,22 @@ const push = computed(() => {
   const p = end > start ? Math.min(Math.max((props.place.local - start) / (end - start), 0), 1) : 0;
   return (1 + 0.06 * p).toFixed(4);
 });
-const others = computed(() => shotRefs(props.project, props.place).filter((r) => r.kind !== "audio" && r.media && r.media !== picture.value?.media));
+const others = computed(() =>
+  shotRefs(props.project, props.place).filter(
+    (r) => r.kind !== "audio" && r.media && r.media !== picture.value?.media,
+  ),
+);
 const spoken = computed(() => {
   const scene = props.project.scenes[props.place.scene];
   if (!scene) return null;
-  return lineTimes(scene).find((x) => props.place.local >= x.start && props.place.local < x.end) ?? null;
+  return (
+    lineTimes(scene).find((x) => props.place.local >= x.start && props.place.local < x.end) ?? null
+  );
 });
 const clipUrl = computed(() => (props.clip ? mediaRefUrl(props.clip) : ""));
-const caption = computed(() => props.project.scenes[props.place.scene]?.shots[props.place.shot]?.text.trim() ?? "");
+const caption = computed(
+  () => props.project.scenes[props.place.scene]?.shots[props.place.shot]?.text.trim() ?? "",
+);
 const names = computed(() => new Set(props.project.refs.map((r) => r.name.toLowerCase())));
 const captionParts = computed(() =>
   caption.value.split(/(@[\w-]+)/).map((text) => ({
@@ -193,7 +241,9 @@ const timecode = computed(() => {
 // timeline, and a scene loop loops it in step with everything else.
 const shown = computed(() => props.run?.steps[props.run.steps.length - 1] ?? null);
 /** Where the playhead is through the scene, 0–1. */
-const position = computed(() => (props.sceneSeconds > 0 ? Math.min(Math.max(props.offset / props.sceneSeconds, 0), 1) : 0));
+const position = computed(() =>
+  props.sceneSeconds > 0 ? Math.min(Math.max(props.offset / props.sceneSeconds, 0), 1) : 0,
+);
 
 const previewEl = ref<HTMLVideoElement | null>(null);
 const framesEl = ref<HTMLCanvasElement | null>(null);
@@ -249,7 +299,10 @@ onBeforeUnmount(() => cancelAnimationFrame(framesRaf));
 // --- render --------------------------------------------------------------------------------------
 const clipEl = ref<HTMLVideoElement | null>(null);
 /** Whether what's showing has sound — the transport's volume control dims when it hasn't. */
-const hasSound = computed(() => (view.value === "render" && !!props.clip) || (view.value === "preview" && !!shown.value?.audio));
+const hasSound = computed(
+  () =>
+    (view.value === "render" && !!props.clip) || (view.value === "preview" && !!shown.value?.audio),
+);
 /** Keep a video on the playhead (`want` maps its duration to the time it should be at): seek while
  *  paused or scrubbing; while the transport plays, let it play — with sound — and correct only a
  *  drift that is actually visible, never while it is still seeking or loading (each seek restarts
@@ -270,7 +323,10 @@ function syncVideo(v: HTMLVideoElement | null, want: (duration: number) => numbe
 function syncClip(force = false) {
   if (view.value === "render") syncVideo(clipEl.value, () => props.offset, force);
 }
-watch(() => [props.offset, props.playing, props.clip, view.value] as const, () => syncClip());
+watch(
+  () => [props.offset, props.playing, props.clip, view.value] as const,
+  () => syncClip(),
+);
 watch(hasSound, (sound) => emit("sound", sound), { immediate: true });
 </script>
 
@@ -428,17 +484,22 @@ watch(hasSound, (sound) => emit("sound", sound), { immediate: true });
   object-fit: cover;
   box-shadow: 0 2px 6px rgb(0 0 0 / 50%);
 }
+/* A new picture (keyed by its file) fades in on mount: a CSS animation rather than a <Transition>,
+   whose enter/leave bookkeeping forced a reflow on every shot change while scrubbing. */
 .plan-pic {
   transform: scale(var(--push, 1));
   transform-origin: 50% 45%;
+  animation: cut-in 0.12s ease;
 }
 @media (prefers-reduced-motion: reduce) {
   .plan-pic {
     transform: none;
+    animation: none;
   }
 }
 :global(body.disable-animations) .plan-pic {
   transform: none;
+  animation: none;
 }
 .caption b {
   color: #9db7ff;
@@ -448,11 +509,10 @@ watch(hasSound, (sound) => emit("sound", sound), { immediate: true });
   color: #ff8a8a;
   text-decoration: wavy underline #ff8a8a;
 }
-.cut-enter-active {
-  transition: opacity 0.12s ease;
-}
-.cut-enter-from {
-  opacity: 0;
+@keyframes cut-in {
+  from {
+    opacity: 0;
+  }
 }
 .card .mdi {
   font-size: 28px;
