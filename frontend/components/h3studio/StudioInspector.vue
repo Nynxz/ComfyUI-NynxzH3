@@ -52,44 +52,44 @@
           :aria-label="`Scene ${sel.sceneIndex + 1} title`"
         />
         <!-- film settings: what every scene says unless it says its own -->
-        <section class="settings" :class="{ open: filmOpen }">
-          <button type="button" class="sechead" @click="filmOpen = !filmOpen">
-            <i class="mdi" :class="filmOpen ? 'mdi-chevron-down' : 'mdi-chevron-right'" />
+        <section class="settings acc filmsec" :class="{ open: section === 'film' }">
+          <button type="button" class="sechead" :aria-expanded="section === 'film'" @click="section = 'film'">
+            <i class="mdi" :class="section === 'film' ? 'mdi-chevron-down' : 'mdi-chevron-right'" />
             <span>Film</span>
             <span class="soft ellipsis">{{ film.style || "style, direction, ambience, music" }}</span>
           </button>
-          <template v-if="filmOpen">
+          <div v-if="section === 'film'" class="accbody">
             <label class="col">
               <span class="lbl">style</span>
-              <textarea v-model="film.style" rows="2" placeholder="the look, e.g. 2D cel animation, painted backgrounds, warm amber light" />
+              <textarea class="fits" v-model="film.style" rows="2" placeholder="the look, e.g. 2D cel animation, painted backgrounds, warm amber light" />
             </label>
             <label class="col">
               <span class="lbl">direction</span>
-              <textarea v-model="film.direction" rows="2" placeholder="how it's made, e.g. animated on twos, held poses, smear frames on fast moves" />
+              <textarea class="fits" v-model="film.direction" rows="2" placeholder="how it's made, e.g. animated on twos, held poses, smear frames on fast moves" />
             </label>
             <label class="col">
               <span class="lbl">ambience</span>
-              <textarea v-model="film.soundscape" rows="2" placeholder="e.g. rain on glass, distant traffic" />
+              <textarea class="fits" v-model="film.soundscape" rows="2" placeholder="e.g. rain on glass, distant traffic" />
             </label>
             <label class="col">
               <span class="lbl">music</span>
-              <textarea v-model="film.music" rows="2" placeholder="leave empty for none" />
+              <textarea class="fits" v-model="film.music" rows="2" placeholder="leave empty for none" />
             </label>
             <span class="soft">Every scene opens with the style and direction; scenes can set their own direction, ambience and music.</span>
-          </template>
+          </div>
         </section>
 
         <!-- scene settings -->
-        <section class="settings" :class="{ open: settingsOpen }">
-          <button type="button" class="sechead" @click="settingsOpen = !settingsOpen">
-            <i class="mdi" :class="settingsOpen ? 'mdi-chevron-down' : 'mdi-chevron-right'" />
+        <section class="settings acc scenesec" :class="{ open: section === 'scene' }">
+          <button type="button" class="sechead" :aria-expanded="section === 'scene'" @click="section = 'scene'">
+            <i class="mdi" :class="section === 'scene' ? 'mdi-chevron-down' : 'mdi-chevron-right'" />
             <span>Scene settings</span>
             <span class="soft">
               {{ sel.sceneIndex > 0 ? continuationOf(scene.continuation.mode).label.toLowerCase() : "opens the film" }}
               <template v-if="edgeKeyframe('first') || edgeKeyframe('last')"> · keyframes</template>
             </span>
           </button>
-          <template v-if="settingsOpen">
+          <div v-if="section === 'scene'" class="accbody">
             <label class="row">
               <span class="lbl">length</span>
               <ZenNumber :model-value="scene.seconds" :min="1" :max="30" :step="0.5" :precision="2" @update:model-value="(v: number) => emit('seconds', sel.sceneIndex, v)" />
@@ -152,21 +152,27 @@
             </div>
             <label class="col">
               <span class="lbl">direction</span>
-              <textarea v-model="scene.direction" rows="2" :placeholder="project.direction || 'the film\'s direction (Film, above)'" />
+              <textarea class="fits" v-model="scene.direction" rows="2" :placeholder="project.direction || 'the film\'s direction (Film, above)'" />
             </label>
             <label class="col">
               <span class="lbl">ambience</span>
-              <textarea v-model="scene.soundscape" rows="2" :placeholder="project.soundscape || 'e.g. rain on glass, distant traffic'" />
+              <textarea class="fits" v-model="scene.soundscape" rows="2" :placeholder="project.soundscape || 'e.g. rain on glass, distant traffic'" />
             </label>
             <label class="col">
               <span class="lbl">music</span>
-              <textarea v-model="scene.music" rows="2" :placeholder="project.music || 'leave empty for none'" />
+              <textarea class="fits" v-model="scene.music" rows="2" :placeholder="project.music || 'leave empty for none'" />
             </label>
-          </template>
+          </div>
         </section>
 
         <!-- shots -->
-        <section ref="shotsEl" class="shots">
+        <section class="shots acc" :class="{ open: section === 'shots' }">
+          <button type="button" class="sechead shotshead" :aria-expanded="section === 'shots'" @click="section = 'shots'">
+            <i class="mdi" :class="section === 'shots' ? 'mdi-chevron-down' : 'mdi-chevron-right'" />
+            <span>Shots</span>
+            <span class="soft ellipsis">{{ scene.shots.length }} · {{ scene.seconds.toFixed(1) }}s</span>
+          </button>
+          <div ref="shotsEl" class="accbody shotlist">
           <div
             v-for="(sh, i) in scene.shots"
             :key="sh.id"
@@ -255,6 +261,7 @@
             </template>
           </div>
           <ZenButton sm variant="ghost" icon="mdi mdi-plus" title="Split the last shot in two" @click="emit('addShot', sel.sceneIndex)">Shot</ZenButton>
+          </div>
         </section>
       </div>
     </template>
@@ -456,17 +463,17 @@ const scene = computed(() => props.project.scenes[props.sel.sceneIndex]);
 // --- scene panel ---------------------------------------------------------------------------------
 // Selecting a shot opens its card; selecting the scene opens its settings (and keeps whichever
 // card you last had open). Cards are opened by selecting the shot, so the timeline follows.
-const settingsOpen = ref(props.sel.kind === "scene");
-const filmOpen = ref(false);
+/** The one open section of the scene panel; picking the scene opens its settings, a shot its shots. */
+const section = ref<"film" | "scene" | "shots">(props.sel.kind === "scene" ? "scene" : "shots");
 /** The film-wide settings: the project itself, edited in place like a scene. */
 const film = computed(() => props.project);
 const lastOpenShot = ref<string | null>(props.sel.kind === "shot" ? props.sel.id : null);
 watch(
   () => [props.sel.kind, props.sel.id] as const,
   ([kind, id]) => {
-    if (kind === "scene") settingsOpen.value = true;
+    if (kind === "scene") section.value = "scene";
     else if (kind === "shot") {
-      settingsOpen.value = false;
+      section.value = "shots";
       lastOpenShot.value = id;
     }
   },
@@ -962,10 +969,50 @@ function mention(name: string) {
   flex: 0 1 150px;
   min-width: 90px;
 }
+/* The scene panel fills the sidebar: Film, Scene settings and Shots are an accordion with one
+   section open, which takes the room left and scrolls on its own; the others are one-line headers. */
+.inspector.scene,
+.inspector.shot {
+  height: 100%;
+  min-height: 0;
+}
 .scenebody {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+.acc {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  min-height: 0;
+}
+.acc.open {
+  flex: 1 1 auto;
+}
+.accbody {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+.acc.open > .accbody {
+  flex: 1;
+  min-height: 0;
+  margin-right: -4px;
+  padding-right: 4px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+.shots:not(.open) > .shotlist {
+  display: none;
+}
+/* Settings text is as tall as what's written in it. */
+.inspector textarea.fits {
+  min-height: 52px;
+  max-height: 240px;
+  field-sizing: content;
 }
 .settings {
   display: flex;
@@ -1002,11 +1049,15 @@ function mention(name: string) {
   text-overflow: ellipsis;
 }
 .shots {
-  display: flex;
-  flex-direction: column;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--h3-line);
+  border-radius: var(--h3-radius);
+}
+.shotlist {
   gap: 5px;
 }
-.shots > :deep(.zen-btn) {
+.shotlist > :deep(.zen-btn) {
   align-self: flex-start;
 }
 .shotcard {
@@ -1272,7 +1323,7 @@ function mention(name: string) {
     display: grid;
     flex: 1;
     grid-template-columns: minmax(240px, 1fr) minmax(0, 1.7fr);
-    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr);
     gap: 6px 12px;
     min-height: 0;
   }
@@ -1281,20 +1332,33 @@ function mention(name: string) {
     grid-row: 1;
     margin: 0;
   }
-  .settings {
+  .filmsec {
     grid-column: 1;
     grid-row: 2;
+    max-height: 100%;
+  }
+  .scenesec {
+    grid-column: 1;
+    grid-row: 3;
     align-self: start;
     max-height: 100%;
-    overflow-y: auto;
   }
+  /* Room for the shots beside the settings: always open, no header. */
   .shots {
     grid-column: 2;
-    grid-row: 1 / span 2;
+    grid-row: 1 / span 3;
     min-height: 0;
     max-height: 100%;
+  }
+  .shotshead {
+    display: none;
+  }
+  .shots > .shotlist {
+    display: flex;
+    flex: 1;
+    min-height: 0;
     overflow-y: auto;
-    padding-right: 2px;
+    scrollbar-gutter: stable;
   }
 }
 </style>

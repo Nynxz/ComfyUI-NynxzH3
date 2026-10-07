@@ -235,7 +235,11 @@
                         },
                       ]"
                     />
-                    <div ref="sideBody" class="sidebody">
+                    <div
+                      ref="sideBody"
+                      class="sidebody"
+                      :class="{ fills: tab === 'edit' && (editSelection.kind === 'scene' || editSelection.kind === 'shot') }"
+                    >
                       <!-- Both stay mounted: switching tabs mustn't rebuild every thumbnail. -->
                       <StudioInspector
                         v-show="tab === 'edit'"
@@ -1525,6 +1529,13 @@ onBeforeUnmount(() => ro?.disconnect());
   padding-right: 4px;
   overflow-y: auto;
   scrollbar-gutter: stable;
+}
+/* The scene panel is an accordion that fills the sidebar and scrolls inside its open section. */
+.sidebody.fills {
+  margin-right: 0;
+  padding-right: 0;
+  overflow: hidden;
+  scrollbar-gutter: auto;
 }
 .divider {
   width: 1px;
