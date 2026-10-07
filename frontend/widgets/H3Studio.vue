@@ -1,7 +1,7 @@
 <template>
   <div class="h3host">
-    <StudioSummary v-if="!panel && poppedOut" :project="project" @focus="popOut" />
-    <StudioEditor v-else :project="project" :view="view" :node-id="nodeId" :in-panel="panel" @pop-out="popOut" />
+    <StudioSummary v-if="!panel && poppedOut" :project="project" @focus="popOut(true)" />
+    <StudioEditor v-else :project="project" :view="view" :node-id="nodeId" :in-panel="panel" @pop-out="popOut(true)" />
   </div>
 </template>
 
@@ -82,7 +82,9 @@ function remember(popped: boolean) {
 }
 
 const self = getCurrentInstance()!.type;
-function popOut() {
+/** `reveal`: you asked for it, so a panel tiled in a workspace that isn't showing goes there.
+ *  The restore on mount doesn't: it waits quietly for its workspace. */
+function popOut(reveal = false) {
   const node = props.node;
   const handle = openZenPanel(
     {
@@ -94,6 +96,7 @@ function popOut() {
       minWidth: 640,
       minHeight: 480,
       persist: true,
+      reveal,
       props: { widget: props.widget, node: props.node, panel: true },
       onClose: () => {
         if (node) handles.delete(node);
