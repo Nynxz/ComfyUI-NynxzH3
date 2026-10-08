@@ -173,7 +173,6 @@ def join(
     music: dict | None = None,
     music_volume: float = 1.0,
     music_fade: float = 2.0,
-    hold: int = 1,
 ):
     """The clips as one video at 24 fps. Where a clip carries the head it regenerated over the end
     of the one before (`h3_head`), the last `crossfade` frames of that one fade into it — the
@@ -187,8 +186,7 @@ def join(
     parts = []
     for v in videos:
         c = v.get_components()
-        images = _held_by_shot(c.images, getattr(v, "h3_holds", None) or [], hold)
-        parts.append((images, c.audio, getattr(v, "h3_head", None)))
+        parts.append((c.images, c.audio, getattr(v, "h3_head", None)))
     like = next((p[1] for p in parts if p[1] is not None), None)
     # A skipped scene's black stand-in takes the size of the rendered ones.
     shape = next(
@@ -253,27 +251,6 @@ def join(
     return InputImpl.VideoFromComponents(
         Types.VideoComponents(images=images, frame_rate=Fraction(FPS), audio=out_audio)
     )
-
-
-def _held_by_shot(images, schedule: list, default: int):
-    """A scene's clip held shot by shot: `schedule` is `[(first frame, "twos" or None)]` (see
-    `_project.hold_schedule`), None taking `default`. Each shot counts its holds from its own first
-    frame, so a cut always lands on a fresh frame."""
-    import torch
-
-    names = {"ones": 1, "twos": 2, "threes": 3}
-    starts = sorted(schedule) or [(0, None)]
-    if starts[0][0] > 0:
-        starts.insert(0, (0, None))
-    n = images.shape[0]
-    index = torch.arange(n)
-    for i, (start, name) in enumerate(starts):
-        end = starts[i + 1][0] if i + 1 < len(starts) else n
-        hold = names.get(name, default) if name else default
-        if hold > 1 and end > start:
-            local = index[start:end] - start
-            index[start:end] = start + local - local % hold
-    return images[index]
 
 
 def _under(film: dict | None, music: dict, seconds: float, volume: float, fade: float) -> dict:

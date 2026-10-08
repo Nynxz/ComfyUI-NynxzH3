@@ -330,7 +330,6 @@ interface Film {
   time: number;
   seconds: number;
   missing: number[];
-  hold?: string;
 }
 const films = ref<Film[]>([]);
 const film = computed(() => films.value[0] ?? null);
@@ -378,12 +377,7 @@ async function exportFilm() {
   }
 }
 function filmDetails(f: Film) {
-  return [
-    new Date(f.time * 1000).toLocaleString(),
-    clock(f.seconds),
-    f.hold && f.hold !== "ones" ? `on ${f.hold}` : "",
-    f.ref,
-  ]
+  return [new Date(f.time * 1000).toLocaleString(), clock(f.seconds), f.ref]
     .filter(Boolean)
     .join(" · ");
 }

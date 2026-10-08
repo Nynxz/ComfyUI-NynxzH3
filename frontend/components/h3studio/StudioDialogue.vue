@@ -159,10 +159,6 @@
     <datalist :id="`dlv-${uidBase}`">
       <option v-for="d in DELIVERIES" :key="d" :value="d" />
     </datalist>
-    <p v-if="!lines.length && !scriptOpen" class="hintline">
-      No one speaks. <b>+</b> adds a line; Enter in a line starts the reply. Or paste a script —
-      <code>NAME: words</code>.
-    </p>
   </div>
 </template>
 

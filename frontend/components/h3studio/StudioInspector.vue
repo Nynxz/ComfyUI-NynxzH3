@@ -146,21 +146,6 @@
                 placeholder="leave empty for none"
               />
             </label>
-            <div
-              class="row"
-              title="How the finished film is shown: held on twos or threes like anime (still 24 fps, same length). A shot can say its own."
-            >
-              <span class="lbl">drawn on</span>
-              <ZenToggleGroup
-                :model-value="project.film?.hold ?? 'ones'"
-                :options="[
-                  { value: 'ones', label: 'Ones' },
-                  { value: 'twos', label: 'Twos' },
-                  { value: 'threes', label: 'Threes' },
-                ]"
-                @update:model-value="(v: string) => setFilm({ hold: v as FilmSettings['hold'] })"
-              />
-            </div>
             <label
               class="row"
               title="Frames a continued scene fades in over, where it joins the one before"
@@ -452,28 +437,7 @@
                     @update:model-value="(v: string) => setTransition(sh, v)"
                   />
                 </label>
-                <div
-                  class="row"
-                  title="How the finished film shows this shot: held on twos or threes like anime, or as the whole film is drawn"
-                >
-                  <span class="lbl">drawn on</span>
-                  <ZenToggleGroup
-                    :model-value="sh.hold ?? 'film'"
-                    :options="[
-                      {
-                        value: 'film',
-                        label: 'Film',
-                        title: 'As the whole film is drawn (Whole film settings)',
-                      },
-                      { value: 'ones', label: 'Ones' },
-                      { value: 'twos', label: 'Twos' },
-                      { value: 'threes', label: 'Threes' },
-                    ]"
-                    @update:model-value="
-                      (v: string) => (sh.hold = v === 'film' ? undefined : (v as Shot['hold']))
-                    "
-                  />
-                </div>
+
                 <label v-if="i > 0" class="row">
                   <span class="lbl">starts at</span>
                   <ZenNumber

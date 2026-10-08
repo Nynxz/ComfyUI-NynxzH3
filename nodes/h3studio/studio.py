@@ -29,7 +29,7 @@ from .._base import NynxzNode
 from . import _carry, _reuse
 from ._loras import apply as apply_loras
 from ._media import has_audio, load_audio, load_image, load_video, path_of
-from ._project import FPS, PREVIOUS_FRAME, compile_scene, hold_schedule, normalize
+from ._project import FPS, PREVIOUS_FRAME, compile_scene, normalize
 from .io_types import H3StudioLinkType, H3StudioRenderType, H3StudioSetupType, H3StudioType
 
 LOG = logging.getLogger(__name__)
@@ -237,14 +237,12 @@ def render_scene(setup: dict, project, scene: int | None) -> dict:
         )
     plan = compile_scene(proj, index, has_audio)
     scene_id = proj["scenes"][index]["id"]
-    #: Each shot's start and hold, for H3 Studio Clip to hold the clip by (see `hold_schedule`).
-    shots = [{"at": s["at"], "hold": s["hold"]} for s in proj["scenes"][index]["shots"]]
     only = proj.get("render_only")
     if only and scene_id not in only:
         if record := _reuse.latest(scene_id):
-            return {**_held(plan, index, scene_id, record, setup), "shots": shots}
+            return _held(plan, index, scene_id, record, setup)
         if index not in _needed(proj, only):
-            return {**_blank(plan, index, scene_id, setup), "shots": shots}
+            return _blank(plan, index, scene_id, setup)
     carried = setup.get("previous_scene")
     if setup.get("previous_frames") is not None and carried is not None and carried != index - 1:
         # A loop over only the picked scenes carries the clip of the pass before, which isn't the
@@ -481,7 +479,6 @@ def render_scene(setup: dict, project, scene: int | None) -> dict:
         "noise_carry": noise_carry,
         "carries_picture": mode == "guide",
         "scene_key": _reuse.scene_key(plan.as_dict(), index, carried),
-        "shots": shots,
         "film": _film_after(proj, index),
     }
 
@@ -686,10 +683,6 @@ def _summary(
     for w in dict.fromkeys(plan.warnings):
         lines.append(f"  ! {w}")
     return "\n".join(lines)
-
-
-#: Hold, as H3 Studio Join and Film name it -> how many frames each picture is shown for.
-HOLDS = {"ones": 1, "twos": 2, "threes": 3}
 
 
 def _controlnets() -> list[str]:
@@ -1172,7 +1165,7 @@ class NynxzH3StudioClip(NynxzNode):
         from comfy_api.latest import InputImpl, Types
 
         if render.get("blank"):
-            return io.NodeOutput(_with_holds(_blank_video(render), render))
+            return io.NodeOutput(_blank_video(render))
         key, saved = cls._saved(render, keep, reuse)
         if images is None and saved:
             LOG.info(
@@ -1250,7 +1243,7 @@ class NynxzH3StudioClip(NynxzNode):
 
     @classmethod
     def _finish(cls, video, render: dict, keep: bool):
-        """The clip with its holds; and after the last scene of a full render, the film saved."""
+        """The clip; and after the last scene of a full render, the film saved."""
         if keep and render.get("film") and render.get("studio_node") is not None:
             from . import film
 
@@ -1259,16 +1252,7 @@ class NynxzH3StudioClip(NynxzNode):
                 _send(FILM_EVENT, {"node_id": render["studio_node"], **record})
             except Exception:
                 LOG.exception("H3 Studio: couldn't save the film (Renders ▸ Export film retries)")
-        return _with_holds(video, render)
-
-
-def _with_holds(video, render: dict):
-    """The clip, told where its shots start and how each is held (for H3 Studio Join). The clip
-    starts after a continuation's carried head, whose length its sidecar keeps."""
-    head = getattr(video, "h3_head", None)
-    trim = int(head[0].shape[0]) if head else int(render.get("trim_frames") or 0)
-    video.h3_holds = hold_schedule({"shots": render.get("shots") or []}, trim)
-    return video
+        return video
 
 
 def _blank_video(render: dict):
@@ -1340,14 +1324,6 @@ class NynxzH3StudioFilm(NynxzNode):
                 io.Audio.Input("music", optional=True, tooltip="A score under the whole film."),
                 io.Float.Input("music_volume", default=0.8, min=0.0, max=2.0, step=0.05),
                 io.Float.Input("music_fade", default=2.0, min=0.0, max=10.0, step=0.25),
-                io.Combo.Input(
-                    "hold",
-                    options=["ones", "twos", "threes"],
-                    default="ones",
-                    tooltip="Hold the finished film's frames on twos or threes, as anime is drawn: "
-                    "each frame shows 2 (or 3) times in place of the next. Still 24 fps, same "
-                    "length and sound. The scenes' own clips are left as they are.",
-                ),
             ],
             outputs=[io.Video.Output(display_name="video")],
             hidden=[io.Hidden.dynprompt],
@@ -1355,7 +1331,7 @@ class NynxzH3StudioFilm(NynxzNode):
 
     @classmethod
     def fingerprint_inputs(
-        cls, link=None, crossfade=8, music=None, music_volume=0.8, music_fade=2.0, hold="ones"
+        cls, link=None, crossfade=8, music=None, music_volume=0.8, music_fade=2.0
     ):
         # A new take changes the film without changing the node's inputs.
         import os
@@ -1366,9 +1342,7 @@ class NynxzH3StudioFilm(NynxzNode):
             return 0
 
     @classmethod
-    def execute(
-        cls, link=None, crossfade=8, music=None, music_volume=0.8, music_fade=2.0, hold="ones"
-    ):
+    def execute(cls, link=None, crossfade=8, music=None, music_volume=0.8, music_fade=2.0):
         from . import film
 
         studio = str((link if isinstance(link, dict) else {}).get("studio") or "").strip()
@@ -1376,7 +1350,7 @@ class NynxzH3StudioFilm(NynxzNode):
         if project is None:
             raise ValueError("H3 Studio Film: pick the H3 Studio on the node.")
         proj = normalize(project)
-        proj["film"] = {**proj["film"], "crossfade": int(crossfade), "hold": hold}
+        proj["film"] = {**proj["film"], "crossfade": int(crossfade)}
         video, _ = film.assemble(proj, music, float(music_volume), float(music_fade))
         return io.NodeOutput(video)
 
@@ -1429,22 +1403,12 @@ class NynxzH3StudioJoin(NynxzNode):
                     step=0.25,
                     tooltip="Seconds the score fades out over at the end of the film.",
                 ),
-                io.Combo.Input(
-                    "hold",
-                    options=["ones", "twos", "threes"],
-                    default="ones",
-                    tooltip="Hold the finished film's frames on twos or threes, as anime is drawn: "
-                    "each frame shows 2 (or 3) times in place of the next. Still 24 fps, same "
-                    "length and sound. The scenes' own clips are left as they are.",
-                ),
             ],
             outputs=[io.Video.Output(display_name="video")],
         )
 
     @classmethod
-    def execute(
-        cls, videos, crossfade, music=None, music_volume=(0.8,), music_fade=(2.0,), hold=("ones",)
-    ):
+    def execute(cls, videos, crossfade, music=None, music_volume=(0.8,), music_fade=(2.0,)):
         return io.NodeOutput(
             _carry.join(
                 list(videos),
@@ -1452,6 +1416,5 @@ class NynxzH3StudioJoin(NynxzNode):
                 music[0] if music else None,
                 float(music_volume[0]),
                 float(music_fade[0]),
-                HOLDS.get(hold[0], 1),
             )
         )

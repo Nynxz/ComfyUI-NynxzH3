@@ -110,8 +110,8 @@ latent (Start Loop can only take an initial value from outside the loop):
 scene's current take into the film and saves it to `output/h3studio/film/`, with the workflow
 inside — nothing after End Loop is needed. The Renders sidebar shows it, and **Export film** there
 saves it again from the current takes at any time (after re-rendering one scene, or making another
-take current) without running the graph. How it's joined — drawn on ones, twos or threes, and the
-crossfade into continued scenes — and whether a full render saves it are in Settings ▸ Whole film.
+take current) without running the graph. The crossfade into continued scenes, and whether a full
+render saves the film, are in Settings ▸ Whole film.
 H3 Studio Film (and Join, on End Loop's accumulated output) are still there for putting a score
 under it or feeding it on into a graph.
 
@@ -159,20 +159,9 @@ Save Video; it runs again whenever a scene gets a new take.
 
 Use it in its own small workflow, or beside the render loop with the loop's nodes bypassed.
 
-**Hold** (on Film and on H3 Studio Join) holds the finished film's frames on twos or threes, the
-way anime is drawn: each frame shows twice (or three times) in place of the ones after it, so motion
-steps instead of gliding. It stays 24 fps with the same length and sound, and the scenes' own clips
-are left alone (a continuation needs their real motion). H3 tends to smooth out held poses even
-when told "animated on twos", so this is the sure way to get the look.
-
-A shot can set its own: **drawn on** in its card (Film, Ones, Twos, Threes). Film follows the
-node's hold; the others override it for that shot, so a fast chase can step on twos while a slow
-establishing drift stays smooth. Each shot counts its holds from its own first frame, so a cut
-always lands on a fresh frame. Changing it never makes a scene out of date: nothing re-renders.
-
 ### Seeds, reuse and rendering part of the film
 
-Every scene has its own seed (Outputs' `seed` and `noise`): the one shown in its settings, which a
+Every scene has its own seed (Outputs' `noise`): the one shown in its settings, which a
 re-roll replaces; a scene that never had one uses a fixed hash of its id, so it renders the same
 every time. A continuation also starts from the very noise the previous scene drew for the frames
 it regenerates.

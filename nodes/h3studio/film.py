@@ -16,13 +16,12 @@ import time
 
 from . import _carry, _reuse
 from ._media import path_of
-from ._project import frames_for, hold_schedule
+from ._project import frames_for
 
 LOG = logging.getLogger(__name__)
 
 FILMS_FILE = "films.json"
 FILMS_KEPT = 40
-HOLDS = {"ones": 1, "twos": 2, "threes": 3}
 _lock = threading.Lock()
 
 
@@ -52,8 +51,6 @@ def assemble(proj: dict, music: dict | None = None, volume: float = 0.8, fade: f
                     "height": height,
                 }
             )
-        head = getattr(video, "h3_head", None)
-        video.h3_holds = hold_schedule(scene, int(head[0].shape[0]) if head else 0)
         videos.append(video)
     if missing:
         LOG.warning(
@@ -61,7 +58,7 @@ def assemble(proj: dict, music: dict | None = None, volume: float = 0.8, fade: f
             "s" if len(missing) > 1 else "",
             ", ".join(map(str, missing)),
         )
-    joined = _carry.join(videos, film["crossfade"], music, volume, fade, HOLDS.get(film["hold"], 1))
+    joined = _carry.join(videos, film["crossfade"], music, volume, fade)
     return joined, missing
 
 
@@ -82,7 +79,6 @@ def save(proj: dict, metadata: dict | None = None) -> dict:
         "seconds": round(float(video.get_duration()), 3),
         "scenes": [s["id"] for s in proj["scenes"]],
         "missing": missing,
-        "hold": proj["film"]["hold"],
     }
     with _lock:
         rows = [r for r in _read() if r.get("ref") != ref] + [record]

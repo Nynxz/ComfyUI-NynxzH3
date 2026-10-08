@@ -204,8 +204,6 @@ def normalize(raw: Any) -> dict[str, Any]:
                         if j > 0 and shot.get("transition") in TRANSITIONS
                         else "cut",
                         "lines": normalize_lines(shot.get("lines")),
-                        # Drawn on ones, twos or threes in the finished film (None: the film's).
-                        "hold": shot.get("hold") if shot.get("hold") in HOLD_NAMES else None,
                     }
                 )
         shots.sort(key=lambda s: s["at"])
@@ -326,15 +324,10 @@ FITS = ("crop", "stretch")
 HOOK_MODES = ("auto", "fast", "low_vram")
 
 
-FILM_HOLDS = ("ones", "twos", "threes")
-
-
 def normalize_film(raw: Any) -> dict[str, Any]:
     """How the finished film is put together and when it's saved (see film.py)."""
     raw = raw if isinstance(raw, dict) else {}
     return {
-        #: Drawn on ones, twos or threes, unless a shot says otherwise.
-        "hold": raw.get("hold") if raw.get("hold") in FILM_HOLDS else "ones",
         #: Frames a continuation fades in over.
         "crossfade": int(_num(raw.get("crossfade"), 8, 0, 39)),
         #: Save the film when a full render finishes.
@@ -480,18 +473,6 @@ MENTION = re.compile(r"@([\w-]+)(?::(look|voice))?(?![\w-])", re.I)
 
 def _seen(ref: dict[str, Any]) -> bool:
     return ref["kind"] in ("image", "video")
-
-
-HOLD_NAMES = ("ones", "twos", "threes")
-
-
-def hold_schedule(scene: dict[str, Any], trim: int) -> list[tuple[int, str | None]]:
-    """Where each shot's hold starts in the scene's clip: `[(clip frame, "twos" or None for the
-    film's own)]`, empty when no shot sets one. The clip starts `trim` frames into the scene (a
-    continuation's carried head is cut off)."""
-    if not any(s.get("hold") for s in scene["shots"]):
-        return []
-    return [(max(0, round(s["at"] * FPS) - trim), s.get("hold")) for s in scene["shots"]]
 
 
 def mentions_ref(project: dict[str, Any], scene: dict[str, Any], ref: dict[str, Any]) -> bool:
