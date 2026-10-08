@@ -136,6 +136,18 @@
           </template>
           <template #default="{ close }">
             <div class="menu">
+              <div
+                class="size"
+                title="Every render is this size. Matching the H3 Studio's canvas means blocking and control videos fit H3's frame exactly"
+              >
+                <span>size</span>
+                <ZenSelect
+                  size="sm"
+                  :model-value="sizeChoice"
+                  :options="sizeOptions"
+                  @update:model-value="(v: string) => pickSize(v)"
+                />
+              </div>
               <ZenMenuItem
                 icon="mdi mdi-filmstrip"
                 @select="
@@ -422,6 +434,13 @@ export interface StudioValue {
   project: string;
   scene: string;
   shot: string;
+  /** The render size, when picked; otherwise it follows `autoSize`. */
+  width?: number;
+  height?: number;
+}
+export interface RenderSize {
+  width: number;
+  height: number;
 }
 const props = defineProps<{
   value: StudioValue;
@@ -429,10 +448,48 @@ const props = defineProps<{
   canPopOut?: boolean;
   width?: number;
   height?: number;
+  /** What the size follows when none is picked: an H3 Studio's canvas in this workflow. */
+  autoSize?: (RenderSize & { label: string }) | null;
   /** Editors with the same key share one session: a node's editor and its popped-out panel. */
   sessionKey?: string;
 }>();
-const emit = defineEmits<{ change: [StudioValue]; popOut: [] }>();
+const emit = defineEmits<{ change: [StudioValue]; popOut: []; size: [RenderSize | null] }>();
+
+const PRESETS: RenderSize[] = [
+  { width: 832, height: 480 },
+  { width: 960, height: 544 },
+  { width: 1280, height: 720 },
+  { width: 1344, height: 768 },
+  { width: 768, height: 1344 },
+];
+const sizeKey = (s: RenderSize) => `${s.width}x${s.height}`;
+/** The Render menu's size choice: "auto" follows the H3 Studio, or a fixed size. */
+const sizeChoice = computed(() =>
+  props.value.width && props.value.height
+    ? sizeKey({ width: props.value.width, height: props.value.height })
+    : "auto",
+);
+const sizeOptions = computed(() => {
+  const auto = props.autoSize
+    ? `Match ${props.autoSize.label} (${props.autoSize.width}×${props.autoSize.height})`
+    : "832×480 (no H3 Studio to match)";
+  const fixed = [...PRESETS];
+  if (
+    props.value.width &&
+    props.value.height &&
+    !PRESETS.some((p) => sizeKey(p) === sizeChoice.value)
+  )
+    fixed.push({ width: props.value.width, height: props.value.height });
+  return [
+    { value: "auto", label: auto },
+    ...fixed.map((p) => ({ value: sizeKey(p), label: `${p.width}×${p.height}` })),
+  ];
+});
+function pickSize(key: string) {
+  if (key === "auto") return emit("size", null);
+  const [width, height] = key.split("x").map(Number);
+  emit("size", { width: width!, height: height! });
+}
 
 const MODES = [
   { value: "free", label: "Free", icon: "mdi mdi-rotate-orbit", title: "Orbit around the set" },
@@ -887,6 +944,17 @@ function onKey(e: KeyboardEvent) {
   flex-direction: column;
   min-width: 220px;
   padding: 4px;
+}
+.menu .size {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px 6px;
+  font-size: 11px;
+  color: var(--zen-muted, #9aa0aa);
+}
+.menu .size :deep(.zen-select) {
+  flex: 1;
 }
 .menu .reach {
   display: flex;

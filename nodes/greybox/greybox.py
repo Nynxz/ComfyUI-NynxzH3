@@ -150,55 +150,16 @@ class NynxzGreyBoxStudio(NynxzNode):
             node_id="GreyBox.Studio",
             display_name="Grey Box Studio",
             description="Build and block grey box scenes in an editor (a set of plain shapes, "
-            "characters moving between marks, a camera per shot), then render a shot as grey video "
-            "for H3 to follow. The scenes are files in a Codex show's greybox/ folder, so agents "
-            "can work on them too.",
+            "characters moving between marks, a camera per shot) and render them from its Render "
+            "menu as grey, depth or edge videos for H3 Studio. The scenes are files in a Codex "
+            "show's greybox/ folder, so agents can work on them too. For a render inside a "
+            "workflow, use Grey Box Shot.",
             search_aliases=["greybox", "blocking", "previs", "layout", "3d"],
-            inputs=[
-                GreyBoxStudioType.Input("studio"),
-                io.Int.Input("width", default=832, min=64, max=2048, step=16),
-                io.Int.Input("height", default=480, min=64, max=2048, step=16),
-                io.String.Input(
-                    "mask_actor", default="", optional=True, tooltip='A character ("@ren") to mask.'
-                ),
-                io.Boolean.Input(
-                    "save", default=True, tooltip="Save the grey video to output/greybox."
-                ),
-            ],
-            outputs=[
-                io.Image.Output(display_name="frames"),
-                io.Image.Output(display_name="depth"),
-                io.Mask.Output(display_name="mask"),
-                io.Image.Output(display_name="sheet"),
-                io.String.Output(display_name="video_ref"),
-            ],
+            inputs=[GreyBoxStudioType.Input("studio")],
+            outputs=[],
         )
 
     @classmethod
-    def _path(cls, studio) -> Path:
-        from .api import codex_root, file_of, project_dir
-
-        studio = studio if isinstance(studio, dict) else {}
-        if not studio.get("project") or not studio.get("scene"):
-            raise gscene.SceneError("Pick a project and a scene in the Grey Box Studio first.")
-        return file_of(project_dir(codex_root(None), studio["project"]), "scene", studio["scene"])
-
-    @classmethod
-    def fingerprint_inputs(cls, studio, width, height, mask_actor="", save=True):
-        try:
-            path = cls._path(studio)
-            files = [
-                path,
-                *path.parent.parent.glob("sets/*.json"),
-                path.parent.parent / "cast.json",
-            ]
-            return ";".join(f"{f}:{os.stat(f).st_mtime_ns}" for f in files if f.exists())
-        except Exception:  # noqa: BLE001 - anything wrong shows when it runs
-            return float("nan")
-
-    @classmethod
-    def execute(cls, studio, width, height, mask_actor="", save=True):
-        path = cls._path(studio)
-        sc = gscene.load(path)
-        shot = (studio or {}).get("shot") or sc.shots[0].name
-        return render_shot(sc, shot, width, height, mask_actor, save, path.stem)
+    def execute(cls, studio):
+        # An editor: nothing to run. Renders come from its Render menu (or Grey Box Shot).
+        return io.NodeOutput()

@@ -20,8 +20,10 @@
       :can-pop-out="canPopOut"
       :width="size.width"
       :height="size.height"
+      :auto-size="autoSize"
       :session-key="panelId()"
       @change="onChange"
+      @size="onSize"
       @pop-out="popOut"
     />
   </div>
@@ -58,12 +60,11 @@ import {
   getCurrentInstance,
   onBeforeUnmount,
   onMounted,
-  reactive,
   ref,
 } from "vue";
 import { ZenButton } from "@nynxz/zenkit-ui";
 import { hasZenPanels, openZenPanel, type ZenPanelHandle } from "@/framework";
-import type { StudioValue } from "@/components/greybox/GreyBoxEditor.vue";
+import type { RenderSize, StudioValue } from "@/components/greybox/GreyBoxEditor.vue";
 
 // The editor (and three.js with it) loads only when a Grey Box Studio is on the canvas.
 const GreyBoxEditor = defineAsyncComponent(() => import("@/components/greybox/GreyBoxEditor.vue"));
@@ -83,31 +84,83 @@ const props = defineProps<{ widget?: DOMWidget; node?: GbNode; panel?: boolean }
 
 const toValue = (v: unknown): StudioValue => {
   const o = (v && typeof v === "object" ? v : {}) as Partial<StudioValue>;
+  const size =
+    Number(o.width) > 0 && Number(o.height) > 0
+      ? { width: Number(o.width), height: Number(o.height) }
+      : {};
   return {
     project: String(o.project ?? ""),
     scene: String(o.scene ?? ""),
     shot: String(o.shot ?? ""),
+    ...size,
   };
 };
 const value = ref<StudioValue>(toValue(props.widget?.value));
-function onChange(next: StudioValue) {
+function write(next: StudioValue) {
   value.value = next;
   const w = props.widget;
   if (!w) return;
   w.value = { ...next };
   w.callback?.(w.value);
 }
+/** The editor's changes (project, scene, shot) keep the picked render size. */
+function onChange(next: StudioValue) {
+  write({ ...next, width: value.value.width, height: value.value.height });
+}
+function onSize(next: RenderSize | null) {
+  const { width: _w, height: _h, ...rest } = value.value;
+  write(next ? { ...rest, ...next } : rest);
+}
 
-// The render's size, from the node's own width and height: the shot view is framed to it.
-const size = reactive({ width: 832, height: 480 });
-const readSize = () => {
-  const n = (name: string) => Number(props.node?.widgets?.find((w) => w.name === name)?.value);
-  if (n("width") > 0) size.width = n("width");
-  if (n("height") > 0) size.height = n("height");
+// The render size follows an H3 Studio's canvas in this workflow, unless one is picked, so the
+// blocking and control videos fit H3's frame exactly.
+const autoSize = ref<(RenderSize & { label: string }) | null>(null);
+interface GraphNode {
+  id: number | string;
+  type?: string;
+  title?: string;
+  widgets?: { name: string; value: unknown }[];
+}
+const findCanvas = () => {
+  const nodes = ((props.node?.graph as { nodes?: GraphNode[] } | null)?.nodes ?? []).filter(
+    (n) => n.type === "nynxz.H3.Studio",
+  );
+  for (const n of nodes) {
+    let project = n.widgets?.find((w) => w.name === "project")?.value;
+    if (typeof project === "string") {
+      try {
+        project = JSON.parse(project);
+      } catch {
+        continue;
+      }
+    }
+    const canvas = (project as { canvas?: { width?: number; height?: number } } | undefined)
+      ?.canvas;
+    if (canvas?.width && canvas.height) {
+      const next = { width: canvas.width, height: canvas.height, label: `H3 Studio #${n.id}` };
+      const now = autoSize.value;
+      if (
+        !now ||
+        now.width !== next.width ||
+        now.height !== next.height ||
+        now.label !== next.label
+      )
+        autoSize.value = next;
+      return;
+    }
+  }
+  if (autoSize.value) autoSize.value = null;
 };
-readSize();
-const sizeTimer = window.setInterval(readSize, 1000);
-onBeforeUnmount(() => window.clearInterval(sizeTimer));
+findCanvas();
+const canvasTimer = window.setInterval(findCanvas, 2000);
+onBeforeUnmount(() => window.clearInterval(canvasTimer));
+const size = computed<RenderSize>(() =>
+  value.value.width && value.value.height
+    ? { width: value.value.width, height: value.value.height }
+    : autoSize.value
+      ? { width: autoSize.value.width, height: autoSize.value.height }
+      : { width: 832, height: 480 },
+);
 
 // --- popping out ------------------------------------------------------------------------------------
 const nodeId = String(props.node?.id ?? "");
