@@ -401,7 +401,7 @@ const views = new Map<
 // Grey Box Studio: block a scene in 3D — the set, the characters moving between marks, a camera
 // per shot — and render shots as grey video for H3 to follow. The scene's files are the truth
 // (lib/greyboxDoc.ts); every change is an action (lib/greyboxActions.ts), the same ones agents use.
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, toRaw, watch } from "vue";
 import {
   ZenButton,
   ZenEmpty,
@@ -523,7 +523,9 @@ const overlay = ref<{
 } | null>(null);
 const aspect = computed(() => (props.width ?? 832) / (props.height ?? 480));
 
-const evaluator = computed(() => new Evaluator(s.doc.scene, s.doc.set, s.doc.cast));
+const evaluator = computed(
+  () => new Evaluator(toRaw(s.doc.scene), toRaw(s.doc.set), toRaw(s.doc.cast)),
+);
 const length = computed(() => evaluator.value.length);
 const shotNow = computed(() => evaluator.value.shotAt(time.value));
 const currentShot = computed(() => {

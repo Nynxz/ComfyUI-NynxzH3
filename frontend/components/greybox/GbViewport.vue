@@ -39,7 +39,7 @@
 // paths and keys, the marks, and every shot's camera. Three ways to look: orbiting freely, through
 // a shot's camera (framed to the render's shape), or from above. Click to select; drag the gizmo to
 // move, turn or resize — each drag one undoable action.
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, toRaw, watch } from "vue";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
@@ -89,8 +89,16 @@ const showLabels = ref(true);
 const host = ref<HTMLElement | null>(null);
 const canvas = ref<HTMLCanvasElement | null>(null);
 const labels = ref<HTMLElement | null>(null);
+// Over the raw objects: playback evaluates every actor key each frame, and reading them through
+// Vue's proxies cost more than the evaluation. Edits change these objects in place, so the
+// evaluator still sees them; a replaced scene, set or cast makes a new one.
 const evaluator = computed(
-  () => new Evaluator(props.session.doc.scene, props.session.doc.set, props.session.doc.cast),
+  () =>
+    new Evaluator(
+      toRaw(props.session.doc.scene),
+      toRaw(props.session.doc.set),
+      toRaw(props.session.doc.cast),
+    ),
 );
 
 // --- three -----------------------------------------------------------------------------------------
@@ -150,6 +158,20 @@ function material(tone: number, selected: boolean) {
   return m;
 }
 
+/** Geometry shared by every shape of the same kind and size: playback rebuilds the actors every
+ *  frame, and without this each rebuild made (and uploaded) new vertex buffers. */
+const geometries = new Map<string, THREE.BufferGeometry>();
+function shared(key: string, make: () => THREE.BufferGeometry): THREE.BufferGeometry {
+  let g = geometries.get(key);
+  if (!g) {
+    g = make();
+    g.userData.shared = true;
+    geometries.set(key, g);
+  }
+  return g;
+}
+const mm = (v: number) => Math.round(v * 1e4) / 1e4;
+
 function shapeMesh(s: ShapeData, selected: boolean): THREE.Mesh {
   const tone = s.tone ?? 0.7;
   let geo: THREE.BufferGeometry;
@@ -158,27 +180,32 @@ function shapeMesh(s: ShapeData, selected: boolean): THREE.Mesh {
     const a = new THREE.Vector3(...(s.a ?? [0, 0, 0]));
     const b = new THREE.Vector3(...(s.b ?? [0, 1, 0]));
     const len = Math.max(a.distanceTo(b), 1e-4);
-    geo = new THREE.CylinderGeometry(s.radius ?? 0.5, s.radius ?? 0.5, len, 32);
+    const r = s.radius ?? 0.5;
+    geo = shared(`cyl|${mm(r)}|${mm(len)}`, () => new THREE.CylinderGeometry(r, r, len, 32));
     mesh.position.copy(a.clone().add(b).multiplyScalar(0.5));
     mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize());
   } else if (s.type === "cylinder") {
     const h = s.height ?? 1;
-    geo = new THREE.CylinderGeometry(s.radius ?? 0.5, s.radius ?? 0.5, h, 32);
+    const r = s.radius ?? 0.5;
+    geo = shared(`cyl|${mm(r)}|${mm(h)}`, () => new THREE.CylinderGeometry(r, r, h, 32));
     const at = s.at ?? [0, 0, 0];
     mesh.position.set(at[0], at[1] + h / 2, at[2]);
   } else if (s.type === "sphere") {
-    geo = new THREE.SphereGeometry(s.radius ?? 0.5, 32, 16);
+    const r = s.radius ?? 0.5;
+    geo = shared(`sph|${mm(r)}`, () => new THREE.SphereGeometry(r, 32, 16));
     mesh.position.set(...(s.at ?? [0, 0, 0]));
   } else if (s.type === "capsule") {
     const a = new THREE.Vector3(...(s.a ?? [0, 0, 0]));
     const b = new THREE.Vector3(...(s.b ?? [0, 1, 0]));
     const len = a.distanceTo(b);
-    geo = new THREE.CapsuleGeometry(s.radius ?? 0.2, len, 6, 16);
+    const r = s.radius ?? 0.2;
+    geo = shared(`cap|${mm(r)}|${mm(len)}`, () => new THREE.CapsuleGeometry(r, len, 6, 16));
     mesh.position.copy(a.clone().add(b).multiplyScalar(0.5));
     if (len > 1e-6)
       mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize());
   } else {
-    geo = new THREE.BoxGeometry(...(s.size ?? [1, 1, 1]));
+    const [w, h, d] = s.size ?? [1, 1, 1];
+    geo = shared(`box|${mm(w)}|${mm(h)}|${mm(d)}`, () => new THREE.BoxGeometry(w, h, d));
     mesh.position.set(...(s.at ?? [0, 0, 0]));
     // As the renderer turns it: its yaw, then its tilt (a lean forward) about its own x.
     mesh.rotation.order = "YXZ";
@@ -197,7 +224,8 @@ function clear(g: THREE.Group) {
     g.remove(o);
     o.traverse((x) => {
       picks.delete(x);
-      if (x instanceof THREE.Mesh || x instanceof THREE.Line) x.geometry.dispose();
+      if ((x instanceof THREE.Mesh || x instanceof THREE.Line) && !x.geometry.userData.shared)
+        x.geometry.dispose();
       if (x instanceof CSS2DObject) x.element.remove();
     });
   }
@@ -223,6 +251,20 @@ const isSel = (s: Selection) =>
   (!("t" in s) || ("t" in selection.value && Math.abs(selection.value.t - s.t) < 1e-3));
 
 // --- building the view -----------------------------------------------------------------------------
+/** The view only redraws when something changed: a build, the camera moving, a resize. Drawing
+ *  every frame regardless kept the GPU and the main thread busy even with nothing moving. */
+let dirty = true;
+const invalidate = () => {
+  dirty = true;
+};
+/** Marks, paths, labels and helpers go on the aids layer, which the shot camera doesn't see. Done
+ *  once per build, not by walking the whole scene every frame. */
+function layer(g: THREE.Group) {
+  g.traverse((o) => {
+    if (o !== g && !o.userData.solid) o.layers.set(AIDS);
+  });
+  invalidate();
+}
 function buildSet() {
   clear(setGroup);
   const { doc } = props.session;
@@ -239,7 +281,7 @@ function buildSet() {
       setGroup.add(m);
     }
   }
-  if (editingProp) return;
+  if (editingProp) return layer(setGroup);
   for (const [name, p] of Object.entries(set.marks)) {
     const pick: Selection = { type: "mark", id: name };
     const ring = new THREE.Mesh(
@@ -276,6 +318,7 @@ function buildSet() {
         label(name, new THREE.Vector3(c.at[0], c.at[1] + 0.25, c.at[2]), "setcam", pick),
       );
   }
+  layer(setGroup);
 }
 
 function camMarker(color: THREE.ColorRepresentation) {
@@ -357,12 +400,14 @@ function buildPaths() {
       pathGroup.add(dot);
     }
   }
+  layer(pathGroup);
 }
 
 /** What moves with time: everyone where they are now, each shot's camera now. Rebuilt every frame
  *  while playing, so it's kept small. */
 function buildLive() {
   clear(liveGroup);
+  const used = new Set<string>();
   const ev = evaluator.value;
   const t = props.time;
   const scene = props.session.doc.scene;
@@ -370,7 +415,7 @@ function buildLive() {
     const pick: Selection = { type: "actor", id: a.id };
     const selected =
       isSel(pick) || (selection.value?.type === "key" && selection.value.id === a.id);
-    for (const part of figure(a, props.session.doc.props)) {
+    for (const part of figure(a, toRaw(props.session.doc.props))) {
       const m = shapeMesh(part, selected);
       picks.set(m, pick);
       liveGroup.add(m);
@@ -380,7 +425,7 @@ function buildLive() {
       a.at[1] + a.member.height * poseHeight(a.pose) + 0.18,
       a.at[2],
     );
-    if (showLabels.value) liveGroup.add(label(a.id, head, "actor", pick));
+    if (showLabels.value) liveLabel(used, `actor:${a.id}`, a.id, head, "actor", pick);
   }
   for (const shot of scene.shots) {
     const active = shot.name === props.shot;
@@ -391,16 +436,13 @@ function buildLive() {
     picks.set(marker.children[0]!, { type: "shot", id: shot.name });
     liveGroup.add(marker);
     if (showLabels.value && active)
-      liveGroup.add(
-        label(
-          `cam ${shot.name}`,
-          new THREE.Vector3(cam.at[0], cam.at[1] + 0.3, cam.at[2]),
-          "cam on",
-          {
-            type: "shot",
-            id: shot.name,
-          },
-        ),
+      liveLabel(
+        used,
+        `cam:${shot.name}`,
+        `cam ${shot.name}`,
+        new THREE.Vector3(cam.at[0], cam.at[1] + 0.3, cam.at[2]),
+        "cam on",
+        { type: "shot", id: shot.name },
       );
     if (active && props.mode !== "shot") {
       const helperCam = new THREE.PerspectiveCamera(fovOf(cam.lens), props.aspect, 0.2, 2.5);
@@ -410,7 +452,34 @@ function buildLive() {
       liveGroup.add(new THREE.CameraHelper(helperCam));
     }
   }
+  for (const [key, o] of liveLabels) o.visible = used.has(key);
+  layer(liveGroup);
+  layer(liveLabelGroup);
   attachGizmo();
+}
+
+/** The labels that move with time, kept from frame to frame and moved, rather than new elements
+ *  added to the page on every frame of playback. */
+const liveLabels = new Map<string, CSS2DObject>();
+const liveLabelGroup = new THREE.Group();
+world.add(liveLabelGroup);
+function liveLabel(
+  used: Set<string>,
+  key: string,
+  text: string,
+  at: THREE.Vector3,
+  cls: string,
+  pick: Selection,
+) {
+  used.add(key);
+  let o = liveLabels.get(key);
+  if (!o) {
+    o = label(text, at, cls, pick);
+    liveLabels.set(key, o);
+    liveLabelGroup.add(o);
+  }
+  o.position.copy(at);
+  o.visible = true;
 }
 
 // --- the gizmo: what's selected, moved by dragging -------------------------------------------------
@@ -612,11 +681,15 @@ function setupControls() {
 
 // --- loop ----------------------------------------------------------------------------------------
 let frame = 0;
+let viewW = 1;
+let viewH = 1;
+let lastCamKey = "";
 function size() {
   const el = host.value;
   if (!el || !renderer || !css) return;
-  const w = el.clientWidth;
-  const h = el.clientHeight;
+  const w = (viewW = el.clientWidth);
+  const h = (viewH = el.clientHeight);
+  invalidate();
   renderer.setSize(w, h, false);
   css.setSize(w, h);
   persp.aspect = w / Math.max(1, h);
@@ -628,12 +701,22 @@ function size() {
 function draw() {
   frame = requestAnimationFrame(draw);
   if (!renderer || !css || !host.value || document.hidden) return;
-  if (fly) stepFly();
-  else orbit?.update();
-  const el = host.value;
-  const w = el.clientWidth;
-  const h = el.clientHeight;
+  if (fly) {
+    stepFly();
+    dirty = true;
+  } else orbit?.update();
   const cam = activeCamera();
+  // Any move of the camera — orbiting, framing, fitting the plan — redraws.
+  cam.updateMatrixWorld();
+  const camKey = `${cam.matrixWorld.elements.join()}|${cam.projectionMatrix.elements.join()}`;
+  if (camKey !== lastCamKey) {
+    lastCamKey = camKey;
+    dirty = true;
+  }
+  if (!dirty) return;
+  dirty = false;
+  const w = viewW;
+  const h = viewH;
   if (props.mode === "shot") {
     const shot = props.session.doc.scene.shots.find((x) => x.name === props.shot);
     if (shot) {
@@ -664,10 +747,6 @@ function draw() {
     renderer.setViewport(0, 0, w, h);
     labels.value!.style.visibility = "";
   }
-  for (const g of [setGroup, pathGroup, liveGroup])
-    g.traverse((o) => {
-      if (o !== g && !o.userData.solid) o.layers.set(AIDS);
-    });
   renderer.render(world, cam);
   if (props.mode !== "shot") css.render(world, cam);
 }
@@ -696,6 +775,7 @@ onMounted(() => {
     }
   });
   gizmo.addEventListener("objectChange", onGizmoChange);
+  gizmo.addEventListener("change", invalidate);
   size();
   new ResizeObserver(size).observe(host.value!);
   setupControls();
