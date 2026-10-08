@@ -65,22 +65,30 @@
             >
               <span class="tthumb"><MediaThumb :media="t.ref" :badge="false" /></span>
               <span class="ttext">
-                <span>{{ ago(t.time) }}</span>
-                <small class="soft ellipsis" :title="t.prompt">
-                  {{ t.seconds ? `${t.seconds.toFixed(1)}s` : ""
-                  }}<template v-if="t.seed !== undefined"> · seed {{ t.seed }}</template>
-                </small>
+                <span class="tline">
+                  <span class="when" :title="new Date(t.time * 1000).toLocaleString()">{{
+                    ago(t.time)
+                  }}</span>
+                  <span v-if="t.ref === g.current" class="badge">Current</span>
+                </span>
+                <span class="tline soft" :title="t.prompt">
+                  <span class="ellipsis"
+                    >{{ t.seconds ? `${t.seconds.toFixed(1)}s` : ""
+                    }}<template v-if="t.seed !== undefined"> · seed {{ t.seed }}</template></span
+                  >
+                  <span
+                    v-if="t.fits === false"
+                    class="stale"
+                    title="Made from an earlier version of this scene: using it leaves the scene out of date"
+                    ><i class="mdi mdi-pencil-clock-outline" />edited</span
+                  >
+                </span>
               </span>
-              <span
-                v-if="t.fits === false"
-                class="stale"
-                title="Made from an earlier version of this scene: using it leaves the scene out of date"
-                >edited since</span
-              >
-              <span v-if="t.ref === g.current" class="badge">Current</span>
               <ZenButton
-                v-else
+                v-if="t.ref !== g.current"
                 size="sm"
+                variant="ghost"
+                class="use"
                 title="Make this the scene's clip"
                 :disabled="!!using"
                 @click="use(g, t)"
@@ -294,9 +302,12 @@ onBeforeUnmount(() => {
 function ago(t: number) {
   const s = Date.now() / 1000 - t;
   if (s < 60) return "just now";
-  if (s < 3600) return `${Math.round(s / 60)} min ago`;
-  if (s < 86400) return `${Math.round(s / 3600)} h ago`;
-  return new Date(t * 1000).toLocaleString();
+  if (s < 3600) return `${Math.round(s / 60)}m ago`;
+  if (s < 86400) return `${Math.round(s / 3600)}h ago`;
+  const d = new Date(t * 1000);
+  return s < 7 * 86400
+    ? d.toLocaleString(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit" })
+    : d.toLocaleDateString(undefined, { day: "numeric", month: "short" });
 }
 </script>
 
@@ -456,11 +467,12 @@ h4 {
 }
 /* A take is a card like the studio's others: its field colour, line and radius. */
 .take {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
-  padding: 4px;
+  padding: 5px 6px 5px 5px;
   border: 1px solid var(--h3-line);
   border-radius: var(--h3-radius);
   background: var(--h3-field);
@@ -471,8 +483,8 @@ h4 {
 }
 .tthumb {
   flex: none;
-  width: 64px;
-  height: 36px;
+  width: 72px;
+  height: 40px;
   overflow: hidden;
   border-radius: calc(var(--h3-radius) - 3px);
   background: var(--zen-media-bg, var(--h3-panel));
@@ -485,18 +497,59 @@ h4 {
   display: flex;
   flex: 1;
   flex-direction: column;
+  gap: 2px;
   min-width: 0;
 }
+.tline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  white-space: nowrap;
+}
+.tline.soft {
+  font-size: 11px;
+}
+.when {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
 .stale {
+  display: inline-flex;
   flex: none;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
   color: var(--zen-warning, #f5b14c);
   font-size: 10.5px;
 }
 .badge {
-  padding: 1px 7px;
+  padding: 0 6px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--h3-accent) 25%, transparent);
-  font-size: 10.5px;
+  font-size: 10px;
+  line-height: 16px;
+}
+/* Use waits until a take is pointed at, so the list reads as takes rather than buttons. */
+.take .use {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  background: var(--h3-panel);
+  box-shadow:
+    0 0 0 1px var(--h3-line),
+    -10px 0 12px var(--h3-field);
+  opacity: 0;
+  transform: translateY(-50%);
+}
+.take:hover .use,
+.take:focus-within .use {
+  opacity: 1;
+}
+@media (hover: none) {
+  .take .use {
+    opacity: 1;
+  }
 }
 .hint {
   margin-top: auto;
