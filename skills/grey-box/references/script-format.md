@@ -20,7 +20,7 @@ after `//`) are comments.
 # Down the neon wall            // the scene's name
 set: neon-wall                  // its set (a file in the show's sets/)
 fps: 24
-drawn on: twos                  // optional: ones (default), twos, threes
+drawn on: twos                  // optional: ones (default), twos, threes, fours
 notes: one line about it        // optional
 
 ## Cast                         // optional: this scene's own cast (the show's cast.json is used too)
@@ -77,7 +77,7 @@ Speeds that read right: walking 1.4 m/s, running 5–7 m/s, sprinting 8. A runni
 `## Shot NAME (START–END)` — a camera for that stretch of the scene; shots can overlap or skip.
 
 `TIME from PLACE, looking at PLACE, LENSmm[, ease …]` — a camera key. `from` takes `[x, y, z]`, a
-mark (at 1.6 m eye height) or a **set camera** (its position, look and lens; then `looking at` is
+mark or a **set camera** (its position, look and lens; then `looking at` is
 optional). `looking at @someone` aims at their face and follows them. Lens is 35 mm-equivalent:
 22–28 wide, 35 normal, 50–85 close. Cameras ease smoothly between keys.
 
