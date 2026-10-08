@@ -62,7 +62,9 @@ def media_stat(ref: str) -> list:
 def scene_key(plan: dict, index: int, carried: str | None) -> str:
     """The scene half: `plan` is the compiled scene, `carried` the fingerprint of what it continues."""
     request = {k: v for k, v in plan.items() if k != "warnings"}
-    request["settings"] = {k: v for k, v in plan.get("settings", {}).items() if k != "verbose"}
+    request["settings"] = {
+        k: v for k, v in plan.get("settings", {}).items() if k not in ("verbose", "log_prompt")
+    }
     media = sorted(
         {m["media"] for m in [*plan.get("refs", []), *plan.get("keyframes", [])] if m.get("media")}
     )

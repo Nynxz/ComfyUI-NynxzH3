@@ -266,6 +266,9 @@ def render_scene(setup: dict, project, scene: int | None) -> dict:
     def snap(n: float) -> int:
         return max(h3.CANVAS_MULTIPLE, round(n / h3.CANVAS_MULTIPLE) * h3.CANVAS_MULTIPLE)
 
+    #: What each reference was given to H3 as (size, frames, sound), by tag: for the summary,
+    #: kept off the references themselves, which make up the scene's fingerprint.
+    given: dict[str, dict] = {}
     keyframes = []
     for k in plan.keyframes:
         # A keyframe fills the canvas: cropped to its shape, or stretched onto it.
@@ -281,12 +284,14 @@ def render_scene(setup: dict, project, scene: int | None) -> dict:
         for ref in plan.refs:
             if ref["alias"]:
                 continue
+            shown_as = given.setdefault(ref["tag"], {})
             if ref["kind"] == "image":
                 image = picture(ref["media"])
                 h, w = image.shape[1], image.shape[2]
                 scale = min(1.0, math.sqrt((width * height) / (w * h))) * ref["size"]
                 tw, th = snap(w * scale), snap(h * scale)
                 resized = h3._resize(image, tw, th, "disabled")
+                shown_as["size"] = (tw, th)
                 ref_items.append({"type": "image", "data": resized})
                 if ref["role"] == "reference":
                     ref_blocks.append(
@@ -314,6 +319,7 @@ def render_scene(setup: dict, project, scene: int | None) -> dict:
                 while n % 17 != 5:
                     n -= 1
                 frames = frames[:n]
+                shown_as.update(size=(cw, ch), frames=n, sound=soundtrack is not None)
                 if soundtrack is not None:
                     ref_items.append({"type": "audio"})
                 sample_idx = list(range(0, frames.shape[0], h3.FPS // 2))
@@ -428,16 +434,26 @@ def render_scene(setup: dict, project, scene: int | None) -> dict:
     model, positive = apply_loras(
         setup.get("model"), positive, plan.loras, plan.warnings, plan.settings
     )
+    control_note = None
     if plan.controls:
+        before = model
         model = _apply_control(setup, model, vae, plan.controls[0], trim, plan.warnings)
+        c = plan.controls[0]
+        control_note = (
+            f"@{c['name']} through {setup.get('controlnet')}, strength {c['strength']:.2f} "
+            f"until {round(c['until'] * 100)}%"
+            if model is not before
+            else f"@{c['name']} skipped (see warnings)"
+        )
     if plan.settings.get("verbose"):
         LOG.info(
-            "H3 Studio scene %d (%s, %d frames) prompt:\n%s",
-            index + 1,
-            plan.task,
-            frame_count,
-            plan.prompt,
+            "%s",
+            _summary(
+                proj, index, plan, frame_count, keyframes, trim, mode, setup, control_note, given
+            ),
         )
+    if plan.settings.get("log_prompt"):
+        LOG.info("H3 Studio scene %d prompt:\n%s", index + 1, plan.prompt)
     for warning in dict.fromkeys(plan.warnings):
         LOG.warning("H3 Studio scene %d: %s", index + 1, warning)
     return {
@@ -586,6 +602,87 @@ class NynxzH3StudioSetup(NynxzNode):
                 "previous_audio": previous_audio,
             }
         )
+
+
+ROLE_WORDS = {
+    ("image", "reference"): "look + meaning",
+    ("image", "semantic"): "meaning only",
+    ("video", "reference"): "look + motion",
+    ("video", "blocking"): "blocking",
+    ("audio", "reference"): "sound",
+}
+
+
+def _summary(
+    proj, index, plan, frame_count, keyframes, trim, mode, setup, control_note, given
+) -> str:
+    """One scene's render in a few readable lines: what H3 is given, and what steers it."""
+    scene = proj["scenes"][index]
+    title = f' "{scene["title"]}"' if scene.get("title") else ""
+    lines = [
+        f"H3 Studio · scene {index + 1}{title} · {plan.task} · {frame_count} frames "
+        f"({frame_count / FPS:.2f}s) · {plan.width}x{plan.height} · seed {plan.seed}"
+    ]
+
+    shown = [r for r in plan.refs if not r.get("alias")]
+    if shown:
+        lines.append(f"  references — H3 sees {len(shown)}:")
+        width = max(len(r["tag"]) for r in shown)
+        for r in shown:
+            names = " / ".join(
+                dict.fromkeys(f"@{x['name']}" for x in plan.refs if x["tag"] == r["tag"])
+            )
+            role = ROLE_WORDS.get((r["kind"], r["role"]), r["role"])
+            seen = given.get(r["tag"], {})
+            detail = []
+            if "size" in seen:
+                detail.append("{}x{}".format(*seen["size"]))
+            if "frames" in seen:
+                detail.append(f"{seen['frames']} frames")
+            if seen.get("sound"):
+                detail.append(f"its sound as {r['soundtrack_tag']}")
+            lines.append(
+                f"    {r['tag'].ljust(width)}  {names:<22} {role}"
+                + (f" — {', '.join(detail)}" if detail else "")
+            )
+    else:
+        lines.append("  references — none (H3 works from the text alone)")
+    edges = []
+    for k in keyframes:
+        if k.get("image") is None:
+            continue
+        f = k["resolved_frame_index"]
+        edges.append("first" if f == 0 else "last" if f == frame_count - 1 else f"frame {f}")
+    if edges:
+        lines.append(f"  keyframes: {', '.join(edges)}")
+
+    if trim:
+        what = "picture and sound" if mode == "guide" else "sound only"
+        source = (
+            "its sampled latent"
+            if setup.get("previous_latent") is not None
+            else "its decoded frames"
+        )
+        lines.append(f"  continues the previous scene: {trim} frames of {what}, from {source}")
+    elif index > 0:
+        lines.append(f"  from the previous scene: {mode or 'cut'}")
+
+    if plan.loras:
+        lines.append(
+            "  LoRAs: "
+            + ", ".join(
+                f"{lane['name']} {lane['strength']:g}" + (" (shaped)" if lane["sampling"] else "")
+                for lane in plan.loras
+            )
+        )
+    if control_note:
+        lines.append(f"  ControlNet: {control_note}")
+    lines.append(
+        f"  prompt: {len(plan.prompt):,} characters (Log the prompt in Settings prints it)"
+    )
+    for w in dict.fromkeys(plan.warnings):
+        lines.append(f"  ! {w}")
+    return "\n".join(lines)
 
 
 def _controlnets() -> list[str]:

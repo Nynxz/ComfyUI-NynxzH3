@@ -221,8 +221,10 @@ export interface StudioSettings {
   hooks?: "auto" | "fast" | "low_vram";
   /** The most changes a step shape is split into. */
   step_detail?: number;
-  /** Log each scene's prompt and LoRA plan to the ComfyUI console. */
+  /** Log a readable summary of each scene's render (and the LoRA plan) to the ComfyUI console. */
   verbose?: boolean;
+  /** Log each scene's full prompt to the ComfyUI console. */
+  log_prompt?: boolean;
 }
 export interface Project {
   /** 2: references are in a scene only when used there or marked for it (see `refInScene`). */

@@ -11,9 +11,11 @@
       <div class="set">
         <div class="what">
           <b>LoRA step shapes</b>
-          <p :title="'Changing strength over the steps uses ComfyUI hooks, which sample on a second, non-dynamic copy of the model. With dynamic VRAM on (the default) that copy runs a 32 GB card out of memory; start ComfyUI with --disable-dynamic-vram to avoid it.'">
-            How LoRA strength that changes over the steps is applied. <b>Auto</b> does it when ComfyUI's
-            dynamic VRAM is off, and otherwise uses each shape's average; <b>Fast</b> and
+          <p
+            :title="'Changing strength over the steps uses ComfyUI hooks, which sample on a second, non-dynamic copy of the model. With dynamic VRAM on (the default) that copy runs a 32 GB card out of memory; start ComfyUI with --disable-dynamic-vram to avoid it.'"
+          >
+            How LoRA strength that changes over the steps is applied. <b>Auto</b> does it when
+            ComfyUI's dynamic VRAM is off, and otherwise uses each shape's average; <b>Fast</b> and
             <b>Low VRAM</b> always do it, keeping the patched weights on or off the GPU.
           </p>
         </div>
@@ -48,13 +50,24 @@
         <div class="what">
           <b>Verbose logging</b>
           <p>
-            Write each scene's full prompt and its LoRA plan (strengths, hook changes) to the
-            ComfyUI console.
+            A short summary of each scene's render in the ComfyUI console: the references H3 sees
+            and in what role, keyframes, what carries over from the scene before, LoRAs and the
+            ControlNet.
           </p>
         </div>
         <ZenSwitch
           :model-value="settings.verbose ?? false"
           @update:model-value="(v: boolean) => set({ verbose: v })"
+        />
+      </div>
+      <div class="set">
+        <div class="what">
+          <b>Log the prompt</b>
+          <p>Also write each scene's full compiled prompt to the console.</p>
+        </div>
+        <ZenSwitch
+          :model-value="settings.log_prompt ?? false"
+          @update:model-value="(v: boolean) => set({ log_prompt: v })"
         />
       </div>
 

@@ -325,6 +325,7 @@ def normalize_settings(raw: Any) -> dict[str, Any]:
         #: The most changes a step shape is split into (only where its strength really changes).
         "step_detail": int(_num(raw.get("step_detail"), 8, 2, 24)),
         "verbose": raw.get("verbose") is True,
+        "log_prompt": raw.get("log_prompt") is True,
     }
 
 
