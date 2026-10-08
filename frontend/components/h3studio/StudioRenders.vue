@@ -44,6 +44,54 @@
       </section>
 
       <section>
+        <h4 class="filmhead">
+          Film
+          <span class="grow" />
+          <ZenButton
+            size="sm"
+            variant="ghost"
+            icon="mdi mdi-movie-export-outline"
+            :disabled="exporting"
+            title="Join every scene's current take into the film and save it, now"
+            @click="exportFilm"
+            >{{ exporting ? "Saving…" : "Export film" }}</ZenButton
+          >
+        </h4>
+        <div v-if="film" class="take film" :title="filmDetails(film)">
+          <span class="tthumb"><MediaThumb :media="film.ref" :badge="false" /></span>
+          <span class="when">{{ ago(film.time) }}</span>
+          <span
+            v-if="film.missing.length"
+            class="gap"
+            :title="`Scene ${film.missing.join(', ')} had no render yet: black`"
+            ><i class="mdi mdi-alert-outline" />{{ film.missing.length }}</span
+          >
+          <span class="soft small">{{ clock(film.seconds) }}</span>
+        </div>
+        <p v-else class="soft small">
+          A full render saves the film here when its last scene lands; Export film saves it from the
+          current takes any time.
+        </p>
+        <button
+          v-if="films.length > 1"
+          type="button"
+          class="ghead older"
+          @click="olderOpen = !olderOpen"
+        >
+          <i class="mdi" :class="olderOpen ? 'mdi-chevron-down' : 'mdi-chevron-right'" />
+          <span class="soft">Earlier films</span>
+          <span class="count">{{ films.length - 1 }}</span>
+        </button>
+        <template v-if="olderOpen">
+          <div v-for="f in films.slice(1)" :key="f.ref" class="take film" :title="filmDetails(f)">
+            <span class="tthumb"><MediaThumb :media="f.ref" :badge="false" /></span>
+            <span class="when">{{ ago(f.time) }}</span>
+            <span class="soft small">{{ clock(f.seconds) }}</span>
+          </div>
+        </template>
+      </section>
+
+      <section>
         <h4>History</h4>
         <p v-if="loading && !groups.length" class="soft small">Looking…</p>
         <p v-else-if="!groups.length" class="soft small">
@@ -106,6 +154,7 @@
 // again. Takes are kept by the server (nodes/h3studio/_reuse.py, takes.json).
 import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
 import { api } from "@comfy/api";
+import { app } from "@comfy/app";
 import { ZenButton, ZenIconButton } from "@nynxz/zenkit-ui";
 import type { StudioLive } from "@/lib/h3live";
 import type { Project } from "@/lib/h3studio";
@@ -275,8 +324,76 @@ async function use(g: { id: string; index: number }, t: Take) {
   }
 }
 
+// --- film: the finished film, saved by a full render or by Export film -----------------------------
+interface Film {
+  ref: string;
+  time: number;
+  seconds: number;
+  missing: number[];
+  hold?: string;
+}
+const films = ref<Film[]>([]);
+const film = computed(() => films.value[0] ?? null);
+const olderOpen = ref(false);
+const exporting = ref(false);
+async function fetchFilms() {
+  const res = await fetch("/nynxz/h3studio/films", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ scenes: doc.value.scenes.map((s) => s.id) }),
+  });
+  if (res.ok) films.value = ((await res.json()) as { films: Film[] }).films;
+}
+async function exportFilm() {
+  exporting.value = true;
+  note.value = null;
+  try {
+    let workflow: unknown = null;
+    try {
+      workflow = app.graph?.serialize();
+    } catch {
+      workflow = null;
+    }
+    const res = await fetch("/nynxz/h3studio/film/export", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ project: doc.value, workflow }),
+    });
+    const body = (await res.json()) as Film & { error?: string };
+    if (!res.ok) throw new Error(body.error ?? res.statusText);
+    note.value = {
+      bad: false,
+      text: body.missing.length
+        ? `Film saved — scene ${body.missing.join(", ")} black, never rendered.`
+        : "Film saved.",
+    };
+    await fetchFilms();
+  } catch (e) {
+    note.value = {
+      bad: true,
+      text: `Couldn't save the film: ${e instanceof Error ? e.message : e}`,
+    };
+  } finally {
+    exporting.value = false;
+  }
+}
+function filmDetails(f: Film) {
+  return [
+    new Date(f.time * 1000).toLocaleString(),
+    clock(f.seconds),
+    f.hold && f.hold !== "ones" ? `on ${f.hold}` : "",
+    f.ref,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+function clock(s: number) {
+  return `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
+}
+
 function refresh() {
   void fetchTakes();
+  void fetchFilms();
   void pollQueue();
 }
 refresh();
@@ -284,6 +401,7 @@ const timer = window.setInterval(() => void pollQueue(), 2500);
 const target = api as unknown as EventTarget;
 const onDone = () => refresh();
 target.addEventListener("nynxz.h3studio.clip", onDone);
+target.addEventListener("nynxz.h3studio.film", onDone);
 target.addEventListener("execution_success", onDone);
 watch(
   () => doc.value.scenes.map((s) => s.id).join(),
@@ -292,6 +410,7 @@ watch(
 onBeforeUnmount(() => {
   window.clearInterval(timer);
   target.removeEventListener("nynxz.h3studio.clip", onDone);
+  target.removeEventListener("nynxz.h3studio.film", onDone);
   target.removeEventListener("execution_success", onDone);
 });
 
@@ -523,6 +642,27 @@ h4 {
 }
 .take.stale .when {
   color: var(--h3-muted);
+}
+.filmhead {
+  display: flex;
+  align-items: center;
+}
+.filmhead :deep(.zen-btn) {
+  letter-spacing: normal;
+  text-transform: none;
+}
+.take.film .when {
+  flex: 1;
+}
+.gap {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--zen-warning, #f5b14c);
+  font-size: 11px;
+}
+.older {
+  padding-left: 0;
 }
 .sub {
   margin: 4px 2px 0;

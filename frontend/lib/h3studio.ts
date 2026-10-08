@@ -243,12 +243,19 @@ export interface Project {
   cast?: Voice[];
   /** How scenes render (nodes/h3studio/_project.py `normalize_settings`). */
   settings?: StudioSettings;
+  /** How the finished film is joined, and whether a full render saves it (`normalize_film`). */
+  film?: FilmSettings;
   active: number;
   /** Editor layout: inspector beside the monitor, under it, or whichever shows the picture bigger. */
   layout?: "auto" | "side" | "stacked";
   /** Set only while a partial render is queued (lib/h3render.ts): the scenes that run renders; the
    *  others play their latest clip. */
   renderOnly?: string[];
+}
+export interface FilmSettings {
+  hold?: "ones" | "twos" | "threes";
+  crossfade?: number;
+  auto?: boolean;
 }
 export interface Compiled {
   task: string;

@@ -29,7 +29,7 @@ from .._base import NynxzNode
 from . import _carry, _reuse
 from ._loras import apply as apply_loras
 from ._media import has_audio, load_audio, load_image, load_video, path_of
-from ._project import FPS, PREVIOUS_FRAME, compile_scene, frames_for, hold_schedule, normalize
+from ._project import FPS, PREVIOUS_FRAME, compile_scene, hold_schedule, normalize
 from .io_types import H3StudioLinkType, H3StudioRenderType, H3StudioSetupType, H3StudioType
 
 LOG = logging.getLogger(__name__)
@@ -213,6 +213,14 @@ def _audio_tail(audio: dict, seconds: float) -> dict:
     waveform = audio["waveform"]
     keep = max(1, round(seconds * audio["sample_rate"]))
     return {"waveform": waveform[..., -keep:], "sample_rate": audio["sample_rate"]}
+
+
+def _film_after(proj: dict, index: int) -> dict | None:
+    """The project, when the film is to be saved once this scene's clip lands: the last scene of a
+    full render, with the film's saving left on."""
+    if proj.get("render_only") or not proj["film"]["auto"] or index != len(proj["scenes"]) - 1:
+        return None
+    return proj
 
 
 def render_scene(setup: dict, project, scene: int | None) -> dict:
@@ -474,6 +482,7 @@ def render_scene(setup: dict, project, scene: int | None) -> dict:
         "carries_picture": mode == "guide",
         "scene_key": _reuse.scene_key(plan.as_dict(), index, carried),
         "shots": shots,
+        "film": _film_after(proj, index),
     }
 
 
@@ -481,6 +490,8 @@ def render_scene(setup: dict, project, scene: int | None) -> dict:
 RENDER_EVENT = "nynxz.h3studio.render"
 #: Sent when H3 Studio Clip has saved a scene's finished clip, so the editor can play it.
 CLIP_EVENT = "nynxz.h3studio.clip"
+#: Sent when a film is saved, so the studio's Renders sidebar shows it.
+FILM_EVENT = "nynxz.h3studio.film"
 
 
 def _send(event: str, payload: dict) -> None:
@@ -956,7 +967,7 @@ class NynxzH3Studio(NynxzNode):
 
 
 #: H3 Studio Outputs' sampler side: positive, latent, model, noise.
-_SAMPLER_OUTPUTS = {0, 1, 7, 9}
+_SAMPLER_OUTPUTS = {0, 1, 2, 3}
 
 
 def _samples_on_every_pass(dynprompt) -> bool:
@@ -1185,7 +1196,7 @@ class NynxzH3StudioClip(NynxzNode):
                         "media": saved,
                     },
                 )
-            return io.NodeOutput(_with_holds(video, render))
+            return io.NodeOutput(cls._finish(video, render, keep))
         if audio is _UNWIRED:
             audio = None
         if latent is _UNWIRED:
@@ -1235,7 +1246,20 @@ class NynxzH3StudioClip(NynxzNode):
                 CLIP_EVENT,
                 {"node_id": render["studio_node"], "scene": render.get("scene"), "media": ref},
             )
-        return io.NodeOutput(_with_holds(video, render))
+        return io.NodeOutput(cls._finish(video, render, keep))
+
+    @classmethod
+    def _finish(cls, video, render: dict, keep: bool):
+        """The clip with its holds; and after the last scene of a full render, the film saved."""
+        if keep and render.get("film") and render.get("studio_node") is not None:
+            from . import film
+
+            try:
+                record = film.save(render["film"], cls._metadata())
+                _send(FILM_EVENT, {"node_id": render["studio_node"], **record})
+            except Exception:
+                LOG.exception("H3 Studio: couldn't save the film (Renders ▸ Export film retries)")
+        return _with_holds(video, render)
 
 
 def _with_holds(video, render: dict):
@@ -1299,7 +1323,8 @@ class NynxzH3StudioFilm(NynxzNode):
             description="The film as it's rendered so far: every scene's current take (its latest "
             "render, or the take you made current), joined like H3 Studio Join — without a loop "
             "and without sampling anything. A scene never rendered plays as black for its length. "
-            "Pick the studio on the node; feed Save Video.",
+            "The studio already saves the film after a full render (and Renders ▸ Export film "
+            "saves it any time); use this node to put a score under it or feed it on.",
             search_aliases=["h3 film", "join takes", "export film", "rendered scenes"],
             inputs=[
                 H3StudioLinkType.Input(
@@ -1344,50 +1369,16 @@ class NynxzH3StudioFilm(NynxzNode):
     def execute(
         cls, link=None, crossfade=8, music=None, music_volume=0.8, music_fade=2.0, hold="ones"
     ):
-        from comfy_api.latest import InputImpl
+        from . import film
 
         studio = str((link if isinstance(link, dict) else {}).get("studio") or "").strip()
         project = _linked_project(cls.hidden.dynprompt, studio)
         if project is None:
             raise ValueError("H3 Studio Film: pick the H3 Studio on the node.")
         proj = normalize(project)
-        width, height = proj["canvas"]["width"], proj["canvas"]["height"]
-        videos, missing = [], []
-        for i, scene in enumerate(proj["scenes"]):
-            record = _reuse.latest(scene["id"])
-            if record:
-                video = InputImpl.VideoFromFile(path_of(record["ref"]))
-                video.h3_scene = i
-                video.h3_latent, video.h3_head = _carry.load_sidecar(path_of(record["ref"]))
-            else:
-                missing.append(i + 1)
-                video = _blank_video(
-                    {
-                        "scene": i,
-                        "frames": frames_for(scene["seconds"]),
-                        "width": width,
-                        "height": height,
-                    }
-                )
-            head = getattr(video, "h3_head", None)
-            video.h3_holds = hold_schedule(scene, int(head[0].shape[0]) if head else 0)
-            videos.append(video)
-        if missing:
-            LOG.warning(
-                "H3 Studio Film: scene%s %s never rendered, black",
-                "s" if len(missing) > 1 else "",
-                ", ".join(map(str, missing)),
-            )
-        return io.NodeOutput(
-            _carry.join(
-                videos,
-                int(crossfade),
-                music,
-                float(music_volume),
-                float(music_fade),
-                HOLDS.get(hold, 1),
-            )
-        )
+        proj["film"] = {**proj["film"], "crossfade": int(crossfade), "hold": hold}
+        video, _ = film.assemble(proj, music, float(music_volume), float(music_fade))
+        return io.NodeOutput(video)
 
 
 class NynxzH3StudioJoin(NynxzNode):

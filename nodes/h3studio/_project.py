@@ -292,6 +292,7 @@ def normalize(raw: Any) -> dict[str, Any]:
         "loras": loras,
         "active": active,
         "settings": normalize_settings(raw.get("settings")),
+        "film": normalize_film(raw.get("film")),
         # A partial render: the ids of the scenes to render this run; the others play their latest
         # clip (see studio.render_scene). None renders every scene.
         "render_only": _render_only(raw.get("renderOnly"), {sc["id"] for sc in scenes}),
@@ -323,6 +324,22 @@ REF_SIZES = (1.0, 0.75, 0.5)
 #: A keyframe picture of another shape than the canvas: cropped to fill it, or stretched onto it.
 FITS = ("crop", "stretch")
 HOOK_MODES = ("auto", "fast", "low_vram")
+
+
+FILM_HOLDS = ("ones", "twos", "threes")
+
+
+def normalize_film(raw: Any) -> dict[str, Any]:
+    """How the finished film is put together and when it's saved (see film.py)."""
+    raw = raw if isinstance(raw, dict) else {}
+    return {
+        #: Drawn on ones, twos or threes, unless a shot says otherwise.
+        "hold": raw.get("hold") if raw.get("hold") in FILM_HOLDS else "ones",
+        #: Frames a continuation fades in over.
+        "crossfade": int(_num(raw.get("crossfade"), 8, 0, 39)),
+        #: Save the film when a full render finishes.
+        "auto": raw.get("auto") is not False,
+    }
 
 
 def normalize_settings(raw: Any) -> dict[str, Any]:

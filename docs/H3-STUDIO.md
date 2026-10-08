@@ -104,9 +104,16 @@ latent (Start Loop can only take an initial value from outside the loop):
       current_iteration_value ─▶ H3 Studio Setup.previous     (empty on the first pass → a fresh start)
     H3 Studio ▶ Outputs ▶ your sampler ▶ decode video + audio
       ▶ H3 Studio Clip (render, images, audio)                (cuts the carried-over head)
-          ├─▶ End Loop.next_iteration_value                   (the next scene continues from it)
-          └─▶ End Loop.output_value, accumulate on
-    End Loop ▶ H3 Studio Join ▶ Save Video
+          └─▶ End Loop.next_iteration_value                   (the next scene continues from it)
+
+**The film saves itself.** When a full render's last scene lands, H3 Studio Clip joins every
+scene's current take into the film and saves it to `output/h3studio/film/`, with the workflow
+inside — nothing after End Loop is needed. The Renders sidebar shows it, and **Export film** there
+saves it again from the current takes at any time (after re-rendering one scene, or making another
+take current) without running the graph. How it's joined — drawn on ones, twos or threes, and the
+crossfade into continued scenes — and whether a full render saves it are in Settings ▸ Whole film.
+H3 Studio Film (and Join, on End Loop's accumulated output) are still there for putting a score
+under it or feeding it on into a graph.
 
 The number of passes needn't be typed in. **H3 Studio Scenes** sits outside the loop and *names*
 the studio rather than being wired to it (a wire from the studio would close a cycle round the loop):

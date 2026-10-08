@@ -146,6 +146,46 @@
                 placeholder="leave empty for none"
               />
             </label>
+            <div
+              class="row"
+              title="How the finished film is shown: held on twos or threes like anime (still 24 fps, same length). A shot can say its own."
+            >
+              <span class="lbl">drawn on</span>
+              <ZenToggleGroup
+                :model-value="project.film?.hold ?? 'ones'"
+                :options="[
+                  { value: 'ones', label: 'Ones' },
+                  { value: 'twos', label: 'Twos' },
+                  { value: 'threes', label: 'Threes' },
+                ]"
+                @update:model-value="(v: string) => setFilm({ hold: v as FilmSettings['hold'] })"
+              />
+            </div>
+            <label
+              class="row"
+              title="Frames a continued scene fades in over, where it joins the one before"
+            >
+              <span class="lbl">crossfade</span>
+              <ZenNumber
+                :model-value="project.film?.crossfade ?? 8"
+                :min="0"
+                :max="39"
+                :step="1"
+                :precision="0"
+                @update:model-value="(v: number) => setFilm({ crossfade: v })"
+              />
+              <span class="soft">frames</span>
+            </label>
+            <label
+              class="row"
+              title="When a render of every scene finishes, join them into the film and save it (Renders shows it). Export film saves it any time."
+            >
+              <span class="lbl">save the film after a full render</span>
+              <ZenSwitch
+                :model-value="project.film?.auto ?? true"
+                @update:model-value="(v: boolean) => setFilm({ auto: v })"
+              />
+            </label>
           </div>
         </section>
 
@@ -414,7 +454,7 @@
                 </label>
                 <div
                   class="row"
-                  title="How the finished film shows this shot (H3 Studio Film or Join): held on twos or threes like anime, or as the node says"
+                  title="How the finished film shows this shot: held on twos or threes like anime, or as the whole film is drawn"
                 >
                   <span class="lbl">drawn on</span>
                   <ZenToggleGroup
@@ -423,7 +463,7 @@
                       {
                         value: 'film',
                         label: 'Film',
-                        title: 'Whatever H3 Studio Film / Join is set to',
+                        title: 'As the whole film is drawn (Whole film settings)',
                       },
                       { value: 'ones', label: 'Ones' },
                       { value: 'twos', label: 'Twos' },
@@ -679,6 +719,7 @@ import {
   shotColors,
   stableUrl,
   type Compiled,
+  type FilmSettings,
   type Project,
   type Shot,
 } from "@/lib/h3studio";
@@ -718,6 +759,8 @@ const view = ref<"shots" | "settings">(props.sel.kind === "scene" ? "settings" :
 const level = ref<"scene" | "film">("scene");
 /** The film-wide settings: the project itself, edited in place like a scene. */
 const film = computed(() => props.project);
+const setFilm = (change: Partial<FilmSettings>) =>
+  (film.value.film = { ...film.value.film, ...change });
 const lastOpenShot = ref<string | null>(props.sel.kind === "shot" ? props.sel.id : null);
 watch(
   () => [props.sel.kind, props.sel.id] as const,

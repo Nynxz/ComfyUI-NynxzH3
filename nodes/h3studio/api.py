@@ -76,6 +76,39 @@ if _routes is not None:
         ok = _reuse.use_take(str(body.get("scene", "")), str(body.get("ref", "")))
         return web.json_response({"ok": ok}, status=200 if ok else 404)
 
+    @_routes.post("/nynxz/h3studio/films")
+    async def h3studio_films(request: web.Request) -> web.Response:
+        """The films saved from a project (by its scene ids), newest first."""
+        if (denied := request_allowed(request)) is not None:
+            return denied
+        from . import film
+
+        body = await request.json()
+        ids = [str(x) for x in body.get("scenes", []) if isinstance(x, (str, int))][:200]
+        return web.json_response({"films": film.films(ids)})
+
+    @_routes.post("/nynxz/h3studio/film/export")
+    async def h3studio_export_film(request: web.Request) -> web.Response:
+        """Join every scene's current take into the film and save it, now. CPU only (files in, a
+        file out), so it runs beside the queue, on a thread of its own."""
+        if (denied := request_allowed(request)) is not None:
+            return denied
+        import asyncio
+
+        from . import film
+
+        body = await request.json()
+        workflow = body.get("workflow")
+        from comfy.cli_args import args
+
+        keep = isinstance(workflow, dict) and not args.disable_metadata
+        metadata = {"workflow": workflow} if keep else None
+        try:
+            record = await asyncio.to_thread(film.save, normalize(body.get("project")), metadata)
+        except Exception as e:  # noqa: BLE001 - reported to the editor
+            return web.json_response({"error": str(e)}, status=500)
+        return web.json_response(record)
+
     @_routes.get("/nynxz/h3studio/writer-guide")
     async def h3studio_writer_guide(_request: web.Request) -> web.Response:
         return web.Response(text=WRITER_GUIDE.read_text(encoding="utf-8"))
