@@ -111,9 +111,9 @@ def strip_comment(line: str) -> str:
 
 def suggest(name: str, known) -> str:
     known = list(known)
-    close = difflib.get_close_matches(name, known, n=1)
+    close = difflib.get_close_matches(name, known, n=3)
     if close:
-        return f" \u2014 did you mean {close[0]}?"
+        return f" \u2014 did you mean {' or '.join(close)}?"
     return (
         f" ({', '.join(known[:12])}{', …' if len(known) > 12 else ''})" if known else " (none yet)"
     )
