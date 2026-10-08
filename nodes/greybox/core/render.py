@@ -302,10 +302,15 @@ def edge_image(frame: Frame, crease: float = 30.0) -> torch.Tensor:
     for dy, dx in ((0, 1), (1, 0)):
         a_o, b_o = owner[: h - dy, : w - dx], owner[dy:, dx:]
         a_d, b_d = finite[: h - dy, : w - dx], finite[dy:, dx:]
-        jump = (a_o != b_o) | ((a_d - b_d).abs() > 0.06 * torch.minimum(a_d, b_d).clamp(min=0.5))
-        if normal is not None:
-            turn = (normal[: h - dy, : w - dx] * normal[dy:, dx:]).sum(-1) < cos
-            jump |= turn & (a_o >= 0) & (b_o >= 0)
+        gap = (a_d - b_d).abs() > 0.06 * torch.minimum(a_d, b_d).clamp(min=0.5)
+        if normal is None:
+            jump = (a_o != b_o) | gap
+        else:
+            facing = (normal[: h - dy, : w - dx] * normal[dy:, dx:]).sum(-1)
+            both = (a_o >= 0) & (b_o >= 0)
+            # A depth gap on one object facing one way is a flat surface seen at a grazing angle
+            # (the road toward the horizon), not an edge: it only counts where the facing changes.
+            jump = (a_o != b_o) | (gap & (facing < 0.999)) | ((facing < cos) & both)
         edge[: h - dy, : w - dx] |= jump
     v = edge.float()
     return v.unsqueeze(-1).expand(h, w, 3).contiguous()
