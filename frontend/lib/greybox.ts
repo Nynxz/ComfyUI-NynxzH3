@@ -117,7 +117,7 @@ export interface SceneData {
   name?: string;
   set?: string;
   fps?: number;
-  /** Drawn on ones, twos or threes: actors hold each pose this many frames; the camera doesn't. */
+  /** Drawn on ones, twos or threes: each frame (actors and camera) is held this many frames. */
   on?: number;
   notes?: string;
   actors: ActorData[];

@@ -15,7 +15,7 @@ import torch
 from PIL import Image, ImageDraw, ImageFont
 
 from .render import bounds, camera_rays, depth_image, edge_image, plan_rays, render
-from .scene import Scene, Shot, shapes_at
+from .scene import Scene, Shot, held, shapes_at
 
 INK = (235, 235, 240)
 MUTED = (150, 150, 160)
@@ -69,7 +69,9 @@ def shot_frames(
     depths = []
     for i in range(n):
         t = t0 + i / rate
-        o, d = camera_rays(scene.camera(shot, t), width, height, device)
+        # The camera holds with the drawing: a moving camera on ones over actors on twos slides
+        # them back across the frame during each hold, then jumps them forward — a judder.
+        o, d = camera_rays(scene.camera(shot, held(scene, t)), width, height, device)
         f = render(shapes_at(scene, t), o, d, width, height, edges=mode == "grey")
         if depth:
             depths.append(f.depth.to("cpu", torch.float16))

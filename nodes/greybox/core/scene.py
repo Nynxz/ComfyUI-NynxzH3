@@ -394,8 +394,8 @@ class Scene:
     name: str = ""
     fps: float = 24.0
     extra: list[Shape] = field(default_factory=list)
-    #: Animated on ones, twos or threes: each pose is held for this many frames, as limited
-    #: animation does, so the actors step rather than glide. The camera stays on ones.
+    #: Animated on ones, twos or threes: each frame is held for this many frames, as limited
+    #: animation does, so motion steps rather than glides. The camera holds with the actors.
     on: int = 1
 
     @property

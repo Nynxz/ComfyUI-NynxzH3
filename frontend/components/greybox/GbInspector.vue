@@ -533,7 +533,7 @@
               {
                 value: '2',
                 label: 'Twos',
-                title: 'Anime-style: each pose held for 2 frames. The camera stays smooth',
+                title: 'Anime-style: each frame held for 2 frames, camera included',
               },
               { value: '3', label: 'Threes', title: 'Choppier still: each pose held for 3 frames' },
             ]"

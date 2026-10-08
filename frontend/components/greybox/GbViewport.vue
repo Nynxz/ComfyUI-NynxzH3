@@ -632,7 +632,7 @@ function draw() {
   if (props.mode === "shot") {
     const shot = props.session.doc.scene.shots.find((x) => x.name === props.shot);
     if (shot) {
-      const c = evaluator.value.camera(shot, props.time);
+      const c = evaluator.value.camera(shot, heldTime(props.session.doc.scene, props.time));
       shotCam.fov = fovOf(c.lens);
       shotCam.aspect = props.aspect;
       shotCam.position.set(...c.at);
