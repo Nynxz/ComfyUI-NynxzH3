@@ -102,9 +102,7 @@ const refs = computed(() => {
     which.value === "scene" && scene
       ? sheetRefs(props.project, scene.id, (r) => refInScene(props.project, r, scene))
       : sheetRefs(props.project);
-  return all.filter(
-    (r) => (audio.value || r.kind !== "audio") && (placeholders.value || r.media),
-  );
+  return all.filter((r) => (audio.value || r.kind !== "audio") && (placeholders.value || r.media));
 });
 
 const blob = ref<Blob | null>(null);
@@ -148,7 +146,8 @@ const summary = computed(() =>
     ? `${refs.value.length} reference${refs.value.length === 1 ? "" : "s"}${size.value ? ` · ${size.value}` : ""}`
     : "",
 );
-const fileName = () => `h3-reference-sheet-${which.value === "scene" ? `scene${props.sceneIndex + 1}` : "all"}.png`;
+const fileName = () =>
+  `h3-reference-sheet-${which.value === "scene" ? `scene${props.sceneIndex + 1}` : "all"}.png`;
 
 function download() {
   if (!url.value) return;
@@ -170,7 +169,10 @@ async function copy() {
 }
 async function save() {
   if (!blob.value) return;
-  saved.value = await uploadOrReuse(new File([blob.value], fileName(), { type: "image/png" }), "h3studio");
+  saved.value = await uploadOrReuse(
+    new File([blob.value], fileName(), { type: "image/png" }),
+    "h3studio",
+  );
 }
 </script>
 

@@ -212,6 +212,8 @@
                     :playing="playing"
                     :volume="volume"
                     :muted="muted"
+                    :control-view="view.control ?? 'inset'"
+                    @control-view="(v: ControlView) => (view.control = v)"
                     @sound="(v: boolean) => (monitorHasSound = v)"
                     @context="monitorMenu"
                   />
@@ -480,7 +482,7 @@ import { useProjectHistory } from "@/lib/h3history";
 import { useStudioLive } from "@/lib/h3live";
 import { renderScenes, useRenderStatus } from "@/lib/h3render";
 import StudioInspector, { type Selection } from "./StudioInspector.vue";
-import type { MonitorMode } from "./StudioMonitor.vue";
+import type { ControlView, MonitorMode } from "./StudioMonitor.vue";
 import StudioCodex from "./StudioCodex.vue";
 import StudioRenders from "./StudioRenders.vue";
 import StudioMonitor from "./StudioMonitor.vue";
@@ -1512,11 +1514,12 @@ onBeforeUnmount(() => ro?.disconnect());
   flex: none;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  box-sizing: border-box;
+  width: var(--zen-control-h, 28px);
+  height: var(--zen-control-h, 28px);
   padding: 0;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: var(--h3-radius);
   background: transparent;
   color: var(--h3-muted);
   font-size: 16px;

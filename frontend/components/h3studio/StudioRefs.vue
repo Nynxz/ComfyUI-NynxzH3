@@ -14,6 +14,23 @@
 
     <div class="codexbar">
       <StudioRefsCodex :project="project" />
+      <span class="grow" />
+      <span
+        v-if="hidden"
+        class="hiddencount"
+        :title="`${hidden} not used ${show === 'scene' ? 'in this scene' : 'in any scene'}, so hidden`"
+        ><i class="mdi mdi-eye-off-outline" />{{ hidden }}</span
+      >
+      <ZenToggleGroup
+        :model-value="show"
+        size="sm"
+        :options="[
+          { value: 'all', label: 'All', title: 'Every reference in the project' },
+          { value: 'film', label: 'Film', title: 'Only references some scene uses or shows' },
+          { value: 'scene', label: 'Scene', title: 'Only references this scene uses or shows' },
+        ]"
+        @update:model-value="(v: string) => setShow(v as RefsShow)"
+      />
     </div>
 
     <div class="strip">
@@ -405,8 +422,22 @@ const inScene = (r: Ref) => (scene.value ? refInScene(props.project, r, scene.va
 const sectionOf = (r: Ref): SectionId =>
   r.kind === "image" ? (r.role === "semantic" ? "meaning" : "look") : r.kind;
 
+type RefsShow = NonNullable<StudioView["refsShow"]>;
+const show = ref<RefsShow>(props.view?.refsShow ?? "all");
+function setShow(v: RefsShow) {
+  show.value = v;
+  if (viewDoc.value) viewDoc.value.refsShow = v;
+}
+const inFilm = (r: Ref) => props.project.scenes.some((s) => refInScene(props.project, r, s));
+/** Whether the panel lists a reference under its filter; the selected one always stays. */
+const listed = (r: Ref) =>
+  r.id === props.selected ||
+  show.value === "all" ||
+  (show.value === "film" ? inFilm(r) : inScene(r));
+const hidden = computed(() => props.project.refs.filter((r) => !listed(r)).length);
+
 const sections = computed(() => {
-  const of = (id: SectionId) => props.project.refs.filter((r) => sectionOf(r) === id);
+  const of = (id: SectionId) => props.project.refs.filter((r) => sectionOf(r) === id && listed(r));
   // Against H3's limits only what it is shown counts: placeholders have no media to show, and one
   // file under several names is shown once.
   const shown = (refs: Ref[]) =>
@@ -1057,7 +1088,16 @@ function onEditorDrop(e: DragEvent) {
 }
 .codexbar {
   display: flex;
+  align-items: center;
   gap: 6px;
+}
+.hiddencount {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
+  color: var(--zen-muted, #9aa0aa);
+  font-size: 11px;
 }
 .strip {
   display: flex;

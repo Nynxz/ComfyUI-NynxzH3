@@ -372,7 +372,7 @@ h4 {
   width: 84px;
   height: 48px;
   overflow: hidden;
-  border-radius: 6px;
+  border-radius: var(--h3-radius, var(--zen-radius, 8px));
   background: var(--zen-media-bg, var(--h3-field));
   color: var(--h3-muted);
 }
@@ -424,7 +424,7 @@ h4 {
   gap: 6px;
   min-width: 0;
   padding: 5px 6px;
-  border-radius: 6px;
+  border-radius: var(--h3-radius, var(--zen-radius, 8px));
   background: var(--h3-field);
 }
 .qrow.running {
@@ -504,7 +504,7 @@ h4 {
 .note {
   margin: 0;
   padding: 6px 8px;
-  border-radius: 6px;
+  border-radius: var(--h3-radius, var(--zen-radius, 8px));
   background: color-mix(in srgb, var(--zen-success, #4ade80) 14%, transparent);
   font-size: 11.5px;
 }

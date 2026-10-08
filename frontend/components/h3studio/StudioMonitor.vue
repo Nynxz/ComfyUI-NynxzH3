@@ -105,6 +105,59 @@
         </div>
       </template>
 
+      <!-- The scene's control video, on the same playhead: in a corner, or laid over the picture
+           to check that the render follows it. -->
+      <div
+        v-if="control && controlView !== 'off'"
+        class="control"
+        :class="controlView"
+        :title="`@${control.name}: the control video steering this scene`"
+      >
+        <video
+          ref="controlEl"
+          :key="control.media"
+          :src="controlUrl"
+          muted
+          playsinline
+          preload="auto"
+          @loadedmetadata="syncControl(true)"
+        />
+        <div class="control-bar">
+          <span
+            :title="`@${control.name}: strength ${(control.controlStrength ?? 1).toFixed(2)}, steering until ${Math.round((control.controlUntil ?? 0.75) * 100)}% of the sampling`"
+            >@{{ control.name }} · {{ +(control.controlStrength ?? 1).toFixed(2) }}/{{
+              Math.round((control.controlUntil ?? 0.75) * 100)
+            }}%</span
+          >
+          <button
+            type="button"
+            :title="controlView === 'overlay' ? 'Back to the corner' : 'Lay it over the picture'"
+            @click="emit('controlView', controlView === 'overlay' ? 'inset' : 'overlay')"
+          >
+            <i
+              class="mdi"
+              :class="
+                controlView === 'overlay'
+                  ? 'mdi-picture-in-picture-bottom-right'
+                  : 'mdi-layers-outline'
+              "
+            />
+          </button>
+          <button type="button" title="Hide the control video" @click="emit('controlView', 'off')">
+            <i class="mdi mdi-close" />
+          </button>
+        </div>
+      </div>
+      <button
+        v-else-if="control"
+        type="button"
+        class="tag control-show"
+        :title="`Show @${control.name}, the control video, on the same playhead`"
+        @click="emit('controlView', 'inset')"
+      >
+        <i class="mdi mdi-vector-square" /> control
+      </button>
+
       <div class="tag tl">
         <b>S{{ place.scene + 1 }}</b> · shot {{ place.shot + 1 }}
         <span v-if="view === 'plan' && picture?.kind === 'reference'" class="soft"
@@ -137,11 +190,21 @@
 //               shots with the transport and timeline as for the animatic.
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { mediaKind, mediaRefUrl } from "@/framework";
-import { pictureAt, shotRefs, stableUrl, thumbUrl, type Place, type Project } from "@/lib/h3studio";
+import {
+  pictureAt,
+  refInScene,
+  shotRefs,
+  stableUrl,
+  thumbUrl,
+  type Place,
+  type Project,
+} from "@/lib/h3studio";
 import { lineTimes, speakerNames } from "@/lib/h3dialogue";
 import type { LiveRun } from "@/lib/h3live";
 
 export type MonitorMode = "follow" | "plan" | "preview" | "render";
+/** How the scene's control video shows: in a corner, over the picture, or not at all. */
+export type ControlView = "inset" | "overlay" | "off";
 
 const props = withDefaults(
   defineProps<{
@@ -162,6 +225,7 @@ const props = withDefaults(
     /** The studio's volume (its transport owns the control). */
     volume?: number;
     muted?: boolean;
+    controlView?: ControlView;
   }>(),
   {
     mode: "follow",
@@ -173,9 +237,14 @@ const props = withDefaults(
     playing: false,
     volume: 0.8,
     muted: false,
+    controlView: "inset",
   },
 );
-const emit = defineEmits<{ context: [event: MouseEvent]; sound: [hasSound: boolean] }>();
+const emit = defineEmits<{
+  context: [event: MouseEvent];
+  sound: [hasSound: boolean];
+  controlView: [view: ControlView];
+}>();
 
 const picture = computed(() => pictureAt(props.project, props.place));
 /** What the monitor shows. Follow picks for the scene at the playhead: its live steps while it
@@ -328,6 +397,29 @@ watch(
   () => syncClip(),
 );
 watch(hasSound, (sound) => emit("sound", sound), { immediate: true });
+
+// --- control: the video the scene's ControlNet follows, at the scene's own time -------------------
+const control = computed(() => {
+  const scene = props.project.scenes[props.place.scene];
+  return scene
+    ? (props.project.refs.find(
+        (r) =>
+          r.kind === "video" &&
+          r.role === "control" &&
+          r.media &&
+          refInScene(props.project, r, scene),
+      ) ?? null)
+    : null;
+});
+const controlUrl = computed(() => (control.value ? stableUrl(control.value.media) : ""));
+const controlEl = ref<HTMLVideoElement | null>(null);
+function syncControl(force = false) {
+  syncVideo(controlEl.value, () => props.offset, force);
+}
+watch(
+  () => [props.offset, props.playing, control.value, props.controlView] as const,
+  () => void nextTick(() => syncControl()),
+);
 </script>
 
 <style scoped>
@@ -523,6 +615,86 @@ watch(hasSound, (sound) => emit("sound", sound), { immediate: true });
   opacity: 0.6;
   font-size: 11px;
   text-align: center;
+}
+.control {
+  position: absolute;
+  overflow: hidden;
+  pointer-events: none;
+}
+.control.inset {
+  bottom: 8px;
+  left: 8px;
+  width: 26%;
+  aspect-ratio: var(--ar);
+  border: 1px solid rgb(255 255 255 / 35%);
+  border-radius: calc(var(--h3-radius) * 0.6);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 55%);
+}
+.control.overlay {
+  inset: 0;
+}
+.control video {
+  object-fit: contain;
+  background: #000;
+}
+/* Over the picture, the control's light lines show through and the dark falls away. */
+.control.overlay video {
+  background: transparent;
+  mix-blend-mode: screen;
+  opacity: 0.6;
+}
+.control-bar {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 2px 2px 6px;
+  background: rgb(0 0 0 / 60%);
+  color: #fff;
+  font-size: 10px;
+  pointer-events: auto;
+}
+.control.overlay .control-bar {
+  right: auto;
+  bottom: 8px;
+  left: 8px;
+  max-width: 60%;
+  border-radius: calc(var(--h3-radius) * 0.6);
+}
+.control-bar span {
+  flex: 1;
+  overflow: hidden;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.control-bar button {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+.control-bar button:hover {
+  background: rgb(255 255 255 / 15%);
+}
+.tag.control-show {
+  top: auto;
+  bottom: 8px;
+  left: 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  cursor: pointer;
 }
 .mute {
   position: absolute;

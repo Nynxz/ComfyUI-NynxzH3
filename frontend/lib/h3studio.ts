@@ -586,6 +586,10 @@ export interface StudioView {
   hide?: string[];
   /** LoRA lanes (by id) showing their shapes over the sampling steps instead of strengths. */
   loraSteps?: string[];
+  /** The control video on the monitor: in a corner, over the picture, or hidden. */
+  control?: "inset" | "overlay" | "off";
+  /** Which references the panel lists: all of them, the film's (used in any scene) or the scene's. */
+  refsShow?: "all" | "film" | "scene";
 }
 interface ViewNode {
   properties?: Record<string, unknown>;
