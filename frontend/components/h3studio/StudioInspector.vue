@@ -72,7 +72,7 @@
         <input
           v-model="scene.title"
           class="scenetitle"
-          spellcheck="false"
+          spellcheck="true"
           placeholder="Name this scene…"
           :aria-label="`Scene ${sel.sceneIndex + 1} title`"
         />

@@ -86,7 +86,7 @@
         v-model="line.words"
         class="words"
         rows="1"
-        spellcheck="false"
+        spellcheck="true"
         :placeholder="`What ${speakerNames(project, line)} ${line.mode === 'sing' ? 'sings' : 'says'}, word for word`"
         @keydown="onWordsKey($event, i)"
       />
@@ -152,7 +152,7 @@
         v-model="line.next"
         class="words next"
         rows="1"
-        spellcheck="false"
+        spellcheck="true"
         placeholder="…and the rest, heard over the next shot"
       />
     </div>

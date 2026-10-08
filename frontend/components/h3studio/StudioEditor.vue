@@ -4,7 +4,7 @@
     class="studio zen-scroll"
     tabindex="0"
     data-capture-wheel="true"
-    @contextmenu.prevent.stop
+    @contextmenu.stop="onContextMenu"
     @pointerenter="onEnter"
     @pointerleave="onLeave"
     @focus.self="keySink?.focus({ preventScroll: true })"
@@ -238,7 +238,11 @@
                     <div
                       ref="sideBody"
                       class="sidebody"
-                      :class="{ fills: tab === 'edit' && (editSelection.kind === 'scene' || editSelection.kind === 'shot') }"
+                      :class="{
+                        fills:
+                          tab === 'edit' &&
+                          (editSelection.kind === 'scene' || editSelection.kind === 'shot'),
+                      }"
                     >
                       <!-- Both stay mounted: switching tabs mustn't rebuild every thumbnail. -->
                       <StudioInspector
@@ -419,7 +423,16 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from "vue";
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  reactive,
+  ref,
+  shallowRef,
+  watch,
+} from "vue";
 import {
   LoraBrowser,
   ZenButton,
@@ -852,7 +865,8 @@ function toggleFilter(id: string) {
 // Scenes picked for a render: Ctrl/⌘-click adds or removes one, Shift-click picks the run from the
 // last one picked; a plain click goes back to a single selection.
 const picked = ref<string[]>([]);
-const pickedInOrder = () => project.scenes.map((s) => s.id).filter((id) => picked.value.includes(id));
+const pickedInOrder = () =>
+  project.scenes.map((s) => s.id).filter((id) => picked.value.includes(id));
 function pickScene(id: string, e?: PointerEvent) {
   const ids = project.scenes.map((s) => s.id);
   const current = selection.value.kind === "scene" ? selection.value.id : null;
@@ -1176,6 +1190,14 @@ const keySink = ref<HTMLTextAreaElement | null>(null);
 // Over the studio, the wheel is the studio's (volume, timeline) — ComfyUI hands wheel events to the
 // canvas unless focus is inside an element that captures them. So hovering takes focus, unless you
 // are typing somewhere else, and leaving gives it back.
+/** Right-click in a text field keeps the browser's own menu (spelling suggestions, paste);
+ *  anywhere else it opens nothing, and never ComfyUI's canvas menu. */
+function onContextMenu(e: MouseEvent) {
+  const field = (e.target as Element | null)?.closest?.(
+    "textarea, input, [contenteditable='true']",
+  );
+  if (!field) e.preventDefault();
+}
 function onEnter() {
   hovered.value = true;
   const active = document.activeElement as HTMLElement | null;
