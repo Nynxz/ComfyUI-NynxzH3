@@ -7,6 +7,12 @@
     python nodes/greybox/cli.py gltf   SCENE.json [--at 2.5] [--out scene.glb]
     python nodes/greybox/cli.py video  SCENE.json --shot 1A [--out 1A.mp4] [--width 832 --height 480] [--depth]
                                        (--shot all: the whole scene as it cuts)
+    python nodes/greybox/cli.py import SCENE.gb.txt [--out scenes/NAME.json]   (a script -> scene JSON)
+    python nodes/greybox/cli.py export SCENE.json                              (scene JSON -> a script)
+
+Every command that takes SCENE.json takes a Grey Box scene script (SCENE.gb.txt) too: its set,
+props and cast are found in the show folder around it (sets/, props/, cast.json). The script
+format is docs/GREYBOX-SCRIPT.md.
 
 Outputs go beside the scene, in `renders/`, unless `--out` says otherwise. Needs torch, numpy and
 Pillow (ComfyUI's Python has them), and ffmpeg for videos. Runs on the CPU unless `--device cuda`.
@@ -23,12 +29,57 @@ from pathlib import Path
 if __package__:
     from .core import gltf as ggltf
     from .core import scene as gscene
+    from .core import script as gscript
     from .core import sheet as gsheet
 else:  # run as a script: python nodes/greybox/cli.py …
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from core import gltf as ggltf  # type: ignore[no-redef]
     from core import scene as gscene  # type: ignore[no-redef]
+    from core import script as gscript  # type: ignore[no-redef]
     from core import sheet as gsheet  # type: ignore[no-redef]
+
+import json
+
+
+def _show(path: Path) -> Path:
+    """The show folder a scene or script belongs to: the first one up with a sets/ folder."""
+    for d in (path.parent, *path.parents):
+        if (d / "sets").is_dir():
+            return d
+    return path.parent
+
+
+def _read_script(path: Path) -> dict:
+    """A scene script read into scene JSON against its show's set, props and cast. Errors say
+    which line, and stop here."""
+    show = _show(path)
+    text = path.read_text(encoding="utf-8")
+    set_name = gscript._sections(text)[0].get("set", "")
+    set_path = show / "sets" / f"{set_name}.json"
+    if not set_name or not set_path.exists():
+        raise gscene.SceneError(f"set {set_name!r} isn't in {show / 'sets'}")
+    cast_path = show / "cast.json"
+    raw, errors = gscript.import_scene(
+        text,
+        json.loads(set_path.read_text(encoding="utf-8")),
+        gscene.load_props(show / "props"),
+        json.loads(cast_path.read_text(encoding="utf-8")) if cast_path.exists() else None,
+    )
+    if errors:
+        raise gscene.SceneError("the script has errors:\n  " + "\n  ".join(errors))
+    return raw
+
+
+def _load(path: Path):
+    if path.suffix == ".json":
+        return gscene.load(path)
+    raw = _read_script(path)
+    show = _show(path)
+    props = gscene.load_props(show / "props")
+    the_set = gscene.load_set(show / "sets" / f"{raw['set']}.json", props)
+    return gscene.build(
+        raw, the_set, gscene.load_cast(show / "cast.json"), raw.get("name", path.stem)
+    )
 
 
 def _out(scene_path: Path, given: str | None, name: str) -> Path:
@@ -42,7 +93,7 @@ def main(argv: list[str] | None = None) -> int:
         prog="greybox", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for name in ("check", "sheet", "plan", "frame", "gltf", "video"):
+    for name in ("check", "sheet", "plan", "frame", "gltf", "video", "import", "export"):
         p = sub.add_parser(name)
         p.add_argument("scene")
         p.add_argument("--out")
@@ -71,7 +122,24 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     path = Path(a.scene)
     try:
-        scene = gscene.load(path)
+        if a.cmd == "export":
+            raw = json.loads(path.read_text(encoding="utf-8"))
+            text = gscript.export_scene(raw)
+            if a.out:
+                Path(a.out).write_text(text, encoding="utf-8")
+            else:
+                print(text, end="")
+            return 0
+        if a.cmd == "import":
+            raw = _read_script(path)
+            out = (
+                Path(a.out) if a.out else _show(path) / "scenes" / f"{path.name.split('.')[0]}.json"
+            )
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(json.dumps(raw, indent=2) + "\n", encoding="utf-8")
+            print(f"wrote {out}")
+            return 0
+        scene = _load(path)
     except gscene.SceneError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
@@ -89,7 +157,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  shot {s.name}: {s.start:.2f}-{s.end:.2f}s, {len(s.camera)} camera keys")
         return 0
     if a.cmd == "sheet":
-        out = _out(path, a.out, f"{path.stem}.sheet.png")
+        out = _out(path, a.out, f"{path.name.split('.')[0]}.sheet.png")
         out.parent.mkdir(parents=True, exist_ok=True)
         gsheet.contact_sheet(scene, a.per_shot, a.width, a.device).save(out)
     elif a.cmd == "plan":

@@ -567,6 +567,8 @@ def import_scene(
         raise ValueError(f"no mark {text}" + suggest(text, sorted(marks)))
 
     def surface(name, x, z):
+        if name not in shape_names:
+            raise ValueError(f"no shape {name}" + suggest(name, sorted(shape_names)))
         return surface_y(the_set, name, x, z, extra) if the_set else None
 
     def bar(name):
