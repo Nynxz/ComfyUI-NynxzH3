@@ -113,6 +113,22 @@
               @update:model-value="up({ yaw: $event })"
             />
           </ZenField>
+          <ZenField
+            v-if="(shape.type ?? 'box') === 'box'"
+            label="Tilt"
+            stack
+            title="Leans it forward (front edge down) by this many degrees: a roof slope, a ramp"
+          >
+            <ZenNumber
+              size="sm"
+              :model-value="shape.tilt ?? 0"
+              :min="-89"
+              :max="89"
+              :step="5"
+              :precision="0"
+              @update:model-value="up({ tilt: $event })"
+            />
+          </ZenField>
         </div>
         <ZenField label="Grey" stack>
           <ZenSlider
@@ -610,6 +626,7 @@ const POSES = [
   { value: "", label: "As before" },
   { value: "stand", label: "Stand" },
   { value: "sit", label: "Sit" },
+  { value: "crouch", label: "Crouch" },
 ];
 const EASES = [
   { value: "linear", label: "Steady" },

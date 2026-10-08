@@ -15,6 +15,8 @@ export interface ShapeData {
   a?: Vec;
   b?: Vec;
   yaw?: number;
+  /** A box leaning forward by this many degrees (front edge down), after its yaw. */
+  tilt?: number;
   tone?: number;
   /** A placed prop: which one, and how big (1 = as built). */
   prop?: string;
@@ -99,7 +101,7 @@ export interface KeyData {
   at?: Ref;
   look?: Ref;
   face?: number | string;
-  pose?: "stand" | "sit";
+  pose?: "stand" | "sit" | "crouch";
   lens?: number;
   ease?: Ease;
 }
@@ -214,6 +216,11 @@ function catmull(p0: Vec, p1: Vec, p2: Vec, p3: Vec, u: number): Vec {
 /** A smooth path through `points` at `times`, each segment eased by its starting key. */
 /** `t` moved back to the start of the pose it falls in, when the scene is drawn on twos or
  *  threes (the frame's index rounded down to a multiple of `on`), as the renderer does. */
+/** How tall each pose stands, as a share of the figure's height (as the renderer has it). */
+export function poseHeight(pose: string | undefined): number {
+  return pose === "sit" ? 0.72 : pose === "crouch" ? 0.6 : 1;
+}
+
 export function heldTime(scene: Pick<SceneData, "fps" | "on">, t: number): number {
   const on = scene.on ?? 1;
   if (on <= 1) return t;
@@ -250,7 +257,7 @@ export interface ActorState {
   id: string;
   at: Vec;
   yaw: number;
-  pose: "stand" | "sit";
+  pose: "stand" | "sit" | "crouch";
   member: Member;
 }
 export const eyeOf = (s: ActorState): Vec => {
@@ -435,7 +442,7 @@ export function figure(s: ActorState, props: Props = {}): (ShapeData & { owner: 
     }));
   }
   const k = m.height / DEFAULT_HEIGHT;
-  const h = m.height * (s.pose === "sit" ? 0.72 : 1);
+  const h = m.height * poseHeight(s.pose);
   const r = 0.17 * m.build * k;
   const [x, y, z] = s.at;
   const yaw = (s.yaw * Math.PI) / 180;

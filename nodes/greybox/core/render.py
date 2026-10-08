@@ -72,8 +72,12 @@ def _box(o, d, s: Shape):
     c = torch.tensor(s.at, device=o.device)
     yaw = math.radians(s.yaw)
     cy, sy = math.cos(yaw), math.sin(yaw)
-    # Into the box's own frame (its yaw undone).
+    # Into the box's own frame: its yaw undone, then its tilt (a lean forward, about its own x).
     rot = torch.tensor(((cy, 0.0, -sy), (0.0, 1.0, 0.0), (sy, 0.0, cy)), device=o.device)
+    if s.tilt:
+        tl = math.radians(s.tilt)
+        ct, st = math.cos(tl), math.sin(tl)
+        rot = torch.tensor(((1.0, 0.0, 0.0), (0.0, ct, st), (0.0, -st, ct)), device=o.device) @ rot
     lo_ = (o - c) @ rot.T
     ld = d @ rot.T
     half = torch.tensor(s.size, device=o.device) / 2

@@ -132,7 +132,7 @@ function keyPatch(a: Args, camera: boolean): Partial<KeyData> {
         : typeof a.face === "number"
           ? round(a.face)
           : str(a.face, "`face`");
-  if (!camera && "pose" in a) p.pose = a.pose === "sit" ? "sit" : "stand";
+  if (!camera && "pose" in a) p.pose = a.pose === "sit" || a.pose === "crouch" ? a.pose : "stand";
   if ("ease" in a)
     p.ease = ["linear", "smooth", "in", "out"].includes(String(a.ease))
       ? (a.ease as KeyData["ease"])
@@ -140,7 +140,18 @@ function keyPatch(a: Args, camera: boolean): Partial<KeyData> {
   return p;
 }
 
-const SHAPE_FIELDS = ["at", "size", "radius", "height", "a", "b", "yaw", "tone", "scale"] as const;
+const SHAPE_FIELDS = [
+  "at",
+  "size",
+  "radius",
+  "height",
+  "a",
+  "b",
+  "yaw",
+  "tilt",
+  "tone",
+  "scale",
+] as const;
 function applyShape(s: ShapeData, a: Args) {
   for (const f of SHAPE_FIELDS) {
     if (!(f in a)) continue;
@@ -149,6 +160,7 @@ function applyShape(s: ShapeData, a: Args) {
       (s as Args)[f] = roundVec(vec(v, `\`${f}\``));
     else if (f === "tone") s.tone = Math.min(Math.max(num(v, "`tone`"), 0), 1);
     else if (f === "scale") s.scale = round(Math.min(Math.max(num(v, "`scale`"), 0.01), 100));
+    else if (f === "tilt") s.tilt = round(Math.min(Math.max(num(v, "`tilt`"), -89), 89));
     else (s as Args)[f] = round(num(v, `\`${f}\``));
   }
 }
@@ -164,7 +176,7 @@ export const ACTIONS: ActionInfo[] = [
   {
     name: "shape.add",
     touches: "set",
-    help: "Add a shape to the set (or to the prop being edited). {kind: box|cylinder|sphere|capsule|prop, id?, at?: [x,y,z], size?: [w,h,d] (box), radius?, height? (cylinder), a?, b? (capsule or lying cylinder ends), yaw?, tone? (0-1), prop? and scale? (kind prop)}. A box's `at` is its centre; a cylinder stands on `at`, or lies from `a` to `b` when they're given; a prop is placed with its origin at `at`.",
+    help: "Add a shape to the set (or to the prop being edited). {kind: box|cylinder|sphere|capsule|prop, id?, at?: [x,y,z], size?: [w,h,d] (box), radius?, height? (cylinder), a?, b? (capsule or lying cylinder ends), yaw?, tilt? (box: degrees it leans forward, front edge down), tone? (0-1), prop? and scale? (kind prop)}. A box's `at` is its centre; a cylinder stands on `at`, or lies from `a` to `b` when they're given; a prop is placed with its origin at `at`.",
     run: (doc, a) => {
       const kind = (
         ["box", "cylinder", "sphere", "capsule", "prop"].includes(String(a.kind)) ? a.kind : "box"
@@ -203,7 +215,7 @@ export const ACTIONS: ActionInfo[] = [
   {
     name: "shape.update",
     touches: "set",
-    help: "Change a shape. {id, at?, size?, radius?, height?, a?, b?, yaw?, tone?, rename?}.",
+    help: "Change a shape. {id, at?, size?, radius?, height?, a?, b?, yaw?, tilt? (box: degrees it leans forward, front edge down — a roof slope or ramp), tone?, rename?}.",
     run: (doc, a) => {
       const s = shape(doc, a.id);
       applyShape(s, a);

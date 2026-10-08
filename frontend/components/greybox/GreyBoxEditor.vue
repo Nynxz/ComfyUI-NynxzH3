@@ -731,7 +731,7 @@ const tracks = computed<TimelineTrack[]>(() => [
       id: `key|${a.id}|${k.t}`,
       start: k.t,
       kind: "marker" as const,
-      label: k.pose === "sit" ? "sit" : "",
+      label: k.pose && k.pose !== "stand" ? k.pose : "",
       commit: "drop" as const,
     })),
   })),

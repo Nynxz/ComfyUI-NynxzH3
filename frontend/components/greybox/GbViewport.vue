@@ -51,6 +51,7 @@ import {
   figure,
   fovOf,
   heldTime,
+  poseHeight,
   isRod,
   isVec,
   type ShapeData,
@@ -179,7 +180,9 @@ function shapeMesh(s: ShapeData, selected: boolean): THREE.Mesh {
   } else {
     geo = new THREE.BoxGeometry(...(s.size ?? [1, 1, 1]));
     mesh.position.set(...(s.at ?? [0, 0, 0]));
-    mesh.rotation.y = ((s.yaw ?? 0) * Math.PI) / 180;
+    // As the renderer turns it: its yaw, then its tilt (a lean forward) about its own x.
+    mesh.rotation.order = "YXZ";
+    mesh.rotation.set(((s.tilt ?? 0) * Math.PI) / 180, ((s.yaw ?? 0) * Math.PI) / 180, 0);
   }
   mesh.geometry = geo;
   mesh.material = material(tone, selected);
@@ -374,7 +377,7 @@ function buildLive() {
     }
     const head = new THREE.Vector3(
       a.at[0],
-      a.at[1] + a.member.height * (a.pose === "sit" ? 0.72 : 1) + 0.18,
+      a.at[1] + a.member.height * poseHeight(a.pose) + 0.18,
       a.at[2],
     );
     if (showLabels.value) liveGroup.add(label(a.id, head, "actor", pick));

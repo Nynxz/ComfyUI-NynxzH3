@@ -45,6 +45,9 @@ class Shape:
     a: Vec = (0.0, 0.0, 0.0)
     b: Vec = (0.0, 1.0, 0.0)
     yaw: float = 0.0
+    #: A box leaning forward by this many degrees (its front edge down), after its yaw: a roof
+    #: slope, a ramp.
+    tilt: float = 0.0
     tone: float = 0.7
     id: str = ""
     #: Which object it belongs to (an actor's mention, or the shape's own id), for masks.
@@ -74,6 +77,7 @@ def _shape(raw: dict, where: str) -> Shape:
             at=_vec(raw.get("at"), f"{label}: at"),
             size=_vec(raw.get("size"), f"{label}: size", (1.0, 1.0, 1.0)),
             yaw=_num(raw.get("yaw"), 0.0),
+            tilt=_num(raw.get("tilt"), 0.0, -89, 89),
             tone=tone,
             id=sid,
             owner=sid,
@@ -154,6 +158,7 @@ def _placed(local: Shape, at: Vec, yaw: float, scale: float, owner: str, prefix:
         a=move(local.a),
         b=move(local.b),
         yaw=local.yaw + yaw,
+        tilt=local.tilt,
         tone=local.tone,
         id=f"{prefix}/{local.id}" if local.id else prefix,
         owner=owner,
@@ -362,7 +367,7 @@ class ActorState:
     @property
     def eye(self) -> Vec:
         """Where a camera looking at it aims (its face)."""
-        h = self.member.height * (0.72 if self.pose == "sit" else 1.0)
+        h = self.member.height * pose_height(self.pose)
         return (self.at[0], self.at[1] + h - LOOK_DROP, self.at[2])
 
 
@@ -620,6 +625,14 @@ def load(path: str | Path, search: list[Path] | None = None) -> Scene:
 # --- figures ---------------------------------------------------------------------------------
 
 
+#: How tall each pose stands, as a share of the figure's height.
+POSE_HEIGHTS = {"stand": 1.0, "sit": 0.72, "crouch": 0.6}
+
+
+def pose_height(pose: str) -> float:
+    return POSE_HEIGHTS.get(pose, 1.0)
+
+
 def figure(state: ActorState, props: Props | None = None) -> list[Shape]:
     """An actor as plain shapes: a body and a head, and a small block on the face so which way it
     faces reads at a glance. Seated, it's lower and its legs reach forward. A cast member that is
@@ -634,7 +647,7 @@ def figure(state: ActorState, props: Props | None = None) -> list[Shape]:
             )
         local = _shapes(props[m.prop].get("shapes", []), f"prop {m.prop}", props, 1)
         return [_placed(s, state.at, state.yaw, 1.0, state.id, state.id) for s in local]
-    h = m.height * (0.72 if state.pose == "sit" else 1.0)
+    h = m.height * pose_height(state.pose)
     r = 0.17 * m.build * m.height / DEFAULT_HEIGHT
     x, y, z = state.at
     yaw = math.radians(state.yaw)
