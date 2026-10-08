@@ -1,0 +1,32 @@
+# Rooftop run
+// Ren runs a roof, jumps the gap, slides down a pitched roof and drops to a lower one, a drone on
+// his tail. The set is `rooftops` (roof A flat at 12 m, B at 11 m, C pitched down to its eave at
+// about 7.4 m, D flat at 6 m, the run going along +z).
+set: rooftops
+fps: 24
+
+## Cast
+@drone: prop drone, height 0.15
+
+## Action
+0:00        @ren on a-roof at [0, 6], facing 0
+0:00–2.00   @ren runs on a-roof to [0, 19.6]
+2.00–2.70   @ren leaps to on b-roof at [0, 24.4]
+2.95–4.15   @ren runs on b-roof to [0, 37.6]
+4.15–4.35   @ren hops to on c-roof at [0, 38.8]
+4.35–5.40   @ren slides down c-roof to [0, 47.5]
+5.40–5.95   @ren drops to on d-roof at [0, 52]
+6.20–7.00   @ren runs on d-roof to [0, 58.6]
+0:00        @drone at [3, 16.5, -2], facing @ren
+0:00–7.00   @drone follows @ren, 8 behind, 4.5 up, 2 left
+
+## Shot 3A (0:00–2.70)
+0:00        from [-7.5, 13.4, 9], looking at @ren, 38mm
+2.70        from [-7, 13.6, 23], looking at @ren, 34mm
+
+## Shot 3B (2.70–4.60)
+2.70–4.60   tracks @ren, 5 behind, 3.2 up, 1.4 left, 28mm
+
+## Shot 3C (4.60–7.00)
+4.60        from [2.6, 7, 66], looking at @ren, 32mm
+7.00        from [2.2, 6.8, 65], looking at @ren, 30mm

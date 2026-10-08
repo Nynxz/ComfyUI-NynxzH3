@@ -9,6 +9,10 @@ Everything is plain JSON, written by people or agents. Nothing to install: rende
 with exact ray–shape intersection (no meshes), on the GPU in ComfyUI or the CPU from the command
 line.
 
+Scenes, sets and props can also be written as **Grey Box scripts** — readable text with moves
+like `runs on`, `jumps to` and `swings on` — in the editor's Script panel or from the command
+line: see [GREYBOX-SCRIPT.md](GREYBOX-SCRIPT.md) and the `grey-box` skill.
+
 ## Grey Box Studio (the editor)
 
 The **Grey Box Studio** node is the editor: pick a project (a Codex show; its grey box lives in
