@@ -17,8 +17,9 @@ from typing import Any
 
 import torch
 
+from . import moves as mv
 from .render import trace
-from .scene import SceneError, set_from
+from .scene import SceneError, build, set_from
 
 KINDS = ("box", "cylinder", "sphere", "capsule", "prop")
 POSES = {
@@ -411,8 +412,15 @@ def export_scene(raw: dict) -> str:
     keyed = []
     for a in raw.get("actors", []):
         for k in a.get("keys", []):
-            keyed.append((float(k.get("t", 0)), a["id"], k))
+            if k.get("run") and not k.get("move"):
+                continue  # part of a move: written once, as its verb
+            t0 = float(k["move"]["from"]) if k.get("move") else float(k.get("t", 0))
+            keyed.append((t0, a["id"], k))
     for t, aid, k in sorted(keyed, key=lambda x: x[0]):
+        if k.get("move"):
+            mvd = k["move"]
+            lines.append(f"{time(mvd['from'])}\u2013{time(mvd['to'])} {aid} {mvd['text']}")
+            continue
         parts = []
         if k.get("on"):
             at = k.get("at", [0, 0, 0])
@@ -434,8 +442,16 @@ def export_scene(raw: dict) -> str:
             f"## Shot {s.get('name', '')} ({time(s.get('start', 0))}\u2013{time(s.get('end', 0))})",
         ]
         for c in s.get("camera", []):
-            lines.append(_camera_text(c, float(c.get("t", s.get("start", 0)))))
+            if c.get("move"):
+                mvd = c["move"]
+                lines.append(f"{time(mvd['from'])}\u2013{time(mvd['to'])} {mvd['text']}")
+            elif not c.get("run"):
+                lines.append(_camera_text(c, float(c.get("t", s.get("start", 0)))))
     return "\n".join(lines) + "\n"
+
+
+def r4(v) -> list[float]:
+    return [round(float(x), 4) for x in v]
 
 
 def surface_y(the_set, name: str, x: float, z: float, extra: list | None = None) -> float | None:
@@ -454,7 +470,7 @@ def surface_y(the_set, name: str, x: float, z: float, extra: list | None = None)
 
 
 def import_scene(
-    text: str, set_raw: dict | None, props: dict | None = None
+    text: str, set_raw: dict | None, props: dict | None = None, cast_raw: dict | None = None
 ) -> tuple[dict, list[str]]:
     """A scene script read into scene JSON, checked against its set (`set_raw`, the set's JSON):
     marks, shapes and set cameras it names must exist."""
@@ -522,73 +538,241 @@ def import_scene(
             if place not in known:
                 errors.append(f"line {n}: {what}: no mark {place}" + suggest(place, sorted(known)))
 
-    actors: dict[str, list[dict]] = {}
+    # Moves (runs, jumps, swings, follows…) need places, surfaces, bars and heights.
+    member_height = {k: float(v.get("height", 1.74)) for k, v in (cast_raw or {}).items()}
+    member_height.update({k: float(v.get("height", 1.74)) for k, v in cast.items()})
+
+    def place(text: str):
+        text = text.strip()
+        on = re.fullmatch(r"on\s+([\w./-]+)\s+at\s+(.+)", text, re.I)
+        if on:
+            name, where = on.group(1), on.group(2).strip()
+            if name not in shape_names:
+                raise ValueError(f"no shape {name}" + suggest(name, sorted(shape_names)))
+            if where.startswith("["):
+                xz = parse_vec(where, 2)
+            elif the_set and where in the_set.marks:
+                mk = the_set.marks[where]
+                xz = [mk[0], mk[2]]
+            else:
+                raise ValueError(f"on {name} at …: give [x, z] or a mark")
+            y = surface_y(the_set, name, xz[0], xz[1], extra) if the_set else None
+            if y is None:
+                raise ValueError(f"[{num(xz[0])}, {num(xz[1])}] isn't over {name}")
+            return (xz[0], y, xz[1])
+        if text.startswith("["):
+            return tuple(parse_vec(text))
+        if the_set and text in the_set.marks:
+            return tuple(the_set.marks[text])
+        raise ValueError(f"no mark {text}" + suggest(text, sorted(marks)))
+
+    def surface(name, x, z):
+        return surface_y(the_set, name, x, z, extra) if the_set else None
+
+    def bar(name):
+        if not the_set:
+            return None
+        for s in [*the_set.shapes, *extra]:
+            if (s.id == name or s.owner == name) and s.kind == "capsule":
+                return tuple(s.a), tuple(s.b)
+        return None
+
+    world = mv.World(place, surface, bar, lambda aid: member_height.get(aid, 1.74))
+
+    def plain_key(t: float, text: str, prev: list[dict]) -> dict:
+        key: dict[str, Any] = {"t": round(t, 4)}
+        for clause in clauses(text):
+            low = clause.lower()
+            if re.fullmatch(r"on\s+([\w./-]+)\s+at\s+(.+)", clause, re.I):
+                p = place(clause)
+                key["at"] = r4(p)
+                key["on"] = re.match(r"on\s+([\w./-]+)", clause, re.I).group(1)
+            elif low.startswith("at "):
+                key["at"] = _parse_place(clause[3:])
+                if (
+                    isinstance(key["at"], str)
+                    and not key["at"].startswith("@")
+                    and key["at"] not in marks
+                ):
+                    raise ValueError(f"at: no mark {key['at']}" + suggest(key["at"], sorted(marks)))
+            elif low.startswith("facing "):
+                f = clause[7:].strip()
+                try:
+                    key["face"] = float(f)
+                except ValueError:
+                    if f != "path" and not f.startswith("@") and f not in marks:
+                        raise ValueError(
+                            f"facing: no mark {f}" + suggest(f, sorted(marks))
+                        ) from None
+                    key["face"] = f
+            elif low in POSES:
+                key["pose"] = POSES[low]
+            elif low.startswith("ease "):
+                if low[5:] not in EASES:
+                    raise ValueError(f"ease is one of {', '.join(EASES)}")
+                key["ease"] = low[5:]
+            else:
+                verb = low.split()[0] if low.split() else ""
+                hint = (
+                    f" — {verb} is a move: give it a span, like 1.0\u20132.0 @someone {clause}"
+                    if verb in mv.VERBS
+                    else ""
+                )
+                raise ValueError(
+                    f"unexpected {clause!r} (at …, on SHAPE at [x, z], facing …, "
+                    f"stand/sit/crouch, ease …){hint}"
+                )
+        if "at" not in key:
+            if not prev:
+                raise ValueError("the first key needs a place (at … or on … at …)")
+            # Where it was: a key that only turns or changes pose stays put.
+            key["at"] = prev[-1]["at"]
+            if prev[-1].get("on"):
+                key["on"] = prev[-1]["on"]
+        return key
+
+    def start_of(aid: str, prev: list[dict], t0: float) -> mv.Start:
+        if not prev:
+            raise ValueError(f"{aid} needs a key before its first move: where it starts")
+        last = prev[-1]
+        if last["t"] > t0 + 1e-6:
+            raise ValueError(f"this starts at {num(t0)}s, before {aid}'s key at {num(last['t'])}s")
+        at = last["at"]
+        if isinstance(at, str):
+            if at.startswith("@"):
+                raise ValueError(f"a move can't start from {at} (where someone else is)")
+            at = place(at)
+        face = last.get("face")
+        if isinstance(face, (int, float)):
+            yaw = float(face)
+        else:
+            moving = [k for k in prev if not isinstance(k["at"], str)][-2:]
+            if len(moving) == 2:
+                yaw = mv.yaw_of(
+                    moving[1]["at"][0] - moving[0]["at"][0],
+                    moving[1]["at"][2] - moving[0]["at"][2],
+                    0.0,
+                )
+            else:
+                yaw = 0.0
+        return mv.Start(tuple(at), yaw, face)
+
+    events: dict[str, list] = {}
     for _, _, lines in _section(sections, "action"):
         for n, line in lines:
-            m = re.fullmatch(rf"({_TIME})\s+(@[\w-]+)\s+(.*)", line)
-            if not m:
-                errors.append(f"line {n}: an action line is TIME @someone at/on …, facing …, pose")
-                continue
-            key: dict[str, Any] = {"t": round(parse_time(m.group(1)), 4)}
-            aid = m.group(2)
+            span = re.fullmatch(
+                rf"({_TIME})\s*[\u2013\u2014-]\s*({_TIME})\s+(@[\w-]+)\s+(.*)", line
+            )
+            plain = re.fullmatch(rf"({_TIME})\s+(@[\w-]+)\s+(.*)", line)
+            if span:
+                t0, t1 = parse_time(span.group(1)), parse_time(span.group(2))
+                if t1 <= t0:
+                    errors.append(f"line {n}: the move ends before it starts")
+                    continue
+                events.setdefault(span.group(3), []).append((t0, t1, n, span.group(4).strip()))
+            elif plain:
+                events.setdefault(plain.group(2), []).append(
+                    (parse_time(plain.group(1)), None, n, plain.group(3).strip())
+                )
+            else:
+                errors.append(
+                    f"line {n}: an action line is TIME @someone at …, or START\u2013END @someone MOVE"
+                )
+
+    actors: dict[str, list[dict]] = {}
+    follows: list[tuple[str, float, float, int, str]] = []
+    runs = 0
+    for aid, evs in events.items():
+        keys = actors.setdefault(aid, [])
+        for t0, t1, n, text in sorted(evs, key=lambda e: (e[0], e[2])):
             try:
-                for clause in clauses(m.group(3)):
-                    low = clause.lower()
-                    on = re.fullmatch(r"on\s+([\w./-]+)\s+at\s+(.+)", clause, re.I)
-                    if on:
-                        name, where = on.group(1), on.group(2).strip()
-                        if where.startswith("["):
-                            xz = parse_vec(where, 2)
-                        elif the_set and where in the_set.marks:
-                            mk = the_set.marks[where]
-                            xz = [mk[0], mk[2]]
-                        else:
-                            raise ValueError(f"on {name} at …: give [x, z] or a mark")
-                        if name not in shape_names:
-                            raise ValueError(
-                                f"no shape {name}" + suggest(name, sorted(shape_names))
-                            )
-                        y = surface_y(the_set, name, xz[0], xz[1], extra) if the_set else None
-                        if y is None:
-                            raise ValueError(f"[{num(xz[0])}, {num(xz[1])}] isn't over {name}")
-                        key["at"] = [round(xz[0], 4), y, round(xz[1], 4)]
-                        key["on"] = name
-                    elif low.startswith("at "):
-                        key["at"] = _parse_place(clause[3:])
-                        check_place(n, key["at"], "at")
-                    elif low.startswith("facing "):
-                        f = clause[7:].strip()
-                        try:
-                            key["face"] = float(f)
-                        except ValueError:
-                            if f != "path" and not f.startswith("@"):
-                                check_place(n, f, "facing")
-                            key["face"] = f
-                    elif low in POSES:
-                        key["pose"] = POSES[low]
-                    elif low.startswith("ease "):
-                        if low[5:] not in EASES:
-                            raise ValueError(f"ease is one of {', '.join(EASES)}")
-                        key["ease"] = low[5:]
-                    else:
-                        raise ValueError(
-                            f"unexpected {clause!r} (at …, on SHAPE at [x, z], facing …, "
-                            "stand/sit/crouch, ease …)"
-                        )
+                if t1 is None:
+                    keys.append(plain_key(t0, text, keys))
+                    continue
+                verb, _, rest = text.partition(" ")
+                kind = mv.VERBS.get(verb.lower())
+                if kind is None:
+                    raise ValueError(
+                        f"unknown move {verb!r} (runs, walks, moves, slides, jumps, leaps, hops, "
+                        "drops, falls, climbs, swings, follows)"
+                    )
+                if kind == "follow":
+                    follows.append((aid, t0, t1, n, rest))
+                    continue
+                start = start_of(aid, keys, t0)
+                if kind == "travel":
+                    made = mv.travel(verb.lower(), t0, t1, start, rest.strip(), world)
+                elif kind == "jump":
+                    made = mv.jump(verb.lower(), t0, t1, start, rest.strip(), world, aid)
+                elif kind == "climb":
+                    made = mv.climb(verb.lower(), t0, t1, start, rest.strip(), world)
+                else:
+                    made = mv.swing(verb.lower(), t0, t1, start, rest.strip(), world, aid)
+                if keys and abs(keys[-1]["t"] - t0) < 1e-6:
+                    # A key already marks where the move starts (and may turn or pose it there).
+                    made = made[1:]
+                runs += 1
+                for k in made:
+                    k["run"] = runs
+                made[0]["move"] = {"from": round(t0, 4), "to": round(t1, 4), "text": text}
+                keys.extend(made)
+            except ValueError as e:
+                errors.append(f"line {n}: {e}")
+
+    def evaluate():
+        """The scene as built so far, to ask where someone is (for follows and tracking shots)."""
+        try:
+            return build(
+                {
+                    "actors": [{"id": a, "keys": k} for a, k in actors.items() if k],
+                    "cast": {**(cast_raw or {}), **cast},
+                    "shots": [
+                        {"name": "_", "camera": [{"t": 0, "at": [0, 1, 0], "look": [0, 1, 1]}]}
+                    ],
+                },
+                the_set,
+            )
+        except SceneError as e:
+            errors.append(f"the scene doesn't hold together: {e}")
+            return None
+
+    if follows:
+        built = evaluate()
+        for aid, t0, t1, n, rest in follows:
+            m = re.fullmatch(r"(@[\w-]+)\s*,?\s*(.*)", rest.strip())
+            if not m:
+                errors.append(f"line {n}: follows @someone[, 6 behind, 4 up, 1 left]")
+                continue
+            target = m.group(1)
+            if built is None or not actors.get(target):
+                errors.append(f"line {n}: {target} has no keys to follow")
+                continue
+            try:
+                off = mv.offset(m.group(2))
             except ValueError as e:
                 errors.append(f"line {n}: {e}")
                 continue
-            if "at" not in key and not actors.get(aid):
-                errors.append(f"line {n}: {aid}'s first key needs a place (at … or on … at …)")
-                continue
-            if "at" not in key:
-                # Where it was: a key that only turns or changes pose stays put.
-                key["at"] = actors[aid][-1]["at"]
-                if actors[aid][-1].get("on"):
-                    key["on"] = actors[aid][-1]["on"]
-            actors.setdefault(aid, []).append(key)
+            made = []
+            for t in mv.times(t0, t1, mv.FOLLOW_STEP):
+                st = built.actor_at(target, t)
+                made.append(
+                    {"t": round(t, 4), "at": r4(mv.in_frame(st.at, st.yaw, off)), "face": target}
+                )
+            runs += 1
+            for k in made:
+                k["run"] = runs
+            made[0]["move"] = {
+                "from": round(t0, 4),
+                "to": round(t1, 4),
+                "text": f"follows {rest.strip()}",
+            }
+            prev = actors.setdefault(aid, [])
+            prev[:] = [k for k in prev if not (t0 - 1e-6 <= k["t"] <= t1 + 1e-6)] + made
+
     out["actors"] = [
-        {"id": aid, "keys": sorted(keys, key=lambda k: k["t"])} for aid, keys in actors.items()
+        {"id": aid, "keys": sorted(keys, key=lambda k: k["t"])}
+        for aid, keys in actors.items()
+        if keys
     ]
     for aid, keys in actors.items():
         for k in keys:
@@ -597,6 +781,11 @@ def import_scene(
                 if isinstance(v, str) and v.startswith("@") and v not in actors:
                     errors.append(f"{aid} at {num(k['t'])}s: {field} {v}, who isn't in the scene")
 
+    built = (
+        evaluate()
+        if any("tracks" in ln for _, _, ls in _section(sections, "shot") for _, ln in ls)
+        else None
+    )
     shots = []
     for title, n0, lines in _section(sections, "shot"):
         m = re.fullmatch(
@@ -610,9 +799,63 @@ def import_scene(
             errors.append(f"line {n0}: shot {m.group(1)} ends before it starts")
         keys = []
         for n, line in lines:
+            track = re.fullmatch(
+                rf"({_TIME})\s*[\u2013\u2014-]\s*({_TIME})\s+tracks\s+(@[\w-]+)\s*,?\s*(.*)", line
+            )
+            if track:
+                t0, t1, target = (
+                    parse_time(track.group(1)),
+                    parse_time(track.group(2)),
+                    track.group(3),
+                )
+                if built is None or not actors.get(target):
+                    errors.append(f"line {n}: {target} has no keys to track")
+                    continue
+                offs, lens, look, ease = [], None, target, None
+                try:
+                    for clause in clauses(track.group(4)):
+                        low = clause.lower()
+                        if re.fullmatch(r"\d+(?:\.\d+)?\s*mm", low):
+                            lens = float(low[:-2])
+                        elif low.startswith("looking at "):
+                            look = _parse_place(clause[11:])
+                        elif low.startswith("ease "):
+                            ease = low[5:]
+                        else:
+                            offs.append(clause)
+                    off = mv.offset(", ".join(offs))
+                except ValueError as e:
+                    errors.append(f"line {n}: {e}")
+                    continue
+                runs += 1
+                made = []
+                for t in mv.times(t0, t1, mv.FOLLOW_STEP):
+                    st = built.actor_at(target, t)
+                    k = {
+                        "t": round(t, 4),
+                        "at": r4(mv.in_frame(st.at, st.yaw, off)),
+                        "look": look,
+                        "run": runs,
+                    }
+                    if lens:
+                        k["lens"] = lens
+                    if ease:
+                        k["ease"] = ease
+                    made.append(k)
+                made[0]["move"] = {
+                    "from": round(t0, 4),
+                    "to": round(t1, 4),
+                    "text": f"tracks {target}"
+                    + (f", {track.group(4).strip()}" if track.group(4).strip() else ""),
+                }
+                keys.extend(made)
+                continue
             mk = re.fullmatch(rf"({_TIME})\s+(.*)", line)
             if not mk:
-                errors.append(f"line {n}: a camera line is TIME from …, looking at …, 35mm")
+                errors.append(
+                    f"line {n}: a camera line is TIME from …, looking at …, 35mm "
+                    "(or START\u2013END tracks @someone, 4 behind, 1.5 up)"
+                )
                 continue
             try:
                 key = _parse_camera(mk.group(2), parse_time(mk.group(1)))
@@ -626,7 +869,14 @@ def import_scene(
                 errors.append(f"line {n}: {e}")
         if not keys:
             errors.append(f"line {n0}: shot {m.group(1)} needs at least one camera line")
-        shots.append({"name": m.group(1), "start": start, "end": end, "camera": keys})
+        shots.append(
+            {
+                "name": m.group(1),
+                "start": start,
+                "end": end,
+                "camera": sorted(keys, key=lambda k: k["t"]),
+            }
+        )
     if not shots:
         errors.append(
             "a scene needs at least one shot: ## Shot 1A (0:00\u20133.00) and a camera line"

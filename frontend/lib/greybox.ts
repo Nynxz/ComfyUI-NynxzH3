@@ -243,6 +243,9 @@ export function pathAt(
   if (t >= times[n - 1]!) return points[n - 1]!;
   let i = 0;
   for (let j = 0; j < n - 1; j++) if (times[j]! <= t) i = j;
+  // Two keys at the same spot hold still between them (as the renderer does): the curve would
+  // otherwise carry the motion before into the hold.
+  if (points[i]!.every((v, k) => Math.abs(v - points[i + 1]![k]!) < 1e-6)) return points[i]!;
   const span = Math.max(times[i + 1]! - times[i]!, 1e-9);
   const u = ease((t - times[i]!) / span, eases[i]);
   return catmull(

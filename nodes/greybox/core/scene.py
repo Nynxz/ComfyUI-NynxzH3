@@ -324,12 +324,16 @@ def _catmull(p0: Vec, p1: Vec, p2: Vec, p3: Vec, u: float) -> Vec:
 
 def path_at(times: list[float], points: list[Vec], eases: list[str], t: float) -> Vec:
     """A smooth path through `points` (one per time): Catmull-Rom between neighbours, each
-    segment eased by its starting key; held before the first and after the last."""
+    segment eased by its starting key; held before the first and after the last. Two keys at the
+    same spot hold still between them: the curve would otherwise carry the motion before into the
+    hold (a landing sinking into the floor and coming back up)."""
     if t <= times[0]:
         return points[0]
     if t >= times[-1]:
         return points[-1]
     i = max(j for j in range(len(times) - 1) if times[j] <= t)
+    if all(abs(points[i][k] - points[i + 1][k]) < 1e-6 for k in range(3)):
+        return points[i]
     span = max(times[i + 1] - times[i], 1e-9)
     u = _ease((t - times[i]) / span, eases[i])
     p0 = points[max(i - 1, 0)]
