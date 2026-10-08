@@ -5,7 +5,7 @@
     tabindex="-1"
     data-capture-wheel="true"
     @pointerdown.stop="onDown"
-    @pointermove="toDocument"
+    @pointermove="onMove"
     @pointerup="onUp"
     @wheel.stop
     @contextmenu.prevent.stop
@@ -594,7 +594,8 @@ function setupControls() {
     orbit = new OrbitControls(cam as THREE.PerspectiveCamera, canvas.value);
     orbit.enableDamping = true;
     // The middle button pans the graph (ComfyUI takes it before the view sees it); the wheel zooms.
-    orbit.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: null, RIGHT: THREE.MOUSE.PAN };
+    // The right button is the fly camera (see `startFly`); Shift + left drag pans.
+    orbit.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: null, RIGHT: null };
     if (props.mode === "plan") {
       orbit.enableRotate = false;
       fitPlan();
@@ -624,7 +625,8 @@ function size() {
 function draw() {
   frame = requestAnimationFrame(draw);
   if (!renderer || !css || !host.value || document.hidden) return;
-  orbit?.update();
+  if (fly) stepFly();
+  else orbit?.update();
   const el = host.value;
   const w = el.clientWidth;
   const h = el.clientHeight;
@@ -700,10 +702,16 @@ onMounted(() => {
   frameAll();
   draw();
   window.addEventListener("keydown", onKey);
+  window.addEventListener("keydown", flyKey, true);
+  window.addEventListener("keyup", flyKey, true);
+  window.addEventListener("blur", endFly);
 });
 onBeforeUnmount(() => {
   cancelAnimationFrame(frame);
   window.removeEventListener("keydown", onKey);
+  window.removeEventListener("keydown", flyKey, true);
+  window.removeEventListener("keyup", flyKey, true);
+  window.removeEventListener("blur", endFly);
   orbit?.dispose();
   gizmo?.dispose();
   clear(setGroup);
@@ -738,7 +746,13 @@ watch([selection, showLabels], () => {
   buildPaths();
   buildLive();
 });
-watch(() => props.mode, setupControls);
+watch(
+  () => props.mode,
+  () => {
+    endFly();
+    setupControls();
+  },
+);
 watch(gizmoMode, attachGizmo);
 
 // --- picking --------------------------------------------------------------------------------------
@@ -761,9 +775,83 @@ function releaseWheel() {
   if (document.activeElement === host.value) host.value?.blur();
 }
 function onDown(e: PointerEvent) {
+  if (e.button === 2 && props.mode === "free") return startFly(e);
   down.value = { x: e.clientX, y: e.clientY };
 }
+function onMove(e: PointerEvent) {
+  if (fly) {
+    e.stopPropagation();
+    fly.yaw -= e.movementX * 0.0025;
+    fly.pitch = Math.max(-1.5, Math.min(1.5, fly.pitch - e.movementY * 0.0025));
+    return;
+  }
+  toDocument(e);
+}
+
+// --- fly camera ------------------------------------------------------------------------------------
+// Hold the right button in the free view: the mouse looks around, W/A/S/D move, Q/E go down and
+// up, Shift goes faster. Letting go orbits again, around what's in front of the camera.
+let fly: { yaw: number; pitch: number; last: number; reach: number; pointer: number } | null = null;
+const held = new Set<string>();
+function startFly(e: PointerEvent) {
+  e.preventDefault();
+  host.value?.setPointerCapture(e.pointerId);
+  const look = new THREE.Euler().setFromQuaternion(persp.quaternion, "YXZ");
+  fly = {
+    yaw: look.y,
+    pitch: look.x,
+    last: performance.now(),
+    reach: orbit ? persp.position.distanceTo(orbit.target) : 6,
+    pointer: e.pointerId,
+  };
+  if (orbit) orbit.enabled = false;
+}
+function endFly() {
+  if (!fly) return;
+  host.value?.releasePointerCapture?.(fly.pointer);
+  const ahead = new THREE.Vector3(0, 0, -1).applyQuaternion(persp.quaternion);
+  if (orbit) {
+    orbit.target.copy(persp.position).addScaledVector(ahead, Math.max(fly.reach, 2));
+    orbit.enabled = true;
+  }
+  fly = null;
+  held.clear();
+}
+function stepFly() {
+  const f = fly!;
+  const now = performance.now();
+  const dt = Math.min((now - f.last) / 1000, 0.1);
+  f.last = now;
+  persp.quaternion.setFromEuler(new THREE.Euler(f.pitch, f.yaw, 0, "YXZ"));
+  const move = new THREE.Vector3(
+    (held.has("d") ? 1 : 0) - (held.has("a") ? 1 : 0),
+    (held.has("e") ? 1 : 0) - (held.has("q") ? 1 : 0),
+    (held.has("s") ? 1 : 0) - (held.has("w") ? 1 : 0),
+  );
+  if (move.lengthSq() === 0) return;
+  const speed = (held.has("shift") ? 12 : 4) * dt;
+  // Forward and sideways follow the view; Q/E are straight down and up.
+  const vertical = move.y;
+  move.y = 0;
+  move.normalize().applyQuaternion(persp.quaternion).multiplyScalar(speed);
+  move.y += vertical * speed;
+  persp.position.add(move);
+}
+/** While flying, the fly keys are the view's alone: not the gizmo's W/E/R, nor ComfyUI's. */
+function flyKey(e: KeyboardEvent) {
+  if (!fly) return;
+  const key = e.key.toLowerCase();
+  if (!["w", "a", "s", "d", "q", "e", "shift"].includes(key)) return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  if (e.type === "keydown") held.add(key);
+  else held.delete(key);
+}
 function onUp(e: PointerEvent) {
+  if (fly && e.button === 2) {
+    e.stopPropagation();
+    return endFly();
+  }
   toDocument(e);
   const d = down.value;
   down.value = null;

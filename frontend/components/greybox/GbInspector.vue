@@ -568,7 +568,8 @@
       </ZenField>
       <p class="soft small">
         Click something in the view or the list to edit it. W / E / R: move, turn, resize; F: frame
-        it.
+        it. Hold the right button to fly: W A S D, Q / E down and up, Shift faster. Shift + drag
+        pans.
       </p>
     </template>
   </div>
