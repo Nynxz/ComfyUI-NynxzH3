@@ -79,8 +79,32 @@ const linkOf = (graph: Graph, id: number) => {
   return links instanceof Map ? links.get(id) : links[id];
 };
 
-/** Whether this studio renders in a scene loop: its Setup's `scene` input is wired. */
+/** Every node in the workflow, inside subgraphs too (Setup and the loop are often packed in one). */
+function allNodes(): GraphNodeWidgets[] {
+  const root = (
+    app as unknown as {
+      graph: {
+        nodes?: GraphNodeWidgets[];
+        subgraphs?: Map<string, { nodes?: GraphNodeWidgets[] }>;
+      };
+    }
+  ).graph;
+  return [
+    ...(root.nodes ?? []),
+    ...[...(root.subgraphs?.values() ?? [])].flatMap((g) => g.nodes ?? []),
+  ];
+}
+const followsStudio = (node: GraphNodeWidgets, studioNodeId: string) => {
+  const link = node.widgets?.find((w) => w.name === "link")?.value as
+    { studio?: string } | undefined;
+  return String(link?.studio ?? "") === studioNodeId;
+};
+
+/** Whether this studio renders in a scene loop: an H3 Studio Scenes follows it, or its Setup's
+ *  `scene` input is wired. */
 export function rendersInALoop(studioNodeId: string): boolean {
+  if (allNodes().some((n) => n.type === "nynxz.H3.StudioScenes" && followsStudio(n, studioNodeId)))
+    return true;
   const graph = (app as unknown as { graph: Graph }).graph;
   const studio = graph.getNodeById(studioNodeId);
   const setupLink = studio?.inputs?.find((i) => i.name === "setup")?.link;
@@ -92,13 +116,10 @@ export function rendersInALoop(studioNodeId: string): boolean {
 /** Tell the H3 Studio Scenes nodes that follow this studio which scenes the run renders: they list
  *  only those for the loop, and their value changing is what tells ComfyUI's cache to ask again. */
 function markScenesNodes(studioNodeId: string, only: string[] | undefined) {
-  const graph = (app as unknown as { graph: { nodes?: GraphNodeWidgets[] } }).graph;
-  for (const node of graph.nodes ?? []) {
-    if (node.type !== "nynxz.H3.StudioScenes") continue;
+  for (const node of allNodes()) {
+    if (node.type !== "nynxz.H3.StudioScenes" || !followsStudio(node, studioNodeId)) continue;
     const widget = node.widgets?.find((w) => w.name === "link");
-    const link = widget?.value as { studio?: string } | undefined;
-    if (!widget || String(link?.studio ?? "") !== studioNodeId) continue;
-    widget.value = { ...(link ?? {}), only: only?.join(",") ?? "" };
+    if (widget) widget.value = { ...(widget.value as object), only: only?.join(",") ?? "" };
   }
 }
 interface GraphNodeWidgets {
