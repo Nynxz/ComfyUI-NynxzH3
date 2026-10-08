@@ -358,7 +358,8 @@ def _camera_text(c: dict, t: float | None) -> str:
         parts.append(f"looking at {_place_text(c['look'])}")
     if "lens" in c:
         parts.append(f"{num(c['lens'])}mm")
-    if c.get("ease"):
+    # Cameras ease smooth unless told otherwise, so only a different ease is worth writing.
+    if c.get("ease") and c["ease"] != "smooth":
         parts.append(f"ease {c['ease']}")
     return (f"{time(t)} " if t is not None else "") + ", ".join(parts)
 
@@ -423,7 +424,8 @@ def export_scene(raw: dict) -> str:
             parts.append(f"facing {num(f) if isinstance(f, (int, float)) else f}")
         if k.get("pose"):
             parts.append(k["pose"])
-        if k.get("ease"):
+        # Actors move linearly between keys unless told otherwise.
+        if k.get("ease") and k["ease"] != "linear":
             parts.append(f"ease {k['ease']}")
         lines.append(f"{time(t)} {aid} " + ", ".join(parts))
     for s in raw.get("shots", []):

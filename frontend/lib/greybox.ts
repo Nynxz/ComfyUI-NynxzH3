@@ -104,6 +104,9 @@ export interface KeyData {
   pose?: "stand" | "sit" | "crouch";
   lens?: number;
   ease?: Ease;
+  /** The surface the key stands on (a shape or placed prop), when a Grey Box script placed it
+   *  there: its height came from that surface. Moving the key clears it. */
+  on?: string;
 }
 export interface ActorData {
   id: string;

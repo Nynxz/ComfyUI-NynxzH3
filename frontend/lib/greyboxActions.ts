@@ -121,7 +121,11 @@ function upsertKey(keys: KeyData[], t: number, patch: Partial<KeyData>): KeyData
 }
 function keyPatch(a: Args, camera: boolean): Partial<KeyData> {
   const p: Partial<KeyData> = {};
-  if ("at" in a) p.at = a.at === null ? undefined : ref(a.at, "`at`");
+  if ("at" in a) {
+    p.at = a.at === null ? undefined : ref(a.at, "`at`");
+    // Placed somewhere new by hand: no longer whatever surface a script stood it on.
+    if (!camera) p.on = undefined;
+  }
   if (camera && "look" in a) p.look = ref(a.look, "`look`");
   if (camera && "lens" in a)
     p.lens = a.lens === null ? undefined : Math.min(Math.max(num(a.lens, "`lens`"), 8), 400);
@@ -584,6 +588,30 @@ export const ACTIONS: ActionInfo[] = [
       k.t = round(num(a.to, "`to`"));
       s.camera.sort((p, q) => p.t - q.t);
       return `Camera key moved to ${k.t}s.`;
+    },
+  },
+  {
+    name: "scene.replace",
+    touches: "scene",
+    help: "Replace the whole scene with new scene JSON — what a Grey Box script reads into (the /nynxz/greybox/script/import route). {scene}.",
+    run: (doc, a) => {
+      const sc = a.scene as SceneData | undefined;
+      if (!sc || typeof sc !== "object" || !Array.isArray(sc.shots) || !sc.shots.length)
+        throw new ActionError("`scene` should be a scene with at least one shot.");
+      doc.scene = JSON.parse(JSON.stringify(sc)) as SceneData;
+      return `Replaced the scene${sc.name ? ` with ${sc.name}` : ""}.`;
+    },
+  },
+  {
+    name: "set.replace",
+    touches: "set",
+    help: "Replace the whole set with new set JSON (shapes, marks, cameras), as a set script reads into. {set}.",
+    run: (doc, a) => {
+      const st = a.set as SetData | undefined;
+      if (!st || typeof st !== "object" || !Array.isArray(st.shapes))
+        throw new ActionError("`set` should be a set with shapes.");
+      doc.set = JSON.parse(JSON.stringify(st)) as SetData;
+      return "Replaced the set.";
     },
   },
   {

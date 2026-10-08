@@ -390,3 +390,32 @@ export function releaseGreyBox(key: string) {
     h.session.stop();
   }, 2000);
 }
+
+/** A scene, set, prop or the cast as a Grey Box script (the server writes it). */
+export async function exportScript(
+  s: GreyBoxSession,
+  kind: "scene" | "set" | "prop" | "cast",
+  data: unknown,
+): Promise<string> {
+  const res = await post<{ text: string }>("/nynxz/greybox/script/export", {
+    project: s.state.project,
+    kind,
+    data,
+  });
+  return res.text;
+}
+
+/** A Grey Box script read into JSON, checked against the open set; errors name their lines. */
+export async function importScript(
+  s: GreyBoxSession,
+  kind: "scene" | "set" | "prop" | "cast",
+  text: string,
+): Promise<{ data: unknown; errors: string[] }> {
+  return post("/nynxz/greybox/script/import", {
+    project: s.state.project,
+    kind,
+    text,
+    set: s.doc.set,
+    props: s.doc.props,
+  });
+}

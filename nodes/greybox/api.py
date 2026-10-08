@@ -25,6 +25,7 @@ from aiohttp import web
 
 from .._zenkit.server import request_allowed
 from .core import scene as gscene
+from .core import script as gscript
 from .core import sheet as gsheet
 from .core.render import REACHES
 
@@ -369,6 +370,56 @@ if _routes is not None:
             elif replace or not dst.exists():
                 shutil.copyfile(src, dst)
         return web.json_response({"ok": True, **listing(pdir), "stamps": stamps(pdir)})
+
+    @_routes.post("/nynxz/greybox/script/export")
+    @_guard
+    async def gb_script_export(request: web.Request) -> web.Response:
+        """A scene, set, prop or the cast as a Grey Box script: {kind, data} (the editor's copy),
+        or {kind, name} to read the project's file."""
+        body = await request.json()
+        kind = body.get("kind")
+        if kind not in ("scene", "set", "prop", "cast"):
+            raise Bad("kind is scene, set, prop or cast.")
+        data = body.get("data")
+        if not isinstance(data, dict):
+            pdir = project_dir(codex_root(request), body.get("project"))
+            data = _read(file_of(pdir, kind, str(body.get("name", ""))))
+            if data is None:
+                raise Bad(f"No {kind} {body.get('name')!r}.")
+        if kind == "scene":
+            text = gscript.export_scene(data)
+        elif kind == "cast":
+            text = gscript.export_cast(data)
+        else:
+            text = gscript.export_set(data, prop=kind == "prop")
+        return web.json_response({"text": text})
+
+    @_routes.post("/nynxz/greybox/script/import")
+    @_guard
+    async def gb_script_import(request: web.Request) -> web.Response:
+        """A Grey Box script read into JSON: {kind, text}; a scene is checked against its set (the
+        editor's `set` and `props` when sent, else the project's files). Returns {data, errors};
+        with errors, nothing should be applied."""
+        body = await request.json()
+        kind = body.get("kind")
+        text = body.get("text")
+        if kind not in ("scene", "set", "prop", "cast") or not isinstance(text, str):
+            raise Bad("Send {kind: scene|set|prop|cast, text}.")
+        if kind == "cast":
+            data, errors = gscript.import_cast(text)
+        elif kind in ("set", "prop"):
+            data, errors = gscript.import_set(text, prop=kind == "prop")
+        else:
+            pdir = project_dir(codex_root(request), body.get("project"))
+            props = gscene.load_props(pdir / "props")
+            if isinstance(body.get("props"), dict):
+                props.update({str(k): v for k, v in body["props"].items() if isinstance(v, dict)})
+            set_raw = body.get("set")
+            if not isinstance(set_raw, dict):
+                name = gscript._sections(text)[0].get("set", "")
+                set_raw = _read(file_of(pdir, "set", name)) if name else None
+            data, errors = gscript.import_scene(text, set_raw, props)
+        return web.json_response({"data": data, "errors": errors})
 
     @_routes.post("/nynxz/greybox/still")
     @_guard

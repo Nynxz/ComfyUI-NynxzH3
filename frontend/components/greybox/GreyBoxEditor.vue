@@ -115,6 +115,18 @@
           :disabled="!s.state.canRedo"
           @click="s.redo()"
         />
+        <ZenPopover placement="bottom-end">
+          <template #trigger="{ toggle }">
+            <ZenButton
+              size="sm"
+              icon="mdi mdi-script-text-outline"
+              title="The scene (or set) as a Grey Box script: read it, edit it, or paste one in"
+              @click="toggle"
+              >Script</ZenButton
+            >
+          </template>
+          <GbScript :session="s" />
+        </ZenPopover>
         <ZenButton
           size="sm"
           icon="mdi mdi-camera-iris"
@@ -427,6 +439,7 @@ import {
   useGreyBox,
 } from "@/lib/greyboxDoc";
 import GbInspector from "./GbInspector.vue";
+import GbScript from "./GbScript.vue";
 import GbOutliner from "./GbOutliner.vue";
 import GbViewport, { type Selection } from "./GbViewport.vue";
 
