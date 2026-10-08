@@ -685,6 +685,10 @@ def _summary(
     return "\n".join(lines)
 
 
+#: Hold, as H3 Studio Join and Film name it -> how many frames each picture is shown for.
+HOLDS = {"ones": 1, "twos": 2, "threes": 3}
+
+
 def _controlnets() -> list[str]:
     try:
         import folder_paths
@@ -1210,6 +1214,14 @@ class NynxzH3StudioFilm(NynxzNode):
                 io.Audio.Input("music", optional=True, tooltip="A score under the whole film."),
                 io.Float.Input("music_volume", default=0.8, min=0.0, max=2.0, step=0.05),
                 io.Float.Input("music_fade", default=2.0, min=0.0, max=10.0, step=0.25),
+                io.Combo.Input(
+                    "hold",
+                    options=["ones", "twos", "threes"],
+                    default="ones",
+                    tooltip="Hold the finished film's frames on twos or threes, as anime is drawn: "
+                    "each frame shows 2 (or 3) times in place of the next. Still 24 fps, same "
+                    "length and sound. The scenes' own clips are left as they are.",
+                ),
             ],
             outputs=[io.Video.Output(display_name="video")],
             hidden=[io.Hidden.dynprompt],
@@ -1217,7 +1229,7 @@ class NynxzH3StudioFilm(NynxzNode):
 
     @classmethod
     def fingerprint_inputs(
-        cls, link=None, crossfade=8, music=None, music_volume=0.8, music_fade=2.0
+        cls, link=None, crossfade=8, music=None, music_volume=0.8, music_fade=2.0, hold="ones"
     ):
         # A new take changes the film without changing the node's inputs.
         import os
@@ -1228,7 +1240,9 @@ class NynxzH3StudioFilm(NynxzNode):
             return 0
 
     @classmethod
-    def execute(cls, link=None, crossfade=8, music=None, music_volume=0.8, music_fade=2.0):
+    def execute(
+        cls, link=None, crossfade=8, music=None, music_volume=0.8, music_fade=2.0, hold="ones"
+    ):
         from comfy_api.latest import InputImpl
 
         studio = str((link if isinstance(link, dict) else {}).get("studio") or "").strip()
@@ -1262,7 +1276,14 @@ class NynxzH3StudioFilm(NynxzNode):
                 ", ".join(map(str, missing)),
             )
         return io.NodeOutput(
-            _carry.join(videos, int(crossfade), music, float(music_volume), float(music_fade))
+            _carry.join(
+                videos,
+                int(crossfade),
+                music,
+                float(music_volume),
+                float(music_fade),
+                HOLDS.get(hold, 1),
+            )
         )
 
 
@@ -1314,12 +1335,22 @@ class NynxzH3StudioJoin(NynxzNode):
                     step=0.25,
                     tooltip="Seconds the score fades out over at the end of the film.",
                 ),
+                io.Combo.Input(
+                    "hold",
+                    options=["ones", "twos", "threes"],
+                    default="ones",
+                    tooltip="Hold the finished film's frames on twos or threes, as anime is drawn: "
+                    "each frame shows 2 (or 3) times in place of the next. Still 24 fps, same "
+                    "length and sound. The scenes' own clips are left as they are.",
+                ),
             ],
             outputs=[io.Video.Output(display_name="video")],
         )
 
     @classmethod
-    def execute(cls, videos, crossfade, music=None, music_volume=(0.8,), music_fade=(2.0,)):
+    def execute(
+        cls, videos, crossfade, music=None, music_volume=(0.8,), music_fade=(2.0,), hold=("ones",)
+    ):
         return io.NodeOutput(
             _carry.join(
                 list(videos),
@@ -1327,5 +1358,6 @@ class NynxzH3StudioJoin(NynxzNode):
                 music[0] if music else None,
                 float(music_volume[0]),
                 float(music_fade[0]),
+                HOLDS.get(hold[0], 1),
             )
         )

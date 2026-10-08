@@ -151,6 +151,12 @@ Save Video; it runs again whenever a scene gets a new take.
 
 Use it in its own small workflow, or beside the render loop with the loop's nodes bypassed.
 
+**Hold** (on Film and on H3 Studio Join) holds the finished film's frames on twos or threes, the
+way anime is drawn: each frame shows twice (or three times) in place of the ones after it, so motion
+steps instead of gliding. It stays 24 fps with the same length and sound, and the scenes' own clips
+are left alone (a continuation needs their real motion). H3 tends to smooth out held poses even
+when told "animated on twos", so this is the sure way to get the look.
+
 ### Seeds, reuse and rendering part of the film
 
 Every scene has its own seed (Outputs' `seed` and `noise`): the one shown in its settings, which a

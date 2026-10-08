@@ -173,6 +173,7 @@ def join(
     music: dict | None = None,
     music_volume: float = 1.0,
     music_fade: float = 2.0,
+    hold: int = 1,
 ):
     """The clips as one video at 24 fps. Where a clip carries the head it regenerated over the end
     of the one before (`h3_head`), the last `crossfade` frames of that one fade into it — the
@@ -247,9 +248,22 @@ def join(
     film_frames = sum(f.shape[0] for f in frames)
     if music is not None:
         out_audio = _under(out_audio, music, film_frames / FPS, music_volume, music_fade)
+    images = held_frames(torch.cat(frames), hold)
     return InputImpl.VideoFromComponents(
-        Types.VideoComponents(images=torch.cat(frames), frame_rate=Fraction(FPS), audio=out_audio)
+        Types.VideoComponents(images=images, frame_rate=Fraction(FPS), audio=out_audio)
     )
+
+
+def held_frames(images, hold: int):
+    """The film drawn on twos or threes: each frame shown `hold` times in place of the ones after
+    it — frame 0 for frames 0-1, frame 2 for 2-3, … — so motion steps the way limited animation
+    does. Still 24 fps and the same length; the sound is untouched."""
+    import torch
+
+    if hold <= 1:
+        return images
+    index = torch.arange(images.shape[0])
+    return images[index - index % hold]
 
 
 def _under(film: dict | None, music: dict, seconds: float, volume: float, fade: float) -> dict:
