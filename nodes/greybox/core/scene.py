@@ -394,6 +394,9 @@ class Scene:
     name: str = ""
     fps: float = 24.0
     extra: list[Shape] = field(default_factory=list)
+    #: Animated on ones, twos or threes: each pose is held for this many frames, as limited
+    #: animation does, so the actors step rather than glide. The camera stays on ones.
+    on: int = 1
 
     @property
     def length(self) -> float:
@@ -417,7 +420,8 @@ class Scene:
             if name in self.set.marks:
                 return self.set.marks[name]
             if ref.startswith("@"):
-                return self.position(ref, t, _depth)
+                # Where the actor is drawn: on twos, a camera aimed at it holds with it.
+                return self.position(ref, held(self, t), _depth)
         raise SceneError(
             f"{what}: {ref!r} isn't a point, a mark of the set "
             f"({', '.join(self.set.marks) or 'it has none'}) or an actor."
@@ -426,7 +430,7 @@ class Scene:
     def target(self, ref: Any, t: float, what: str) -> Vec:
         """Where to look: an actor's face, else a point or mark (at eye height when on the floor)."""
         if isinstance(ref, str) and ref.startswith("@"):
-            return self.actor_at(ref, t).eye
+            return self.actor_at(ref, held(self, t)).eye
         p = self.point(ref, t, what)
         return p if isinstance(ref, (list, tuple)) else (p[0], 1.2, p[2])
 
@@ -577,6 +581,7 @@ def build(
         shots,
         name=str(raw.get("name", name)),
         fps=_num(raw.get("fps"), 24.0, 1, 120),
+        on=int(_num(raw.get("on"), 1, 1, 4)),
         extra=[_shape(s, "scene") for s in raw.get("shapes", [])],
     )
     for s in shots:
@@ -674,9 +679,19 @@ def figure(state: ActorState, props: Props | None = None) -> list[Shape]:
     return shapes
 
 
+def held(scene: Scene, t: float) -> float:
+    """`t` moved back to the start of the pose it falls in, when the scene is drawn on twos or
+    threes: the frame's index, rounded down to a multiple of `on`."""
+    if scene.on <= 1:
+        return t
+    frame = math.floor(t * scene.fps + 1e-6)
+    return (frame - frame % scene.on) / scene.fps
+
+
 def shapes_at(scene: Scene, t: float) -> list[Shape]:
-    """Everything visible at `t`: the set, the scene's own shapes, and every actor's figure."""
+    """Everything visible at `t`: the set, the scene's own shapes, and every actor's figure (in
+    the pose it's held at, on twos or threes)."""
     out = [*scene.set.shapes, *scene.extra]
-    for state in scene.at(t):
+    for state in scene.at(held(scene, t)):
         out.extend(figure(state, scene.set.props))
     return out

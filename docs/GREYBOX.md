@@ -217,6 +217,13 @@ example ships a van, a sedan and a street lamp (`build_props.py`), a night stree
 }
 ```
 
+`"on": 2` draws the scene **on twos** (`3` on threes; `1`, the default, on ones): every actor
+holds each pose for that many frames, so motion steps the way limited animation does instead of
+gliding. The camera's own moves stay smooth, but a camera aimed at an actor (`"look": "@mika"`)
+aims at the held pose, so a tracked subject stays steady in frame. Renders, depth renders (the
+ControlNet's) and the editor's playback all follow it; in the editor it's **Drawn on** in the
+scene's settings.
+
 ### Actor keys
 
 - `t`: seconds from the start of the scene. Keys are sorted by time.

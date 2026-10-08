@@ -50,6 +50,7 @@ import {
   expandShapes,
   figure,
   fovOf,
+  heldTime,
   isRod,
   isVec,
   type ShapeData,
@@ -362,7 +363,7 @@ function buildLive() {
   const ev = evaluator.value;
   const t = props.time;
   const scene = props.session.doc.scene;
-  for (const a of ev.actors(t)) {
+  for (const a of ev.actors(heldTime(scene, t))) {
     const pick: Selection = { type: "actor", id: a.id };
     const selected =
       isSel(pick) || (selection.value?.type === "key" && selection.value.id === a.id);

@@ -525,6 +525,21 @@
             @update:model-value="run('scene.update', { fps: $event })"
           />
         </ZenField>
+        <ZenField label="Drawn on" stack>
+          <ZenToggleGroup
+            :model-value="String(doc.scene.on ?? 1)"
+            :options="[
+              { value: '1', label: 'Ones', title: 'Smooth: a new pose every frame' },
+              {
+                value: '2',
+                label: 'Twos',
+                title: 'Anime-style: each pose held for 2 frames. The camera stays smooth',
+              },
+              { value: '3', label: 'Threes', title: 'Choppier still: each pose held for 3 frames' },
+            ]"
+            @update:model-value="run('scene.update', { on: Number($event) })"
+          />
+        </ZenField>
         <ZenField label="Set" stack
           ><span class="soft">{{ session.state.setName || "—" }}</span></ZenField
         >
@@ -562,7 +577,15 @@
 <script setup lang="ts">
 // The Grey Box Studio inspector: the exact values of what's selected, each change an action.
 import { computed } from "vue";
-import { ZenButton, ZenField, ZenInput, ZenNumber, ZenSelect, ZenSlider } from "@nynxz/zenkit-ui";
+import {
+  ZenButton,
+  ZenField,
+  ZenInput,
+  ZenNumber,
+  ZenSelect,
+  ZenSlider,
+  ZenToggleGroup,
+} from "@nynxz/zenkit-ui";
 import {
   Evaluator,
   describeRef,

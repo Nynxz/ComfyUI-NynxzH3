@@ -589,11 +589,12 @@ export const ACTIONS: ActionInfo[] = [
   {
     name: "scene.update",
     touches: "scene",
-    help: "Change the scene's name, frame rate, notes or set. {name?, fps?, notes?, set?}.",
+    help: "Change the scene's name, frame rate, drawing (on: 1 ones, 2 twos, 3 threes), notes or set. {name?, fps?, on?, notes?, set?}.",
     run: (doc, a) => {
       if (typeof a.name === "string") doc.scene.name = a.name;
       if (typeof a.notes === "string") doc.scene.notes = a.notes;
       if (typeof a.fps === "number") doc.scene.fps = Math.min(Math.max(a.fps, 1), 120);
+      if (typeof a.on === "number") doc.scene.on = Math.min(Math.max(Math.round(a.on), 1), 4);
       if (typeof a.set === "string" && a.set) doc.scene.set = a.set;
       return "Changed the scene.";
     },

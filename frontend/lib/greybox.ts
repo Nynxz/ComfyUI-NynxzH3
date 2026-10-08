@@ -117,6 +117,8 @@ export interface SceneData {
   name?: string;
   set?: string;
   fps?: number;
+  /** Drawn on ones, twos or threes: actors hold each pose this many frames; the camera doesn't. */
+  on?: number;
   notes?: string;
   actors: ActorData[];
   shots: ShotData[];
@@ -210,6 +212,16 @@ function catmull(p0: Vec, p1: Vec, p2: Vec, p3: Vec, u: number): Vec {
   ) as Vec;
 }
 /** A smooth path through `points` at `times`, each segment eased by its starting key. */
+/** `t` moved back to the start of the pose it falls in, when the scene is drawn on twos or
+ *  threes (the frame's index rounded down to a multiple of `on`), as the renderer does. */
+export function heldTime(scene: Pick<SceneData, "fps" | "on">, t: number): number {
+  const on = scene.on ?? 1;
+  if (on <= 1) return t;
+  const fps = scene.fps ?? 24;
+  const frame = Math.floor(t * fps + 1e-6);
+  return (frame - (frame % on)) / fps;
+}
+
 export function pathAt(
   times: number[],
   points: Vec[],
@@ -271,13 +283,15 @@ export class Evaluator {
     if (typeof ref === "string") {
       const name = ref.replace(/^mark:/, "");
       if (this.set.marks[name]) return this.set.marks[name]!;
-      if (ref.startsWith("@")) return this.actor(ref, t, depth + 1)?.at ?? [0, 0, 0];
+      // Where the actor is drawn: on twos, a camera aimed at it holds with it.
+      if (ref.startsWith("@"))
+        return this.actor(ref, heldTime(this.scene, t), depth + 1)?.at ?? [0, 0, 0];
     }
     return [0, 0, 0];
   }
   target(ref: Ref | undefined, t: number): Vec {
     if (typeof ref === "string" && ref.startsWith("@")) {
-      const a = this.actor(ref, t);
+      const a = this.actor(ref, heldTime(this.scene, t));
       return a ? eyeOf(a) : [0, 1.2, 0];
     }
     const p = this.point(ref, t);
