@@ -57,44 +57,40 @@
             <span class="count">{{ g.takes.length }}</span>
           </button>
           <template v-if="open.has(g.id)">
-            <div
-              v-for="t in g.takes"
-              :key="t.ref"
-              class="take"
-              :class="{ current: t.ref === g.current }"
-            >
-              <span class="tthumb"><MediaThumb :media="t.ref" :badge="false" /></span>
-              <span class="ttext">
-                <span class="tline">
-                  <span class="when" :title="new Date(t.time * 1000).toLocaleString()">{{
-                    ago(t.time)
-                  }}</span>
-                  <span v-if="t.ref === g.current" class="badge">Current</span>
-                </span>
-                <span class="tline soft" :title="t.prompt">
-                  <span class="ellipsis"
-                    >{{ t.seconds ? `${t.seconds.toFixed(1)}s` : ""
-                    }}<template v-if="t.seed !== undefined"> · seed {{ t.seed }}</template></span
-                  >
-                  <span
-                    v-if="t.fits === false"
-                    class="stale"
-                    title="Made from an earlier version of this scene: using it leaves the scene out of date"
-                    ><i class="mdi mdi-pencil-clock-outline" />edited</span
-                  >
-                </span>
-              </span>
-              <ZenButton
-                v-if="t.ref !== g.current"
-                size="sm"
-                variant="ghost"
-                class="use"
-                title="Make this the scene's clip"
-                :disabled="!!using"
-                @click="use(g, t)"
-                >{{ using === t.ref ? "…" : "Use" }}</ZenButton
+            <template v-for="part in parts(g.takes)" :key="part.label">
+              <h5
+                v-if="part.label"
+                class="sub"
+                :title="
+                  part.stale
+                    ? 'Made before the scene was last edited: using one puts the scene back out of date'
+                    : undefined
+                "
               >
-            </div>
+                {{ part.label }}
+              </h5>
+              <div
+                v-for="t in part.takes"
+                :key="t.ref"
+                class="take"
+                :class="{ current: t.ref === g.current, stale: part.stale }"
+                :title="details(t)"
+              >
+                <span class="tthumb"><MediaThumb :media="t.ref" :badge="false" /></span>
+                <span class="when">{{ ago(t.time) }}</span>
+                <span v-if="t.ref === g.current" class="badge">Current</span>
+                <ZenButton
+                  v-else
+                  size="sm"
+                  variant="ghost"
+                  class="use"
+                  title="Make this the scene's clip"
+                  :disabled="!!using"
+                  @click="use(g, t)"
+                  >{{ using === t.ref ? "…" : "Use" }}</ZenButton
+                >
+              </div>
+            </template>
           </template>
         </div>
       </section>
@@ -299,6 +295,26 @@ onBeforeUnmount(() => {
   target.removeEventListener("execution_success", onDone);
 });
 
+/** A scene's takes, the ones from its current version first; split under labels only when some
+ *  were made from an earlier version. */
+function parts(takes: Take[]) {
+  const stale = takes.filter((t) => t.fits === false);
+  if (!stale.length) return [{ label: "", stale: false, takes }];
+  const fresh = takes.filter((t) => t.fits !== false);
+  return [
+    ...(fresh.length ? [{ label: "This version", stale: false, takes: fresh }] : []),
+    { label: "Earlier versions", stale: true, takes: stale },
+  ];
+}
+function details(t: Take) {
+  return [
+    new Date(t.time * 1000).toLocaleString(),
+    t.seconds ? `${t.seconds.toFixed(1)}s` : "",
+    t.seed !== undefined ? `seed ${t.seed}` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
 function ago(t: number) {
   const s = Date.now() / 1000 - t;
   if (s < 60) return "just now";
@@ -493,35 +509,26 @@ h4 {
   width: 100%;
   height: 100%;
 }
-.ttext {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-.tline {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  white-space: nowrap;
-}
-.tline.soft {
-  font-size: 11px;
-}
 .when {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.stale {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: 2px;
-  margin-left: auto;
-  color: var(--zen-warning, #f5b14c);
+.take.stale .tthumb {
+  opacity: 0.7;
+}
+.take.stale .when {
+  color: var(--h3-muted);
+}
+.sub {
+  margin: 4px 2px 0;
+  color: var(--h3-muted);
   font-size: 10.5px;
+  font-weight: 600;
 }
 .badge {
   padding: 0 6px;
@@ -532,15 +539,8 @@ h4 {
 }
 /* Use waits until a take is pointed at, so the list reads as takes rather than buttons. */
 .take .use {
-  position: absolute;
-  top: 50%;
-  right: 6px;
-  background: var(--h3-panel);
-  box-shadow:
-    0 0 0 1px var(--h3-line),
-    -10px 0 12px var(--h3-field);
+  flex: none;
   opacity: 0;
-  transform: translateY(-50%);
 }
 .take:hover .use,
 .take:focus-within .use {
