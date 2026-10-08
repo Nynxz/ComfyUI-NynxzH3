@@ -163,3 +163,41 @@ class NynxzGreyBoxStudio(NynxzNode):
     def execute(cls, studio):
         # An editor: nothing to run. Renders come from its Render menu (or Grey Box Shot).
         return io.NodeOutput()
+
+
+class NynxzGreyBoxRender(NynxzNode):
+    """The Grey Box Studio's Render menu, as a job on ComfyUI's queue (see `api.gb_render`): GPU
+    work has to run on the queue's thread, not beside a sampler. Not for workflows."""
+
+    CATEGORY = f"{NynxzNode.CATEGORY}/H3/Grey box"
+
+    @classmethod
+    def define_schema(cls):
+        return cls.make_schema(
+            node_id="GreyBox.Render",
+            display_name="Grey Box Render (internal)",
+            description="A render from Grey Box Studio's Render menu, queued. Not for workflows: "
+            "use Grey Box Shot.",
+            inputs=[io.String.Input("job", multiline=True)],
+            outputs=[],
+            is_output_node=True,
+            is_dev_only=True,
+            not_idempotent=True,
+        )
+
+    @classmethod
+    def execute(cls, job):
+        import json
+
+        import folder_paths
+
+        from .api import render_video
+
+        body = json.loads(job)
+        pdir = Path(str(body.get("pdir", ""))).resolve()
+        users = Path(folder_paths.get_user_directory()).resolve()
+        # Only a project inside ComfyUI's user folder (where every Codex show lives).
+        if users not in pdir.parents or pdir.name != "greybox":
+            raise ValueError("Grey Box Render: not a Grey Box project folder.")
+        ref = render_video(body, pdir)
+        return io.NodeOutput(ui={"ref": [ref]})

@@ -24,7 +24,7 @@ from .nodes.canvas.node import H3Canvas
 from .nodes.edit.node import H3Edit
 from .nodes.encode.node import H3Encode
 from .nodes.extras.node import H3Extras
-from .nodes.greybox.greybox import NynxzGreyBoxShot, NynxzGreyBoxStudio
+from .nodes.greybox.greybox import NynxzGreyBoxRender, NynxzGreyBoxShot, NynxzGreyBoxStudio
 from .nodes.h3.cache import H3BlockCache
 from .nodes.h3.decode import H3DecodeFrames
 from .nodes.h3.depthskip import H3DepthSkip
@@ -87,6 +87,7 @@ NODES: list[type[io.ComfyNode]] = [
     NynxzH3StudioClip,
     NynxzH3StudioFilm,
     NynxzH3StudioJoin,
+    NynxzGreyBoxRender,
     NynxzGreyBoxShot,
     NynxzGreyBoxStudio,
     # Reference conditioning from NynxzNodes (ids kept: nynxz.H3.*).

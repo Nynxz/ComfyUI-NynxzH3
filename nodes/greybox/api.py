@@ -98,6 +98,116 @@ def stamps(pdir: Path) -> dict[str, int]:
     return {str(f.relative_to(pdir)): f.stat().st_mtime_ns for f in files if f.exists()}
 
 
+def _render_plan(body: dict, pdir: Path):
+    """What a render request asks for: (scene, shot or None for the whole scene, w, h, mode,
+    reach). Raises `Bad` for anything wrong with it."""
+    scene = scene_from(body, pdir)
+    whole = body.get("shot") == "*"
+    shot = None if whole else scene.shot(str(body.get("shot", "")))
+    if whole and not scene.shots:
+        raise Bad("The scene has no shots.")
+    if not whole and shot is None:
+        raise Bad(f"No shot {body.get('shot')!r}.")
+    w = max(64, min(int(body.get("width", 832)), 2048)) // 16 * 16
+    h = max(64, min(int(body.get("height", 480)), 2048)) // 16 * 16
+    mode = body.get("mode") if body.get("mode") in ("grey", "depth", "edges") else None
+    mode = mode or ("depth" if body.get("depth") else "grey")
+    reach = body.get("reach") if body.get("reach") in REACHES else "near"
+    return scene, shot, w, h, mode, reach
+
+
+def render_video(body: dict, pdir: Path) -> str:
+    """Render a request to output/greybox; its media ref. Runs on ComfyUI's execution thread (the
+    Grey Box Render job), never beside it."""
+    import comfy.model_management as mm
+    import folder_paths
+
+    scene, shot, w, h, mode, reach = _render_plan(body, pdir)
+    device = mm.get_torch_device()
+    frames = (
+        gsheet.scene_frames(scene, w, h, device, mode=mode, reach=reach)
+        if shot is None
+        else gsheet.shot_frames(scene, shot, w, h, device, mode=mode, reach=reach)
+    )
+    # To H3's frame grid, so a blocking reference covers the whole H3 scene: the last shot runs on
+    # a little past its end.
+    last = shot or max(scene.shots, key=lambda s: s.start)
+    frames = gsheet.pad_to(
+        frames,
+        gsheet.h3_frames(frames.shape[0]),
+        lambda k: gsheet.shot_frames(
+            scene, last, w, h, device, start=last.end, count=k, mode=mode, reach=reach
+        ),
+    )
+    part = "cut" if shot is None else shot.name
+    folder, name, counter, subfolder, _ = folder_paths.get_save_image_path(
+        f"greybox/{body.get('name') or scene.name}-{part}{'' if mode == 'grey' else f'-{mode}'}",
+        folder_paths.get_output_directory(),
+    )
+    file = f"{name}_{counter:05}_.mp4"
+    gsheet.save_video(frames, Path(folder) / file, scene.fps)
+    return "/".join(p for p in ("output", subfolder, file) if p)
+
+
+async def _queued_render(job: dict) -> str:
+    """Run a render as a one-node job on ComfyUI's queue and wait for its result."""
+    import time
+    import uuid
+
+    import execution
+
+    server = PromptServer.instance
+    prompt_id = str(uuid.uuid4())
+    prompt = {"1": {"class_type": "nynxz.GreyBox.Render", "inputs": {"job": json.dumps(job)}}}
+    valid = await execution.validate_prompt(prompt_id, prompt, None)
+    if not valid[0]:
+        raise Bad(f"Couldn't queue the render: {valid[1]}")
+    number = server.number
+    server.number += 1
+    extra = {"create_time": int(time.time() * 1000)}
+    server.prompt_queue.put((number, prompt_id, prompt, extra, valid[2], {}))
+    polls = 0
+    while True:
+        await asyncio.sleep(0.25)
+        polls += 1
+        done = server.prompt_queue.get_history(prompt_id=prompt_id).get(prompt_id)
+        if done is not None:
+            break
+        if polls % 8 == 0:
+            running, pending = server.prompt_queue.get_current_queue()
+            if not any(item[1] == prompt_id for item in [*running, *pending]):
+                # Deleted from the queue, or interrupted before it finished.
+                done = server.prompt_queue.get_history(prompt_id=prompt_id).get(prompt_id)
+                if done is None:
+                    raise Bad("The render was removed from the queue.")
+                break
+    status = done.get("status") or {}
+    if status.get("status_str") == "error":
+        message = next(
+            (
+                m[1].get("exception_message", "")
+                for m in status.get("messages", [])
+                if m[0] == "execution_error"
+            ),
+            "",
+        )
+        raise Bad(f"The render failed: {message.strip() or 'see the ComfyUI console'}")
+    ref = ((done.get("outputs") or {}).get("1") or {}).get("ref") or [None]
+    if not ref[0]:
+        raise Bad("The render finished without a video.")
+    return ref[0]
+
+
+def _still_device():
+    """Where a still or a contact sheet renders: the GPU, unless dynamic VRAM is on — then the
+    CPU, because these run beside ComfyUI's queue, and GPU work beside a running sampler crashes
+    the server. They're small enough for the CPU."""
+    import comfy.memory_management
+    import comfy.model_management as mm
+
+    return "cpu" if comfy.memory_management.aimdo_enabled else mm.get_torch_device()
+
+
 def scene_from(body: dict, pdir: Path) -> gscene.Scene:
     """The scene to render: the editor's own copy (saved or not) when it sends one, else the file."""
     raw = body.get("scene")
@@ -273,9 +383,8 @@ if _routes is not None:
         h = max(64, min(int(body.get("height", 540)), 2048))
 
         def run() -> str:
-            import comfy.model_management as mm
 
-            img = gsheet.still(scene, shot, t, w, h, mm.get_torch_device())
+            img = gsheet.still(scene, shot, t, w, h, _still_device())
             buf = io.BytesIO()
             img.save(buf, "PNG")
             return base64.b64encode(buf.getvalue()).decode()
@@ -304,10 +413,9 @@ if _routes is not None:
         per = max(1, min(int(body.get("perShot", 4)), 8))
 
         def run() -> str:
-            import comfy.model_management as mm
             import folder_paths
 
-            img = gsheet.contact_sheet(scene, per, 320, mm.get_torch_device())
+            img = gsheet.contact_sheet(scene, per, 320, _still_device())
             folder, name, counter, subfolder, _ = folder_paths.get_save_image_path(
                 f"greybox/{body.get('name') or 'scene'}-sheet", folder_paths.get_temp_directory()
             )
@@ -321,51 +429,14 @@ if _routes is not None:
     @_routes.post("/nynxz/greybox/render")
     @_guard
     async def gb_render(request: web.Request) -> web.Response:
-        """A shot's grey video (or its depth), saved to output/greybox; its media ref. `shot: "*"`
-        renders the whole scene as it cuts, every shot in order."""
+        """A shot's grey video (or its depth or edges), saved to output/greybox; its media ref.
+        `shot: "*"` renders the whole scene as it cuts, every shot in order.
+
+        It renders on ComfyUI's queue, not here: with dynamic VRAM, GPU work from this thread while
+        a sampler runs corrupts ComfyUI's allocator and crashes the server (segfault). Queued, it
+        waits its turn behind whatever is running."""
         body = await request.json()
         pdir = project_dir(codex_root(request), body.get("project"))
-        scene = scene_from(body, pdir)
-        whole = body.get("shot") == "*"
-        shot = None if whole else scene.shot(str(body.get("shot", "")))
-        if whole and not scene.shots:
-            raise Bad("The scene has no shots.")
-        if not whole and shot is None:
-            raise Bad(f"No shot {body.get('shot')!r}.")
-        w = max(64, min(int(body.get("width", 832)), 2048)) // 16 * 16
-        h = max(64, min(int(body.get("height", 480)), 2048)) // 16 * 16
-        mode = body.get("mode") if body.get("mode") in ("grey", "depth", "edges") else None
-        mode = mode or ("depth" if body.get("depth") else "grey")
-        reach = body.get("reach") if body.get("reach") in REACHES else "near"
-
-        def run() -> str:
-            import comfy.model_management as mm
-            import folder_paths
-
-            device = mm.get_torch_device()
-            frames = (
-                gsheet.scene_frames(scene, w, h, device, mode=mode, reach=reach)
-                if shot is None
-                else gsheet.shot_frames(scene, shot, w, h, device, mode=mode, reach=reach)
-            )
-            # To H3's frame grid, so a blocking reference covers the whole H3 scene: the last
-            # shot runs on a little past its end.
-            last = shot or max(scene.shots, key=lambda s: s.start)
-            frames = gsheet.pad_to(
-                frames,
-                gsheet.h3_frames(frames.shape[0]),
-                lambda k: gsheet.shot_frames(
-                    scene, last, w, h, device, start=last.end, count=k, mode=mode, reach=reach
-                ),
-            )
-            part = "cut" if shot is None else shot.name
-            folder, name, counter, subfolder, _ = folder_paths.get_save_image_path(
-                f"greybox/{body.get('name') or scene.name}-{part}{'' if mode == 'grey' else f'-{mode}'}",
-                folder_paths.get_output_directory(),
-            )
-            file = f"{name}_{counter:05}_.mp4"
-            gsheet.save_video(frames, Path(folder) / file, scene.fps)
-            return "/".join(p for p in ("output", subfolder, file) if p)
-
-        ref = await asyncio.get_running_loop().run_in_executor(None, run)
+        _render_plan(body, pdir)  # a bad request fails now, not in the queue
+        ref = await _queued_render({**body, "pdir": str(pdir)})
         return web.json_response({"ref": ref})
