@@ -65,6 +65,7 @@ import {
 import { ZenButton } from "@nynxz/zenkit-ui";
 import { hasZenPanels, openZenPanel, type ZenPanelHandle } from "@/framework";
 import type { RenderSize, StudioValue } from "@/components/greybox/GreyBoxEditor.vue";
+import { toProject } from "@/lib/h3studio";
 
 // The editor (and three.js with it) loads only when a Grey Box Studio is on the canvas.
 const GreyBoxEditor = defineAsyncComponent(() => import("@/components/greybox/GreyBoxEditor.vue"));
@@ -134,9 +135,9 @@ const findCanvas = () => {
         continue;
       }
     }
-    const canvas = (project as { canvas?: { width?: number; height?: number } } | undefined)
-      ?.canvas;
-    if (canvas?.width && canvas.height) {
+    // Through the studio's own reading of a project, so a project on the default canvas counts.
+    const canvas = toProject(project).canvas;
+    if (canvas.width && canvas.height) {
       const next = { width: canvas.width, height: canvas.height, label: `H3 Studio #${n.id}` };
       const now = autoSize.value;
       if (

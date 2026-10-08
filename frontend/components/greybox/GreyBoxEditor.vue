@@ -185,7 +185,7 @@
                   renderVideo('depth');
                 "
                 >Depth, the whole scene
-                <template #hint>for H3 Studio's ControlNet (a Control reference)</template>
+                <template #hint>ControlNet</template>
               </ZenMenuItem>
               <div
                 class="reach"
@@ -209,7 +209,7 @@
                   renderVideo('edges');
                 "
                 >Edges, the whole scene
-                <template #hint>line art: the background keeps its structure (ControlNet)</template>
+                <template #hint>line art, ControlNet</template>
               </ZenMenuItem>
             </div>
           </template>
