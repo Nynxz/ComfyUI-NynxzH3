@@ -26,6 +26,7 @@ from aiohttp import web
 from .._zenkit.server import request_allowed
 from .core import scene as gscene
 from .core import sheet as gsheet
+from .core.render import REACHES
 
 try:
     from server import PromptServer
@@ -333,7 +334,9 @@ if _routes is not None:
             raise Bad(f"No shot {body.get('shot')!r}.")
         w = max(64, min(int(body.get("width", 832)), 2048)) // 16 * 16
         h = max(64, min(int(body.get("height", 480)), 2048)) // 16 * 16
-        depth = bool(body.get("depth"))
+        mode = body.get("mode") if body.get("mode") in ("grey", "depth", "edges") else None
+        mode = mode or ("depth" if body.get("depth") else "grey")
+        reach = body.get("reach") if body.get("reach") in REACHES else "near"
 
         def run() -> str:
             import comfy.model_management as mm
@@ -341,9 +344,9 @@ if _routes is not None:
 
             device = mm.get_torch_device()
             frames = (
-                gsheet.scene_frames(scene, w, h, device, depth=depth)
+                gsheet.scene_frames(scene, w, h, device, mode=mode, reach=reach)
                 if shot is None
-                else gsheet.shot_frames(scene, shot, w, h, device, depth=depth)
+                else gsheet.shot_frames(scene, shot, w, h, device, mode=mode, reach=reach)
             )
             # To H3's frame grid, so a blocking reference covers the whole H3 scene: the last
             # shot runs on a little past its end.
@@ -352,12 +355,12 @@ if _routes is not None:
                 frames,
                 gsheet.h3_frames(frames.shape[0]),
                 lambda k: gsheet.shot_frames(
-                    scene, last, w, h, device, depth=depth, start=last.end, count=k
+                    scene, last, w, h, device, start=last.end, count=k, mode=mode, reach=reach
                 ),
             )
             part = "cut" if shot is None else shot.name
             folder, name, counter, subfolder, _ = folder_paths.get_save_image_path(
-                f"greybox/{body.get('name') or scene.name}-{part}{'-depth' if depth else ''}",
+                f"greybox/{body.get('name') or scene.name}-{part}{'' if mode == 'grey' else f'-{mode}'}",
                 folder_paths.get_output_directory(),
             )
             file = f"{name}_{counter:05}_.mp4"

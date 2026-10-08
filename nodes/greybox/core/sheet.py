@@ -14,7 +14,7 @@ import numpy as np
 import torch
 from PIL import Image, ImageDraw, ImageFont
 
-from .render import bounds, camera_rays, depth_image, plan_rays, render
+from .render import bounds, camera_rays, depth_image, edge_image, plan_rays, render
 from .scene import Scene, Shot, shapes_at
 
 INK = (235, 235, 240)
@@ -53,10 +53,15 @@ def shot_frames(
     depth: bool = False,
     start: float | None = None,
     count: int | None = None,
+    mode: str | None = None,
+    reach: str = "near",
 ) -> torch.Tensor:
-    """Every frame of a shot `[N, H, W, 3]` (or its depth pictures with `depth`). With `start` and
-    `count`: that many frames from that time instead, which may run past the shot's end (its
-    camera then holds its last key)."""
+    """Every frame of a shot `[N, H, W, 3]`: the grey render, or with `mode` "depth" (also
+    `depth=True`, with `reach` as in `depth_image`) or "edges" (line art, `edge_image`). With
+    `start` and `count`: that many frames from that time instead, which may run past the shot's
+    end (its camera then holds its last key)."""
+    mode = mode or ("depth" if depth else "grey")
+    depth = mode == "depth"
     rate = fps or scene.fps
     t0 = shot.start if start is None else start
     n = count or max(1, round((shot.end - shot.start) * rate))
@@ -65,9 +70,11 @@ def shot_frames(
     for i in range(n):
         t = t0 + i / rate
         o, d = camera_rays(scene.camera(shot, t), width, height, device)
-        f = render(shapes_at(scene, t), o, d, width, height)
+        f = render(shapes_at(scene, t), o, d, width, height, edges=mode == "grey")
         if depth:
             depths.append(f.depth.to("cpu", torch.float16))
+        elif mode == "edges":
+            out[i] = edge_image(f).cpu()
         else:
             out[i] = f.image.cpu()
     if depth:
@@ -75,7 +82,7 @@ def shot_frames(
         # a ControlNet reads as the geometry changing.
         near, far = _depth_range(depths)
         for i, dd in enumerate(depths):
-            out[i] = depth_image(dd.float(), near, far)
+            out[i] = depth_image(dd.float(), near, far, reach)
     return out
 
 
@@ -95,12 +102,19 @@ def scene_frames(
     device="cpu",
     fps: float | None = None,
     depth: bool = False,
+    mode: str | None = None,
+    reach: str = "near",
 ) -> torch.Tensor:
     """The whole scene as it cuts: every shot in order, each through its own camera."""
     shots = sorted(scene.shots, key=lambda s: s.start)
     if not shots:
         raise ValueError("The scene has no shots.")
-    return torch.cat([shot_frames(scene, s, width, height, device, fps, depth) for s in shots])
+    return torch.cat(
+        [
+            shot_frames(scene, s, width, height, device, fps, depth, mode=mode, reach=reach)
+            for s in shots
+        ]
+    )
 
 
 def h3_frames(n: int) -> int:

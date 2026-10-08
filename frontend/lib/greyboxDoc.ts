@@ -347,7 +347,8 @@ export async function renderShot(
   shot: string,
   width: number,
   height: number,
-  depth = false,
+  mode: "grey" | "depth" | "edges" = "grey",
+  reach: "near" | "balanced" | "far" = "near",
 ): Promise<string> {
   const res = await post<{ ref: string }>("/nynxz/greybox/render", {
     project: s.state.project,
@@ -359,7 +360,8 @@ export async function renderShot(
     shot,
     width,
     height,
-    depth,
+    mode,
+    reach,
   });
   return res.ref;
 }

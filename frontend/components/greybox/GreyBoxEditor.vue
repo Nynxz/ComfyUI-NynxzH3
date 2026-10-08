@@ -175,6 +175,30 @@
                 >Depth, the whole scene
                 <template #hint>for H3 Studio's ControlNet (a Control reference)</template>
               </ZenMenuItem>
+              <div
+                class="reach"
+                title="How depth spends its brightness: Near keeps the foreground's detail (the background goes dark), Far gives the background its own gradation"
+              >
+                <span>depth reach</span>
+                <ZenToggleGroup
+                  v-model="reach"
+                  :options="[
+                    { value: 'near', label: 'Near' },
+                    { value: 'balanced', label: 'Balanced' },
+                    { value: 'far', label: 'Far' },
+                  ]"
+                />
+              </div>
+              <ZenMenuItem
+                icon="mdi mdi-vector-polyline"
+                :disabled="!s.doc.scene.shots.length"
+                @select="
+                  close();
+                  renderVideo('edges');
+                "
+                >Edges, the whole scene
+                <template #hint>line art: the background keeps its structure (ControlNet)</template>
+              </ZenMenuItem>
             </div>
           </template>
         </ZenPopover>
@@ -731,7 +755,26 @@ async function still() {
   }
 }
 /** Render grey video: the current shot, the whole scene as it cuts, or every shot on its own. */
-async function renderVideo(what: "shot" | "cut" | "each" | "depth") {
+/** How depth renders spend their brightness; remembered in this browser. */
+const reach = ref<"near" | "balanced" | "far">(
+  (() => {
+    try {
+      const v = localStorage.getItem("greybox.depthReach");
+      return v === "balanced" || v === "far" ? v : "near";
+    } catch {
+      return "near";
+    }
+  })(),
+);
+watch(reach, (v) => {
+  try {
+    localStorage.setItem("greybox.depthReach", v);
+  } catch {
+    // a remembered choice is a convenience
+  }
+});
+
+async function renderVideo(what: "shot" | "cut" | "each" | "depth" | "edges") {
   busy.value = true;
   const w = props.width ?? 832;
   const h = props.height ?? 480;
@@ -755,20 +798,29 @@ async function renderVideo(what: "shot" | "cut" | "each" | "depth") {
       s.state.message = `Rendered ${shots.length} shots.`;
       return;
     }
-    const whole = what === "cut" || what === "depth";
+    const whole = what === "cut" || what === "depth" || what === "edges";
     const shot = whole ? "*" : currentShot.value;
     s.state.message =
       what === "depth"
         ? "Rendering the scene's depth…"
-        : whole
-          ? "Rendering the whole scene…"
-          : `Rendering shot ${shot}…`;
-    const ref = await renderShot(s, shot, w, h, what === "depth");
+        : what === "edges"
+          ? "Rendering the scene's edges…"
+          : whole
+            ? "Rendering the whole scene…"
+            : `Rendering shot ${shot}…`;
+    const mode = what === "depth" || what === "edges" ? what : "grey";
+    const ref = await renderShot(s, shot, w, h, mode, reach.value);
     overlay.value = {
       kind: "video",
       src: mediaRefUrl(ref),
       title:
-        what === "depth" ? "The whole scene, depth" : whole ? "The whole scene" : `Shot ${shot}`,
+        what === "depth"
+          ? `The whole scene, depth (${reach.value})`
+          : what === "edges"
+            ? "The whole scene, edges"
+            : whole
+              ? "The whole scene"
+              : `Shot ${shot}`,
       note: `Saved as ${ref}`,
     };
     s.state.message = `Rendered ${ref}`;
@@ -835,6 +887,14 @@ function onKey(e: KeyboardEvent) {
   flex-direction: column;
   min-width: 220px;
   padding: 4px;
+}
+.menu .reach {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 8px 6px 34px;
+  font-size: 11px;
+  color: var(--zen-muted, #9aa0aa);
 }
 .bar {
   display: flex;

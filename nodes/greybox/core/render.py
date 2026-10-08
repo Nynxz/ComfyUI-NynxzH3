@@ -28,6 +28,7 @@ class Frame:
     depth: torch.Tensor  # [H, W] metres; inf where nothing is hit
     owner: torch.Tensor  # [H, W] long: index into `owners`, -1 for nothing
     owners: list[str]
+    normal: torch.Tensor | None = None  # [H, W, 3], facing the camera; zero where nothing is hit
 
 
 def _norm(v: torch.Tensor) -> torch.Tensor:
@@ -269,7 +270,11 @@ def render(
     if edges:
         img = _edges(img, depth, owner)
     return Frame(
-        img.clamp(0, 1).unsqueeze(-1).expand(height, width, 3).contiguous(), depth, owner, owners
+        img.clamp(0, 1).unsqueeze(-1).expand(height, width, 3).contiguous(),
+        depth,
+        owner,
+        owners,
+        torch.where(hit.unsqueeze(-1), n, torch.zeros_like(n)).view(height, width, 3),
     )
 
 
@@ -285,12 +290,43 @@ def _edges(img: torch.Tensor, depth: torch.Tensor, owner: torch.Tensor) -> torch
     return torch.where(edge, img * 0.45, img)
 
 
+def edge_image(frame: Frame, crease: float = 30.0) -> torch.Tensor:
+    """Line art: white lines on black where one object meets another, the depth jumps, or the
+    surface turns by more than `crease` degrees (a building's corner, a van's bonnet). Lines
+    don't fade with distance the way depth does, so the background keeps its structure. `[H, W, 3]`."""
+    depth, owner, normal = frame.depth, frame.owner, frame.normal
+    edge = torch.zeros_like(owner, dtype=torch.bool)
+    finite = torch.where(torch.isfinite(depth), depth, torch.full_like(depth, 1e4))
+    cos = math.cos(math.radians(crease))
+    h, w = owner.shape
+    for dy, dx in ((0, 1), (1, 0)):
+        a_o, b_o = owner[: h - dy, : w - dx], owner[dy:, dx:]
+        a_d, b_d = finite[: h - dy, : w - dx], finite[dy:, dx:]
+        jump = (a_o != b_o) | ((a_d - b_d).abs() > 0.06 * torch.minimum(a_d, b_d).clamp(min=0.5))
+        if normal is not None:
+            turn = (normal[: h - dy, : w - dx] * normal[dy:, dx:]).sum(-1) < cos
+            jump |= turn & (a_o >= 0) & (b_o >= 0)
+        edge[: h - dy, : w - dx] |= jump
+    v = edge.float()
+    return v.unsqueeze(-1).expand(h, w, 3).contiguous()
+
+
+#: How depth spends its brightness range: "near" is inverse depth (foreground detail, the
+#: background close to black), "far" linear depth (the background keeps its gradation), and
+#: "balanced" halfway between.
+REACHES = ("near", "balanced", "far")
+
+
 def depth_image(
-    depth: torch.Tensor, near: float | None = None, far: float | None = None
+    depth: torch.Tensor,
+    near: float | None = None,
+    far: float | None = None,
+    reach: str = "near",
 ) -> torch.Tensor:
     """Depth as a picture: near is white, far is black (nothing hit is black). `[H, W, 3]`.
     Inverse depth, as monocular depth models (and the ControlNets trained on them) draw it: close
-    things keep their shading instead of washing out to white."""
+    things keep their shading instead of washing out to white. `reach` moves some of the range
+    to the background (see `REACHES`)."""
     finite = depth[torch.isfinite(depth)]
     if finite.numel() == 0:
         return torch.zeros(*depth.shape, 3, device=depth.device)
@@ -304,7 +340,10 @@ def depth_image(
     )
     lo = max(lo, 0.3)
     hi = max(hi, lo + 1e-3)
-    v = ((1 / depth.clamp(min=lo) - 1 / hi) / (1 / lo - 1 / hi)).clamp(0, 1)
+    inverse = ((1 / depth.clamp(min=lo) - 1 / hi) / (1 / lo - 1 / hi)).clamp(0, 1)
+    linear = (1 - (depth - lo) / (hi - lo)).clamp(0, 1)
+    mix = {"near": 0.0, "balanced": 0.5, "far": 1.0}.get(reach, 0.0)
+    v = inverse * (1 - mix) + linear * mix
     v = torch.where(torch.isfinite(depth), v, torch.zeros_like(v))
     return v.unsqueeze(-1).expand(*depth.shape, 3).contiguous()
 
