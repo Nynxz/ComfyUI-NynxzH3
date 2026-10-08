@@ -105,7 +105,24 @@ function ref(v: unknown, what: string): Vec | string {
   return roundVec(vec(v, what));
 }
 /** Insert or update the key at `t` with the given fields. */
+/** Editing a key a script's move made (or adding one inside a move's span) turns that move's keys
+ *  into ordinary ones: otherwise the script would write the move back and drop the edit. */
+function unbake(keys: KeyData[], t: number) {
+  const runs = new Set<number>();
+  for (const k of keys) {
+    if (k.run !== undefined && near(k.t, t)) runs.add(k.run);
+    if (k.move && k.run !== undefined && k.move.from - 1e-6 <= t && t <= k.move.to + 1e-6)
+      runs.add(k.run);
+  }
+  for (const k of keys)
+    if (k.run !== undefined && runs.has(k.run)) {
+      delete k.run;
+      delete k.move;
+    }
+}
+
 function upsertKey(keys: KeyData[], t: number, patch: Partial<KeyData>): KeyData {
+  unbake(keys, t);
   let k = keys.find((x) => near(x.t, t));
   if (!k) {
     k = { t: round(t) };
@@ -123,8 +140,9 @@ function keyPatch(a: Args, camera: boolean): Partial<KeyData> {
   const p: Partial<KeyData> = {};
   if ("at" in a) {
     p.at = a.at === null ? undefined : ref(a.at, "`at`");
-    // Placed somewhere new by hand: no longer whatever surface a script stood it on.
-    if (!camera) p.on = undefined;
+    // Placed somewhere new by hand: no longer whatever surface a script stood it on (null
+    // clears a field; undefined would leave it).
+    if (!camera) (p as Args).on = null;
   }
   if (camera && "look" in a) p.look = ref(a.look, "`look`");
   if (camera && "lens" in a)
@@ -484,6 +502,8 @@ export const ACTIONS: ActionInfo[] = [
     help: "Move a character's key to another time. {actor, t, to}.",
     run: (doc, a) => {
       const x = actor(doc, a.actor);
+      unbake(x.keys, num(a.t, "`t`"));
+      unbake(x.keys, num(a.to, "`to`"));
       const k = x.keys.find((y) => near(y.t, num(a.t, "`t`")));
       if (!k) throw new ActionError(`${x.id} has no key at ${String(a.t)}s.`);
       k.t = round(Math.max(0, num(a.to, "`to`")));
@@ -500,6 +520,7 @@ export const ACTIONS: ActionInfo[] = [
       const t = num(a.t, "`t`");
       if (x.keys.length <= 1)
         throw new ActionError(`${x.id} needs at least one key — remove the actor instead.`);
+      unbake(x.keys, t);
       x.keys = x.keys.filter((k) => !near(k.t, t));
       return `${x.id}'s key at ${round(t)}s removed.`;
     },
@@ -583,6 +604,8 @@ export const ACTIONS: ActionInfo[] = [
     help: "Move a camera key to another time. {shot, t, to}.",
     run: (doc, a) => {
       const s = shot(doc, a.shot);
+      unbake(s.camera, num(a.t, "`t`"));
+      unbake(s.camera, num(a.to, "`to`"));
       const k = s.camera.find((y) => near(y.t, num(a.t, "`t`")));
       if (!k) throw new ActionError(`Shot ${s.name} has no camera key at ${String(a.t)}s.`);
       k.t = round(num(a.to, "`to`"));
@@ -622,6 +645,7 @@ export const ACTIONS: ActionInfo[] = [
       const s = shot(doc, a.shot);
       if (s.camera.length <= 1)
         throw new ActionError(`Shot ${s.name} needs at least one camera key.`);
+      unbake(s.camera, num(a.t, "`t`"));
       s.camera = s.camera.filter((k) => !near(k.t, num(a.t, "`t`")));
       return "Camera key removed.";
     },

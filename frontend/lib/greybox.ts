@@ -107,6 +107,11 @@ export interface KeyData {
   /** The surface the key stands on (a shape or placed prop), when a Grey Box script placed it
    *  there: its height came from that surface. Moving the key clears it. */
   on?: string;
+  /** Made by a Grey Box script's move (runs, jumps, swings…): which one, and on its first key
+   *  the move as written, so the script writes it back as one line. Editing any key of a move
+   *  turns its keys into ordinary ones. */
+  run?: number;
+  move?: { from: number; to: number; text: string };
 }
 export interface ActorData {
   id: string;
