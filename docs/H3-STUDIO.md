@@ -14,8 +14,8 @@ frames and sound across the cut.
 ## The node and its wiring
 
     H3 Studio Setup ──setup──▶ H3 Studio ──render──▶ H3 Studio Outputs ──▶ your sampler / decode
-    clip, vae, audio_vae,       the editor             positive, latent, prompt,
-    previous scene, scene       (pop-out panel)        trim_frames, frames, size
+    model, clip, vae,           the editor             model, positive, noise,
+    audio_vae, previous, scene  (pop-out panel)        latent, frames, prompt
 
 The studio renders the scene under the playhead (or the `scene` given to Setup). Everything else —
 model, sampler, decode, save — is ordinary ComfyUI.
@@ -90,8 +90,9 @@ With references in the scene, keyframes still guide the frames but the prompt ca
 ### Continuation
 
 *Cut* starts the scene fresh. *Continue* anchors the previous scene's last 5 / 22 / 39 frames (and
-its sound) at frame 0; `trim_frames` says how many to cut from the head after decoding so scenes
-join cleanly. Wire the previous scene's decoded frames and audio into H3 Studio Setup.
+its sound) at frame 0; H3 Studio Clip cuts those regenerated frames from the head after decoding
+so scenes join cleanly. Wire the previous scene's clip into H3 Studio Setup's `previous` (the loop
+below carries it round).
 
 ### Rendering the whole film in a loop
 

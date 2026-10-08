@@ -170,7 +170,7 @@
             <div class="row">
               <span
                 class="lbl"
-                title="This scene's noise seed. The workflow uses it when H3 Studio Outputs' seed is wired to Random Noise."
+                title="This scene's noise seed. H3 Studio Outputs' noise is drawn from it."
                 >seed</span
               >
               <ZenNumber

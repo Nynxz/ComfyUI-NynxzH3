@@ -3,18 +3,18 @@
 Three nodes, so the studio's own header stays clean:
 
     H3 Studio Setup ──setup──▶ H3 Studio ──render──▶ H3 Studio Outputs
-    clip, vae, audio_vae,       the project            positive, latent, prompt,
-    previous scene              (H3Studio.vue)         trim_frames, frames, size
+    model, clip, vae,           the project            model, positive, noise,
+    audio_vae, previous         (H3Studio.vue)         latent, frames, prompt
 
 H3 Studio turns one scene of the project into what MiniMax H3 samples from: positive conditioning
 and an empty AV latent sized to that scene. Use its outputs in place of core's MiniMax H3 Image to
 Video / Reference to Video; the sampler, model and decode stay yours.
 
-**Continuation.** Wire the previous scene's decoded frames (and audio) into `previous_frames` /
-`previous_audio`, set the scene's continuation to *guide*, and its last 5/22/39 frames are
-anchored at frame 0 of this scene — through the same keyframe conditioning core's Add Guide
-writes, so nothing in H3 is patched. Those frames are regenerated at the head of this scene;
-`trim_frames` says how many to cut after decoding so the scenes butt-join cleanly.
+**Continuation.** Wire the previous scene (H3 Studio Clip's video, carried round a loop) into
+`previous`, set the scene's continuation to *guide*, and its last 5/22/39 frames are anchored at
+frame 0 of this scene — through the same keyframe conditioning core's Add Guide writes, so nothing
+in H3 is patched. Those frames are regenerated at the head of this scene; H3 Studio Clip cuts them
+after decoding so the scenes butt-join cleanly.
 """
 
 from __future__ import annotations
@@ -515,6 +515,11 @@ class NynxzH3StudioSetup(NynxzNode):
             description="The models H3 Studio renders with, and the previous scene it continues from, "
             "gathered onto one wire.",
             inputs=[
+                io.Model.Input(
+                    "model",
+                    tooltip="The H3 model. H3 Studio Outputs gives it back with the scene's LoRAs and "
+                    "control video applied — sample with that model.",
+                ),
                 io.Clip.Input("clip", tooltip="The MiniMax H3 text encoder."),
                 io.Vae.Input(
                     "vae", tooltip="The H3 video VAE, for keyframes, references and continuation."
@@ -524,14 +529,14 @@ class NynxzH3StudioSetup(NynxzNode):
                     optional=True,
                     tooltip="The H3 audio VAE. Needed to carry the previous scene's sound across a continuation.",
                 ),
-                io.Image.Input(
-                    "previous_frames",
+                io.Combo.Input(
+                    "controlnet",
+                    options=_controlnets(),
+                    default="none",
                     optional=True,
-                    tooltip="The previous scene's decoded frames. When the scene continues, their tail is "
-                    "anchored at frame 0 so motion carries across the cut.",
-                ),
-                io.Audio.Input(
-                    "previous_audio", optional=True, tooltip="The previous scene's audio."
+                    tooltip="The MiniMax H3 Fun ControlNet, from models/model_patches. Loaded only when a "
+                    "scene has a control video (a video reference used as Control), which then steers its "
+                    "layout and camera. Needs the model wired.",
                 ),
                 io.Video.Input(
                     "previous",
@@ -551,21 +556,6 @@ class NynxzH3StudioSetup(NynxzNode):
                     "render the film scene by scene (or its list_item, looping over H3 Studio Scenes' "
                     "`picked`). Unwired, the scene selected in the studio renders.",
                 ),
-                io.Model.Input(
-                    "model",
-                    optional=True,
-                    tooltip="The H3 model, for the studio's LoRA lanes. H3 Studio Outputs gives it back with "
-                    "the scene's LoRAs applied — sample with that model.",
-                ),
-                io.Combo.Input(
-                    "controlnet",
-                    options=_controlnets(),
-                    default="none",
-                    optional=True,
-                    tooltip="The MiniMax H3 Fun ControlNet, from models/model_patches. Loaded only when a "
-                    "scene has a control video (a video reference used as Control), which then steers its "
-                    "layout and camera. Needs the model wired.",
-                ),
             ],
             outputs=[H3StudioSetupType.Output(display_name="setup")],
         )
@@ -573,20 +563,19 @@ class NynxzH3StudioSetup(NynxzNode):
     @classmethod
     def execute(
         cls,
+        model,
         clip,
         vae,
         audio_vae=None,
-        previous_frames=None,
-        previous_audio=None,
+        controlnet="none",
         previous=None,
         scene=None,
-        model=None,
-        controlnet="none",
     ):
         previous_key = previous_latent = previous_scene = None
-        if previous_frames is None and previous is not None:
+        previous_frames = previous_audio = None
+        if previous is not None:
             components = previous.get_components()
-            previous_frames, previous_audio = components.images, previous_audio or components.audio
+            previous_frames, previous_audio = components.images, components.audio
             previous_key = getattr(previous, "h3_key", None)
             previous_latent = getattr(previous, "h3_latent", None)
             previous_scene = getattr(previous, "h3_scene", None)
@@ -1015,37 +1004,25 @@ class NynxzH3StudioOutputs(NynxzNode):
             description="Breaks an H3 Studio render out into conditioning, latent and the scene's details.",
             inputs=[H3StudioRenderType.Input("render", tooltip="From H3 Studio.")],
             outputs=[
+                io.Model.Output(
+                    display_name="model",
+                    tooltip="The model from H3 Studio Setup with this scene's LoRAs (lanes with a curve "
+                    "over the steps ride on `positive` as hooks) and its control video applied.",
+                ),
                 io.Conditioning.Output(display_name="positive"),
+                io.Noise.Output(
+                    display_name="noise",
+                    tooltip="The scene's noise, from its own seed — wire it to the sampler's noise. Re-roll "
+                    "a scene in the studio and only that scene (and those continuing from it) renders "
+                    "again. A continuation's first tokens get the very noise the previous scene drew "
+                    "for the frames they regenerate, so the two start from one field.",
+                ),
                 io.Latent.Output(display_name="latent"),
-                io.String.Output(
-                    display_name="prompt", tooltip="The scene's prompt, as H3 receives it."
-                ),
-                io.Int.Output(
-                    display_name="trim_frames",
-                    tooltip="Frames to cut from the head of the decoded video: the carried-over context of a "
-                    "continuation. 0 for a cut.",
-                ),
                 io.Int.Output(
                     display_name="frames", tooltip="The scene's length in frames, at 24 fps."
                 ),
-                io.Int.Output(display_name="width"),
-                io.Int.Output(display_name="height"),
-                io.Model.Output(
-                    display_name="model",
-                    tooltip="The model from H3 Studio Setup with this scene's LoRAs applied (lanes with a "
-                    "curve over the steps ride on `positive` as hooks).",
-                ),
-                io.Int.Output(
-                    display_name="seed",
-                    tooltip="The scene's own noise seed — wire it to Random Noise's noise_seed. Re-roll "
-                    "a scene in the studio and only that scene (and those continuing from it) renders "
-                    "again.",
-                ),
-                io.Noise.Output(
-                    display_name="noise",
-                    tooltip="The scene's noise, from its seed — wire it to the sampler's noise. A "
-                    "continuation's first tokens get the very noise the previous scene drew for "
-                    "the frames they regenerate, so the two start from one field.",
+                io.String.Output(
+                    display_name="prompt", tooltip="The scene's prompt, as H3 receives it."
                 ),
             ],
             hidden=[io.Hidden.dynprompt],
@@ -1063,16 +1040,12 @@ class NynxzH3StudioOutputs(NynxzNode):
                 "Clip's video instead — it plays a skipped scene's clip — or render every scene."
             )
         return io.NodeOutput(
-            render["positive"],
-            render["latent"],
-            render["prompt"],
-            render["trim_frames"],
-            render["frames"],
-            render["width"],
-            render["height"],
             render.get("model"),
-            render["seed"],
+            render["positive"],
             _carry.SceneNoise(render["seed"], render.get("noise_carry")),
+            render["latent"],
+            render["frames"],
+            render["prompt"],
         )
 
 

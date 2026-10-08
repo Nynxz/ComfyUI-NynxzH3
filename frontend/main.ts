@@ -18,6 +18,10 @@ setLoraDetailOpener(openLoraDetailPanel);
 
 registerNodes(discoverWidgets(widgets));
 
+// Old workflows rewired to H3 Studio's current sockets, by name, before they load.
+import { registerSocketMigrations } from "@/lib/socketMigrations";
+registerSocketMigrations();
+
 // The Codex: a show's characters, places, props and looks (ZenKit's Start menu, else the sidebar).
 import { registerCodex } from "@/lib/codexOpen";
 void registerCodex();
