@@ -41,6 +41,12 @@ music: sparse piano at a slow tempo               the score for every scene unle
   show it with `with:`.
 - A scene shows H3 only the references it **uses**: the ones its shots `@mention`, and the ones
   whose voices speak in it. Anything else is left out of that scene's prompt.
+  - `@ren` brings what can be **seen** by that name (the picture or video). A sound with nothing
+    visible by its name (`@rain`) comes in from a plain mention too.
+  - `@ren:look` brings only the picture, `@ren:voice` only the voice sample. The suffix doesn't
+    appear in the prompt.
+  - A voice speaking brings its voice sample, and its face only for lines said or sung on screen:
+    a voice-over (`REN (V.O.):`) brings the voice alone.
 - Names the project already has keep their media; a description given here replaces their note.
 - Any `@name` used in a shot but declared nowhere becomes a placeholder with no description, which
   is weak. Declare everything.

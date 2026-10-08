@@ -48,6 +48,17 @@ it as new entries, picking their kind (a placeholder with a voice in the cast st
 character). Either way the reference stays tied to its entry, so filling again brings the entry's
 latest picture and description — give Ren a new picture in the Codex once, and every act gets it.
 
+### Which references a scene uses
+
+A scene shows H3 the references its shots mention and the voices that speak in it:
+
+- `@ren` brings what can be seen by that name: the picture or video. When nothing by that name can
+  be seen (a sound effect, `@rain`), it brings the sound.
+- `@ren:look` brings only the picture; `@ren:voice` only the voice sample. Either way the prompt
+  reads the tag alone.
+- A voice that speaks brings its voice sample, and its face only for lines said or sung on screen.
+  A voice-over brings the voice alone, so an off-screen line doesn't add the character's picture.
+
 ### Control videos (the H3 Fun ControlNet)
 
 A video reference can be **Control** instead of Look + motion or Blocking. H3 never sees a control

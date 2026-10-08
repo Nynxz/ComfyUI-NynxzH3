@@ -494,16 +494,32 @@ export function pictureAt(
 /** Whether a scene uses a reference: a shot @mentions it, or a voice it gives a face or a timbre to
  *  speaks there (as nodes/h3studio/_project.py's `mentions_ref`). */
 const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\-]/g, "\\$&");
+/** Whether a scene uses a reference — the same rules as the server's `mentions_ref`:
+ *  `@name` brings what can be seen by that name (else its audio), `@name:look` only what can be
+ *  seen, `@name:voice` only the audio; a voice speaking brings its voice sample, and its face only
+ *  for lines said or sung on screen. */
 export function refUsedIn(project: Project, ref: Ref, scene: Scene): boolean {
-  const mention = new RegExp(`@${escapeRegExp(ref.name)}(?![\\w-])`, "i");
-  if (scene.shots.some((s) => mention.test(s.text))) return true;
-  const voices = new Set(
-    (project.cast ?? []).filter((v) => v.ref === ref.id || v.timbre === ref.id).map((v) => v.id),
-  );
-  return (
-    voices.size > 0 &&
-    scene.shots.some((s) => (s.lines ?? []).some((l) => l.speakers.some((v) => voices.has(v))))
-  );
+  const seen = (r: Ref) => r.kind === "image" || r.kind === "video";
+  const name = ref.name.toLowerCase();
+  const visible = project.refs.some((r) => seen(r) && r.name.toLowerCase() === name);
+  const mention = new RegExp(`@${escapeRegExp(ref.name)}(?::(look|voice))?(?![\\w-])`, "gi");
+  for (const s of scene.shots) {
+    for (const m of s.text.matchAll(mention)) {
+      const want = (m[1] ?? "").toLowerCase();
+      if (want === "voice" && ref.kind === "audio") return true;
+      if (want === "look" && seen(ref)) return true;
+      if (!want && (seen(ref) || (ref.kind === "audio" && !visible))) return true;
+    }
+  }
+  for (const v of project.cast ?? []) {
+    const spoken = scene.shots.flatMap((s) =>
+      (s.lines ?? []).filter((l) => l.speakers.includes(v.id)),
+    );
+    if (!spoken.length) continue;
+    if (v.timbre === ref.id) return true;
+    if (v.ref === ref.id && spoken.some((l) => l.mode !== "voiceover")) return true;
+  }
+  return false;
 }
 /** Whether a scene shows H3 a reference: it uses it, or it's marked for that scene (or every scene). */
 export function refInScene(project: Project, ref: Ref, scene: Scene): boolean {

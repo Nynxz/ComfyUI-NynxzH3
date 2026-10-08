@@ -449,14 +449,47 @@ def _sentence(text: str) -> str:
     return text
 
 
+#: `@name`, `@name:look` (only what can be seen) or `@name:voice` (only the voice sample).
+MENTION = re.compile(r"@([\w-]+)(?::(look|voice))?(?![\w-])", re.I)
+
+
+def _seen(ref: dict[str, Any]) -> bool:
+    return ref["kind"] in ("image", "video")
+
+
 def mentions_ref(project: dict[str, Any], scene: dict[str, Any], ref: dict[str, Any]) -> bool:
-    """Whether a scene uses a reference: a shot @mentions it, or a voice it gives a face or a timbre
-    to speaks there."""
-    mention = re.compile(rf"@{re.escape(ref['name'])}(?![\w-])", re.I)
-    if any(mention.search(s["text"]) for s in scene["shots"]):
-        return True
-    voices = {v["id"] for v in project["cast"] if ref["id"] in (v.get("ref"), v.get("timbre"))}
-    return any(set(line["speakers"]) & voices for s in scene["shots"] for line in s["lines"])
+    """Whether a scene uses a reference.
+
+    - A shot's `@name` brings what can be seen by that name (a picture or video); when nothing by
+      that name can be seen (a sound effect), its audio. `@name:look` brings only what can be seen,
+      `@name:voice` only the audio.
+    - A voice speaking brings its voice sample (`timbre`), and its face (`ref`) only for a line
+      said or sung on screen: a voice-over needs no face.
+    """
+    name = ref["name"].lower()
+    visible = any(_seen(r) and r["name"].lower() == name for r in project["refs"])
+    for s in scene["shots"]:
+        for m in MENTION.finditer(s["text"]):
+            if m.group(1).lower() != name:
+                continue
+            want = (m.group(2) or "").lower()
+            if want == "voice" and ref["kind"] == "audio":
+                return True
+            if want == "look" and _seen(ref):
+                return True
+            if not want and (_seen(ref) or (ref["kind"] == "audio" and not visible)):
+                return True
+    for v in project["cast"]:
+        spoken = [
+            line for s in scene["shots"] for line in s["lines"] if v["id"] in line["speakers"]
+        ]
+        if not spoken:
+            continue
+        if v.get("timbre") == ref["id"]:
+            return True
+        if v.get("ref") == ref["id"] and any(line["mode"] != "voiceover" for line in spoken):
+            return True
+    return False
 
 
 def refs_in_scene(project: dict[str, Any], scene: dict[str, Any]) -> list[dict[str, Any]]:
@@ -592,9 +625,18 @@ def compile_scene(project: dict[str, Any], index: int, has_audio=None) -> Compil
     proxies = [r for r in in_scene if not r["media"]]
     refs = tag_refs([r for r in in_scene if r["media"]], has_audio, warnings)
     # What an @mention becomes: a picture or video is a <Subject n>; audio is named by its tag.
-    named = {
-        r["name"].lower(): (f"<Subject {r['subject']}>" if r["subject"] else r["tag"]) for r in refs
-    }
+    # Where a picture and a sound share a name, `@name` (and `@name:look`) is what can be seen and
+    # `@name:voice` the sound.
+    named: dict[str, str] = {}
+    voiced: dict[str, str] = {}
+    for r in refs:
+        key = r["name"].lower()
+        if r["kind"] == "audio":
+            voiced.setdefault(key, r["tag"])
+        else:
+            named.setdefault(key, f"<Subject {r['subject']}>" if r["subject"] else r["tag"])
+    for key, tag in voiced.items():
+        named.setdefault(key, tag)
     # A placeholder's full description the first time it's mentioned in the scene, its first clause
     # after that ("a woman in her thirties, a red coat" → "the woman in her thirties").
     described: dict[str, tuple[str, str]] = {}
@@ -630,7 +672,7 @@ def compile_scene(project: dict[str, Any], index: int, has_audio=None) -> Compil
     def mentions(text: str) -> str:
         def swap(match: re.Match) -> str:
             key = match.group(1).lower()
-            tag = named.get(key)
+            tag = voiced.get(key) if (match.group(2) or "").lower() == "voice" else named.get(key)
             if tag is None and key in described:
                 full, short = described[key]
                 tag = short if key in seen else full
@@ -644,7 +686,7 @@ def compile_scene(project: dict[str, Any], index: int, has_audio=None) -> Compil
                 return match.group(0)
             return tag
 
-        return re.sub(r"@([\w-]+)", swap, text)
+        return MENTION.sub(swap, text)
 
     shots = [s for s in scene["shots"] if s["at"] < seconds or s is scene["shots"][0]]
     dialogue = Dialogue(project["cast"], refs, warnings, subjects=bool(refs))
