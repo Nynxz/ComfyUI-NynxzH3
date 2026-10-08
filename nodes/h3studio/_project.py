@@ -167,8 +167,14 @@ def normalize(raw: Any) -> dict[str, Any]:
                 "size": ref.get("size") if ref.get("size") in REF_SIZES else 1.0,
                 # A control video steers the scene through H3's Fun ControlNet: how hard, and until
                 # how far through the sampling (the rest is left to H3 for detail).
-                "control_strength": _num(ref.get("controlStrength"), 1.0, 0.0, 2.0),
-                "control_until": _num(ref.get("controlUntil"), 0.75, 0.05, 1.0),
+                # Read under either name: normalizing an already-normalized project (compile_scene
+                # does) must keep them.
+                "control_strength": _num(
+                    ref.get("controlStrength", ref.get("control_strength")), 1.0, 0.0, 2.0
+                ),
+                "control_until": _num(
+                    ref.get("controlUntil", ref.get("control_until")), 0.75, 0.05, 1.0
+                ),
                 # Scenes that show it without using it (see `refs_in_scene`): a list of scene ids, or
                 # "all". Before version 2 every reference was "all" by default, so that is read as none.
                 "scenes": scenes
