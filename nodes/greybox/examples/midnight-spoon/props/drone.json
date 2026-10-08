@@ -1,0 +1,155 @@
+{
+  "name": "Drone",
+  "notes": "A quadcopter, origin under its middle, +z its front (the camera pod).",
+  "shapes": [
+    {
+      "id": "body",
+      "type": "box",
+      "at": [
+        0,
+        0.12,
+        0
+      ],
+      "size": [
+        0.34,
+        0.14,
+        0.46
+      ],
+      "tone": 0.3
+    },
+    {
+      "id": "pod",
+      "type": "sphere",
+      "at": [
+        0,
+        0.03,
+        0.2
+      ],
+      "radius": 0.07,
+      "tone": 0.15
+    },
+    {
+      "id": "arm-0",
+      "type": "capsule",
+      "a": [
+        0,
+        0.15,
+        0
+      ],
+      "b": [
+        0.38,
+        0.17,
+        0.38
+      ],
+      "radius": 0.025,
+      "tone": 0.3
+    },
+    {
+      "id": "rotor-0",
+      "type": "cylinder",
+      "at": [
+        0.38,
+        0.18,
+        0.38
+      ],
+      "radius": 0.2,
+      "height": 0.02,
+      "tone": 0.55
+    },
+    {
+      "id": "arm-1",
+      "type": "capsule",
+      "a": [
+        0,
+        0.15,
+        0
+      ],
+      "b": [
+        -0.38,
+        0.17,
+        0.38
+      ],
+      "radius": 0.025,
+      "tone": 0.3
+    },
+    {
+      "id": "rotor-1",
+      "type": "cylinder",
+      "at": [
+        -0.38,
+        0.18,
+        0.38
+      ],
+      "radius": 0.2,
+      "height": 0.02,
+      "tone": 0.55
+    },
+    {
+      "id": "arm-2",
+      "type": "capsule",
+      "a": [
+        0,
+        0.15,
+        0
+      ],
+      "b": [
+        0.38,
+        0.17,
+        -0.38
+      ],
+      "radius": 0.025,
+      "tone": 0.3
+    },
+    {
+      "id": "rotor-2",
+      "type": "cylinder",
+      "at": [
+        0.38,
+        0.18,
+        -0.38
+      ],
+      "radius": 0.2,
+      "height": 0.02,
+      "tone": 0.55
+    },
+    {
+      "id": "arm-3",
+      "type": "capsule",
+      "a": [
+        0,
+        0.15,
+        0
+      ],
+      "b": [
+        -0.38,
+        0.17,
+        -0.38
+      ],
+      "radius": 0.025,
+      "tone": 0.3
+    },
+    {
+      "id": "rotor-3",
+      "type": "cylinder",
+      "at": [
+        -0.38,
+        0.18,
+        -0.38
+      ],
+      "radius": 0.2,
+      "height": 0.02,
+      "tone": 0.55
+    },
+    {
+      "id": "light",
+      "type": "sphere",
+      "at": [
+        0,
+        0.2,
+        -0.22
+      ],
+      "radius": 0.03,
+      "tone": 0.98
+    }
+  ]
+}
