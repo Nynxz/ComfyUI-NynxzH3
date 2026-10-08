@@ -187,7 +187,8 @@ def join(
     parts = []
     for v in videos:
         c = v.get_components()
-        parts.append((c.images, c.audio, getattr(v, "h3_head", None)))
+        images = _held_by_shot(c.images, getattr(v, "h3_holds", None) or [], hold)
+        parts.append((images, c.audio, getattr(v, "h3_head", None)))
     like = next((p[1] for p in parts if p[1] is not None), None)
     # A skipped scene's black stand-in takes the size of the rendered ones.
     shape = next(
@@ -248,22 +249,31 @@ def join(
     film_frames = sum(f.shape[0] for f in frames)
     if music is not None:
         out_audio = _under(out_audio, music, film_frames / FPS, music_volume, music_fade)
-    images = held_frames(torch.cat(frames), hold)
+    images = torch.cat(frames)
     return InputImpl.VideoFromComponents(
         Types.VideoComponents(images=images, frame_rate=Fraction(FPS), audio=out_audio)
     )
 
 
-def held_frames(images, hold: int):
-    """The film drawn on twos or threes: each frame shown `hold` times in place of the ones after
-    it — frame 0 for frames 0-1, frame 2 for 2-3, … — so motion steps the way limited animation
-    does. Still 24 fps and the same length; the sound is untouched."""
+def _held_by_shot(images, schedule: list, default: int):
+    """A scene's clip held shot by shot: `schedule` is `[(first frame, "twos" or None)]` (see
+    `_project.hold_schedule`), None taking `default`. Each shot counts its holds from its own first
+    frame, so a cut always lands on a fresh frame."""
     import torch
 
-    if hold <= 1:
-        return images
-    index = torch.arange(images.shape[0])
-    return images[index - index % hold]
+    names = {"ones": 1, "twos": 2, "threes": 3}
+    starts = sorted(schedule) or [(0, None)]
+    if starts[0][0] > 0:
+        starts.insert(0, (0, None))
+    n = images.shape[0]
+    index = torch.arange(n)
+    for i, (start, name) in enumerate(starts):
+        end = starts[i + 1][0] if i + 1 < len(starts) else n
+        hold = names.get(name, default) if name else default
+        if hold > 1 and end > start:
+            local = index[start:end] - start
+            index[start:end] = start + local - local % hold
+    return images[index]
 
 
 def _under(film: dict | None, music: dict, seconds: float, volume: float, fade: float) -> dict:

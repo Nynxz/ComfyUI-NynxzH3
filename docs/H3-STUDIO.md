@@ -157,6 +157,11 @@ steps instead of gliding. It stays 24 fps with the same length and sound, and th
 are left alone (a continuation needs their real motion). H3 tends to smooth out held poses even
 when told "animated on twos", so this is the sure way to get the look.
 
+A shot can set its own: **drawn on** in its card (Film, Ones, Twos, Threes). Film follows the
+node's hold; the others override it for that shot, so a fast chase can step on twos while a slow
+establishing drift stays smooth. Each shot counts its holds from its own first frame, so a cut
+always lands on a fresh frame. Changing it never makes a scene out of date: nothing re-renders.
+
 ### Seeds, reuse and rendering part of the film
 
 Every scene has its own seed (Outputs' `seed` and `noise`): the one shown in its settings, which a

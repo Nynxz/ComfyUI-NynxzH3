@@ -198,6 +198,8 @@ def normalize(raw: Any) -> dict[str, Any]:
                         if j > 0 and shot.get("transition") in TRANSITIONS
                         else "cut",
                         "lines": normalize_lines(shot.get("lines")),
+                        # Drawn on ones, twos or threes in the finished film (None: the film's).
+                        "hold": shot.get("hold") if shot.get("hold") in HOLD_NAMES else None,
                     }
                 )
         shots.sort(key=lambda s: s["at"])
@@ -455,6 +457,18 @@ MENTION = re.compile(r"@([\w-]+)(?::(look|voice))?(?![\w-])", re.I)
 
 def _seen(ref: dict[str, Any]) -> bool:
     return ref["kind"] in ("image", "video")
+
+
+HOLD_NAMES = ("ones", "twos", "threes")
+
+
+def hold_schedule(scene: dict[str, Any], trim: int) -> list[tuple[int, str | None]]:
+    """Where each shot's hold starts in the scene's clip: `[(clip frame, "twos" or None for the
+    film's own)]`, empty when no shot sets one. The clip starts `trim` frames into the scene (a
+    continuation's carried head is cut off)."""
+    if not any(s.get("hold") for s in scene["shots"]):
+        return []
+    return [(max(0, round(s["at"] * FPS) - trim), s.get("hold")) for s in scene["shots"]]
 
 
 def mentions_ref(project: dict[str, Any], scene: dict[str, Any], ref: dict[str, Any]) -> bool:

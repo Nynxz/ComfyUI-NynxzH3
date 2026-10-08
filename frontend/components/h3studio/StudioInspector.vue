@@ -412,6 +412,28 @@
                     @update:model-value="(v: string) => setTransition(sh, v)"
                   />
                 </label>
+                <div
+                  class="row"
+                  title="How the finished film shows this shot (H3 Studio Film or Join): held on twos or threes like anime, or as the node says"
+                >
+                  <span class="lbl">drawn on</span>
+                  <ZenToggleGroup
+                    :model-value="sh.hold ?? 'film'"
+                    :options="[
+                      {
+                        value: 'film',
+                        label: 'Film',
+                        title: 'Whatever H3 Studio Film / Join is set to',
+                      },
+                      { value: 'ones', label: 'Ones' },
+                      { value: 'twos', label: 'Twos' },
+                      { value: 'threes', label: 'Threes' },
+                    ]"
+                    @update:model-value="
+                      (v: string) => (sh.hold = v === 'film' ? undefined : (v as Shot['hold']))
+                    "
+                  />
+                </div>
                 <label v-if="i > 0" class="row">
                   <span class="lbl">starts at</span>
                   <ZenNumber
@@ -732,13 +754,11 @@ function setShotStart(i: number, v: number) {
 const refNames = computed(() => new Set(sceneRefs.value.map((r) => r.name.toLowerCase())));
 function mentionParts(text: string) {
   const line = text.replace(/\s+/g, " ").trim();
-  return line
-    .split(/(@[\w-]+)/)
-    .map((t) => ({
-      text: t,
-      ref: t.startsWith("@"),
-      known: refNames.value.has(t.slice(1).toLowerCase()),
-    }));
+  return line.split(/(@[\w-]+)/).map((t) => ({
+    text: t,
+    ref: t.startsWith("@"),
+    known: refNames.value.has(t.slice(1).toLowerCase()),
+  }));
 }
 const keyframe = computed(() => scene.value?.keyframes.find((k) => k.id === props.sel.id));
 const colors = computed(() => (scene.value ? shotColors(scene.value) : []));

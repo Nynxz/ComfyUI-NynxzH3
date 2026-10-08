@@ -109,6 +109,8 @@ export interface Shot {
   text: string;
   /** How it follows the shot before (the first shot always starts the scene). Default: a cut. */
   transition?: Transition;
+  /** Held on ones, twos or threes in the finished film (H3 Studio Film / Join); unset: the node's. */
+  hold?: "ones" | "twos" | "threes";
   /** What is spoken in the shot, in order (see `h3dialogue.ts`). */
   lines?: Line[];
 }

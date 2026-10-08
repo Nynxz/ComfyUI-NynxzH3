@@ -29,7 +29,7 @@ from .._base import NynxzNode
 from . import _carry, _reuse
 from ._loras import apply as apply_loras
 from ._media import has_audio, load_audio, load_image, load_video, path_of
-from ._project import FPS, PREVIOUS_FRAME, compile_scene, frames_for, normalize
+from ._project import FPS, PREVIOUS_FRAME, compile_scene, frames_for, hold_schedule, normalize
 from .io_types import H3StudioLinkType, H3StudioRenderType, H3StudioSetupType, H3StudioType
 
 LOG = logging.getLogger(__name__)
@@ -229,12 +229,14 @@ def render_scene(setup: dict, project, scene: int | None) -> dict:
         )
     plan = compile_scene(proj, index, has_audio)
     scene_id = proj["scenes"][index]["id"]
+    #: Each shot's start and hold, for H3 Studio Clip to hold the clip by (see `hold_schedule`).
+    shots = [{"at": s["at"], "hold": s["hold"]} for s in proj["scenes"][index]["shots"]]
     only = proj.get("render_only")
     if only and scene_id not in only:
         if record := _reuse.latest(scene_id):
-            return _held(plan, index, scene_id, record, setup)
+            return {**_held(plan, index, scene_id, record, setup), "shots": shots}
         if index not in _needed(proj, only):
-            return _blank(plan, index, scene_id, setup)
+            return {**_blank(plan, index, scene_id, setup), "shots": shots}
     carried = setup.get("previous_scene")
     if setup.get("previous_frames") is not None and carried is not None and carried != index - 1:
         # A loop over only the picked scenes carries the clip of the pass before, which isn't the
@@ -471,6 +473,7 @@ def render_scene(setup: dict, project, scene: int | None) -> dict:
         "noise_carry": noise_carry,
         "carries_picture": mode == "guide",
         "scene_key": _reuse.scene_key(plan.as_dict(), index, carried),
+        "shots": shots,
     }
 
 
@@ -1069,7 +1072,7 @@ class NynxzH3StudioClip(NynxzNode):
         from comfy_api.latest import InputImpl, Types
 
         if render.get("blank"):
-            return io.NodeOutput(_blank_video(render))
+            return io.NodeOutput(_with_holds(_blank_video(render), render))
         key, saved = cls._saved(render, keep, reuse)
         if images is None and saved:
             LOG.info(
@@ -1093,7 +1096,7 @@ class NynxzH3StudioClip(NynxzNode):
                         "media": saved,
                     },
                 )
-            return io.NodeOutput(video)
+            return io.NodeOutput(_with_holds(video, render))
         if audio is _UNWIRED:
             audio = None
         if latent is _UNWIRED:
@@ -1143,7 +1146,16 @@ class NynxzH3StudioClip(NynxzNode):
                 CLIP_EVENT,
                 {"node_id": render["studio_node"], "scene": render.get("scene"), "media": ref},
             )
-        return io.NodeOutput(video)
+        return io.NodeOutput(_with_holds(video, render))
+
+
+def _with_holds(video, render: dict):
+    """The clip, told where its shots start and how each is held (for H3 Studio Join). The clip
+    starts after a continuation's carried head, whose length its sidecar keeps."""
+    head = getattr(video, "h3_head", None)
+    trim = int(head[0].shape[0]) if head else int(render.get("trim_frames") or 0)
+    video.h3_holds = hold_schedule({"shots": render.get("shots") or []}, trim)
+    return video
 
 
 def _blank_video(render: dict):
@@ -1268,6 +1280,8 @@ class NynxzH3StudioFilm(NynxzNode):
                         "height": height,
                     }
                 )
+            head = getattr(video, "h3_head", None)
+            video.h3_holds = hold_schedule(scene, int(head[0].shape[0]) if head else 0)
             videos.append(video)
         if missing:
             LOG.warning(
