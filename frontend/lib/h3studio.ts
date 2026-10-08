@@ -244,8 +244,6 @@ export interface Project {
   /** How the finished film is joined, and whether a full render saves it (`normalize_film`). */
   film?: FilmSettings;
   active: number;
-  /** Editor layout: inspector beside the monitor, under it, or whichever shows the picture bigger. */
-  layout?: "auto" | "side" | "stacked";
   /** Set only while a partial render is queued (lib/h3render.ts): the scenes that run renders; the
    *  others play their latest clip. */
   renderOnly?: string[];
@@ -583,8 +581,7 @@ export interface StudioView {
   timeline?: number;
   /** Reference sections folded or opened by hand (by default an empty one is folded). */
   refsFold?: Record<string, "open" | "folded">;
-  /** The inspector's height under the monitor (stacked) and its width beside it (side), px. */
-  stackH?: number;
+  /** The inspector's width beside the monitor, px. */
   sideW?: number;
   /** Track groups hidden by the timeline filters ("keyframes", "loras", "refs"). */
   hide?: string[];

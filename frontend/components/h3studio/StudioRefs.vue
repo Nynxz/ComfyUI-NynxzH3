@@ -3,7 +3,6 @@
     ref="rootEl"
     class="refs"
     :class="{ dropping: fileOver, dragging: !!dragId || fileOver }"
-    :style="cardPx ? { '--card': cardPx } : undefined"
     @dragover="onRootDragOver"
     @dragleave="onRootDragLeave"
     @drop="onRootDrop"
@@ -56,9 +55,9 @@
             @click="toggleFold(sec)"
           >
             <i class="mdi" :class="sec.icon" />
-            <span>{{ cardPx ? sec.short : sec.label }}</span>
+            <span>{{ sec.label }}</span>
           </button>
-          <span v-if="sec.hint && !cardPx" class="sechint">{{ sec.hint }}</span>
+          <span v-if="sec.hint" class="sechint">{{ sec.hint }}</span>
           <span class="grow" />
           <span class="count">{{ sec.count }}</span>
           <ZenIconButton
@@ -148,30 +147,6 @@
           </div>
         </div>
       </section>
-      <!-- The wide strip hides empty sections, so adding goes through one tile at its end. -->
-      <ZenPopover v-if="cardPx" placement="bottom-start">
-        <template #trigger="{ toggle }">
-          <button type="button" class="addtile" title="Add a reference" @click="toggle">
-            <i class="mdi mdi-plus" /><span>Add</span>
-          </button>
-        </template>
-        <template #default="{ close }">
-          <div class="addmenu">
-            <button
-              v-for="item in addItems"
-              :key="item.label"
-              type="button"
-              :disabled="item.disabled"
-              @click="
-                item.run();
-                close();
-              "
-            >
-              <i class="mdi" :class="item.icon" /> {{ item.label }}
-            </button>
-          </div>
-        </template>
-      </ZenPopover>
     </div>
 
     <!-- the selected reference -->
@@ -366,15 +341,8 @@
 // sees (look + meaning) first, then pictures it only reads about, then videos, then audio — as
 // cards you drag to reorder. Dragging a picture between the two picture sections changes its role,
 // which is the same thing as changing where H3 numbers it.
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import {
-  ZenButton,
-  ZenCheckbox,
-  ZenIconButton,
-  ZenNumber,
-  ZenPopover,
-  ZenToggleGroup,
-} from "@nynxz/zenkit-ui";
+import { computed, nextTick, ref, watch } from "vue";
+import { ZenButton, ZenCheckbox, ZenIconButton, ZenNumber, ZenToggleGroup } from "@nynxz/zenkit-ui";
 import { hasMediaDrop } from "@/framework";
 import {
   LIMITS,
@@ -396,8 +364,6 @@ const props = defineProps<{
   selected: string | null;
   /** How the studio was left: which sections are folded is kept on it. */
   view?: StudioView;
-  /** In the strip under the monitor (the stacked layout), where wide means a filmstrip. */
-  strip?: boolean;
 }>();
 const emit = defineEmits<{
   select: [id: string];
@@ -448,7 +414,6 @@ const sections = computed(() => {
   return [
     {
       id: "look" as const,
-      short: "Pictures",
       kind: "image" as const,
       label: "Pictures",
       hint: "look + meaning",
@@ -462,7 +427,6 @@ const sections = computed(() => {
     },
     {
       id: "meaning" as const,
-      short: "Meaning only",
       kind: null,
       label: "Pictures",
       hint: "meaning only",
@@ -476,7 +440,6 @@ const sections = computed(() => {
     },
     {
       id: "video" as const,
-      short: "Videos",
       kind: "video" as const,
       label: "Videos",
       hint: "",
@@ -490,7 +453,6 @@ const sections = computed(() => {
     },
     {
       id: "audio" as const,
-      short: "Audio",
       kind: "audio" as const,
       label: "Audio",
       hint: "",
@@ -505,64 +467,7 @@ const sections = computed(() => {
   ];
 });
 
-// --- size: in the wide strip (the stacked layout) cards are as tall as the strip allows -----------
 const rootEl = ref<HTMLElement | null>(null);
-const box = ref({ w: 0, h: 0 });
-let resizes: ResizeObserver | null = null;
-onMounted(() => {
-  if (!rootEl.value) return;
-  resizes = new ResizeObserver(([entry]) => {
-    if (entry) box.value = { w: entry.contentRect.width, h: entry.contentRect.height };
-  });
-  resizes.observe(rootEl.value);
-});
-onBeforeUnmount(() => resizes?.disconnect());
-const cardPx = computed(() =>
-  props.strip && box.value.w >= 600
-    ? `${Math.round(Math.min(200, Math.max(64, box.value.h - 48)))}px`
-    : null,
-);
-const addItems = computed(() => {
-  const full = (id: SectionId) => sections.value.find((s) => s.id === id)?.full ?? false;
-  return [
-    {
-      label: "Pictures…",
-      icon: "mdi-image-plus-outline",
-      disabled: full("look"),
-      run: () => emit("add", "image/*"),
-    },
-    {
-      label: "Video…",
-      icon: "mdi-video-plus-outline",
-      disabled: full("video"),
-      run: () => emit("add", "video/*"),
-    },
-    {
-      label: "Audio…",
-      icon: "mdi-music-note-plus",
-      disabled: full("audio"),
-      run: () => emit("add", "audio/*"),
-    },
-    {
-      label: "Placeholder picture",
-      icon: "mdi-image-outline",
-      disabled: false,
-      run: () => emit("addProxy", "image"),
-    },
-    {
-      label: "Placeholder video",
-      icon: "mdi-video-outline",
-      disabled: false,
-      run: () => emit("addProxy", "video"),
-    },
-    {
-      label: "Placeholder sound",
-      icon: "mdi-music-note-outline",
-      disabled: false,
-      run: () => emit("addProxy", "audio"),
-    },
-  ];
-});
 
 // --- folding: an empty section starts folded; any can be folded or opened by its name -------------
 type Section = (typeof sections.value)[number];
@@ -1103,126 +1008,5 @@ function onEditorDrop(e: DragEvent) {
   display: flex;
   flex-direction: column;
   gap: 10px;
-}
-.addtile {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  width: calc(var(--card, 72px) * 0.6);
-  height: var(--card, 72px);
-  margin: 28px 0 0 10px;
-  border: 1px dashed var(--zen-border, #34343c);
-  border-radius: var(--zen-radius, 8px);
-  background: none;
-  color: var(--zen-muted, #9aa0aa);
-  font: inherit;
-  font-size: 11px;
-  cursor: pointer;
-}
-.addtile:hover {
-  border-color: var(--zen-accent, #6366f1);
-  color: var(--zen-text, #e5e5ea);
-}
-.addtile .mdi {
-  font-size: 20px;
-}
-.addmenu {
-  display: flex;
-  flex-direction: column;
-  min-width: 190px;
-  padding: 4px;
-}
-.addmenu button {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
-  border: 0;
-  border-radius: calc(var(--zen-radius, 8px) * 0.75);
-  background: none;
-  color: var(--zen-text, #e5e5ea);
-  font: inherit;
-  font-size: 12px;
-  text-align: left;
-  cursor: pointer;
-}
-.addmenu button:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--zen-accent, #6366f1) 18%, transparent);
-}
-.addmenu button:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-/* A wide, short panel (the stacked layout): the sections side by side, each scrolling on its own,
-   with the selected reference's editor as a column on the right — not one long scroll. */
-@container h3strip (min-width: 620px) {
-  .refs {
-    flex-direction: row;
-    gap: 0;
-    height: 100%;
-  }
-  /* A filmstrip: each section exactly as wide as its cards, packed from the left; empty sections
-     hidden (shown slim while something is dragged, to drop on); cards as tall as the strip. */
-  .strip {
-    flex: 1;
-    flex-direction: row;
-    gap: 0;
-    min-width: 0;
-    overflow-x: auto;
-    overflow-y: hidden;
-  }
-  .sec {
-    flex: none;
-    min-height: 0;
-    overflow: hidden;
-    padding: 0 10px;
-    border-right: 1px solid var(--zen-border, #34343c);
-  }
-  .sec:first-of-type {
-    padding-left: 0;
-  }
-  .grid {
-    grid-template-columns: repeat(var(--n), var(--card, 72px));
-  }
-  .name {
-    font-size: clamp(10px, calc(var(--card, 72px) / 9), 12.5px);
-  }
-  .refs:not(.dragging) .sec.vacant {
-    display: none;
-  }
-  .sec.slim,
-  .refs.dragging .sec.vacant {
-    flex: 0 0 30px;
-    min-width: 0;
-    padding: 0 4px;
-  }
-  .sec.slim .sechead,
-  .refs.dragging .sec.vacant .sechead {
-    flex-direction: column;
-    align-items: center;
-    height: 100%;
-  }
-  .sec.slim .secname,
-  .refs.dragging .sec.vacant .secname {
-    writing-mode: vertical-rl;
-    transform: rotate(180deg);
-  }
-  .sec.slim .grow,
-  .refs.dragging .sec.vacant .grow,
-  .refs.dragging .sec.vacant .grid {
-    display: none;
-  }
-  .proxytext span {
-    display: none;
-  }
-  .editor {
-    flex: 0 0 320px;
-    min-height: 0;
-    overflow-y: auto;
-    padding: 0 0 0 10px;
-    border-top: 0;
-  }
 }
 </style>

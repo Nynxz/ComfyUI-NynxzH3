@@ -155,11 +155,6 @@
         @click="history.redo()"
       />
       <ZenIconButton
-        :icon="LAYOUT_ICON[layout]"
-        :title="`Layout: ${LAYOUT_TITLE[layout]} — click to change`"
-        @click="cycleLayout"
-      />
-      <ZenIconButton
         v-if="canPopOut && !inPanel"
         icon="mdi mdi-open-in-new"
         title="Pop out into a panel"
@@ -188,11 +183,10 @@
       >
         <template #pane-0>
           <div class="upper">
-            <div ref="stageEl" class="stage" :class="{ stacked }">
+            <div ref="stageEl" class="stage">
               <ZenSplit
-                :key="stacked ? 'stacked' : 'side'"
                 class="stagesplit"
-                :direction="stacked ? 'vertical' : 'horizontal'"
+                direction="horizontal"
                 gutter="gap"
                 :panes="stagePanes"
                 :sizes="stageSizes"
@@ -269,7 +263,6 @@
                         :compiled="compiled"
                         :selected="selection.kind === 'ref' ? selection.id : null"
                         :view="view"
-                        :strip="stacked"
                         @select="(id: string) => select('ref', id)"
                         @menu="(id: string, e: MouseEvent) => openMenu(refMenu(id), e)"
                         @add="(accept: string) => pickRefs(accept)"
@@ -1330,75 +1323,24 @@ async function copyPrompt() {
   window.setTimeout(() => (copied.value = false), 1500);
 }
 
-// --- layout: the inspector beside the monitor or under it ------------------------------------------
-// Auto picks whichever shows the picture bigger for the canvas's shape at the editor's current
-// size — a landscape film in a wide node goes stacked, a portrait one stays side by side.
-type Layout = "auto" | "side" | "stacked";
-const LAYOUTS: Layout[] = ["auto", "side", "stacked"];
-const LAYOUT_ICON: Record<Layout, string> = {
-  auto: "mdi mdi-view-dashboard-variant-outline",
-  side: "mdi mdi-dock-right",
-  stacked: "mdi mdi-dock-bottom",
-};
-const LAYOUT_TITLE: Record<Layout, string> = {
-  auto: "auto (whichever shows the picture bigger)",
-  side: "inspector beside the monitor",
-  stacked: "inspector under the monitor",
-};
-const layout = computed<Layout>(() => project.layout ?? "auto");
-const cycleLayout = () =>
-  (project.layout = LAYOUTS[(LAYOUTS.indexOf(layout.value) + 1) % LAYOUTS.length]);
-const GAP = 8;
+// --- the inspector beside the monitor ------------------------------------------------------------
 const stageEl = ref<HTMLElement | null>(null);
 const stageSize = ref({ w: 900, h: 400 });
-// The inspector's size: dragged on the split between it and the monitor, kept on the node. Until
-// dragged, stacked it takes about 40% of the stage, and beside the monitor 320px.
-const stackH = ref<number | null>(view.stackH ?? null);
+// The inspector's width: dragged on the split between it and the monitor, kept on the node.
 const sideW = ref<number | null>(view.sideW ?? null);
-const clampStack = (h: number) =>
-  Math.round(Math.min(Math.max(h, 170), Math.max(170, stageSize.value.h - 140)));
-const clampSide = (w: number) =>
-  Math.round(Math.min(Math.max(w, 260), Math.max(260, stageSize.value.w - 260)));
-const STACK_H = computed(() => clampStack(stackH.value ?? stageSize.value.h * 0.42));
-const SIDE_W = computed(() => clampSide(sideW.value ?? 320));
 /** The monitor/inspector split: the inspector a px pane (its default is what a double-click on the
  *  gap goes back to), the monitor taking the rest. */
-const stagePanes = computed(() =>
-  stacked.value
-    ? [
-        { min: 140 },
-        {
-          size: clampStack(stageSize.value.h * 0.42),
-          min: 170,
-          max: Math.max(170, stageSize.value.h - 140),
-        },
-      ]
-    : [{ min: 260 }, { size: 320, min: 260, max: Math.max(260, stageSize.value.w - 260) }],
-);
-const stageSizes = computed(() => {
-  const px = stacked.value ? stackH.value : sideW.value;
-  return px == null ? undefined : [1, px];
-});
+const stagePanes = computed(() => [
+  { min: 260 },
+  { size: 320, min: 260, max: Math.max(260, stageSize.value.w - 260) },
+]);
+const stageSizes = computed(() => (sideW.value == null ? undefined : [1, sideW.value]));
 function onStageSizes(sizes?: number[]) {
   const px = sizes?.[1];
   if (px == null) return;
-  if (stacked.value) stackH.value = Math.round(px);
-  else sideW.value = Math.round(px);
-  view.stackH = stackH.value ?? undefined;
-  view.sideW = sideW.value ?? undefined;
+  sideW.value = Math.round(px);
+  view.sideW = sideW.value;
 }
-/** The picture's fitted area in a box `w` × `h`. */
-function pictureArea(w: number, h: number) {
-  const ar = project.canvas.width / project.canvas.height;
-  const fw = Math.max(0, Math.min(w, h * ar));
-  return fw * (fw / ar);
-}
-const stacked = computed(() => {
-  if (layout.value !== "auto") return layout.value === "stacked";
-  const { w, h } = stageSize.value;
-  if (w < 720) return true;
-  return pictureArea(w, h - STACK_H.value - GAP) > pictureArea(w - SIDE_W.value - GAP, h);
-});
 let ro: ResizeObserver | null = null;
 onMounted(() => {
   if (!stageEl.value || typeof ResizeObserver === "undefined") return;
@@ -1562,13 +1504,6 @@ onBeforeUnmount(() => ro?.disconnect());
   box-sizing: border-box;
   height: 100%;
 }
-/* The strip under the monitor is its own container: the inspector's wide, short layouts
-   (@container h3strip) are for it alone, never for a side panel dragged wide. */
-.stage.stacked .side {
-  overflow: hidden;
-  container-name: h3strip;
-}
-
 .side {
   container: h3side / inline-size;
   display: flex;

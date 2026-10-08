@@ -324,21 +324,4 @@ function remove(id: string) {
   color: var(--h3-muted);
   font-size: 10.5px;
 }
-/* A wide, short panel (the stacked layout): each voice on one line — name, how it sounds, then its
-   reference, language and timbre — so the whole cast fits the strip. */
-@container h3strip (min-width: 620px) {
-  .voice {
-    display: grid;
-    grid-template-columns: minmax(200px, 1fr) minmax(180px, 1.3fr) minmax(280px, 1.7fr);
-    align-items: center;
-    gap: 8px;
-    padding: 5px 7px;
-  }
-  .voice > .row {
-    flex-wrap: nowrap;
-  }
-  .pick {
-    flex: 1 1 0;
-  }
-}
 </style>
