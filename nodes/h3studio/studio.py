@@ -1096,7 +1096,12 @@ class NynxzH3StudioClip(NynxzNode):
                 ),
             ],
             outputs=[io.Video.Output(display_name="video")],
-            hidden=[io.Hidden.unique_id, io.Hidden.dynprompt],
+            hidden=[
+                io.Hidden.unique_id,
+                io.Hidden.dynprompt,
+                io.Hidden.prompt,
+                io.Hidden.extra_pnginfo,
+            ],
         )
 
     @classmethod
@@ -1105,6 +1110,19 @@ class NynxzH3StudioClip(NynxzNode):
             return None
         chain = _reuse.chain_key(cls.hidden.dynprompt, cls.hidden.unique_id, ("images", "audio"))
         return f"{render['scene_key'][:32]}{chain[:32]}"
+
+    @classmethod
+    def _metadata(cls) -> dict | None:
+        """The workflow and prompt, embedded in the saved clip as core's Save Video does, so a clip
+        dropped back onto ComfyUI opens the workflow that made it."""
+        from comfy.cli_args import args
+
+        if args.disable_metadata:
+            return None
+        metadata = dict(cls.hidden.extra_pnginfo or {})
+        if cls.hidden.prompt is not None:
+            metadata["prompt"] = cls.hidden.prompt
+        return metadata or None
 
     @classmethod
     def _saved(cls, render, keep, reuse) -> tuple[str | None, str | None]:
@@ -1197,7 +1215,7 @@ class NynxzH3StudioClip(NynxzNode):
         )
         video.h3_head = head
         if keep and render.get("studio_node") is not None:
-            ref = _save_clip(video, render)
+            ref = _save_clip(video, render, cls._metadata())
             _carry.save_sidecar(path_of(ref), video.h3_latent, head)
             if key:
                 _reuse.remember(key, ref, cls._models(render))
@@ -1255,7 +1273,7 @@ def _blank_video(render: dict):
     return video
 
 
-def _save_clip(video, render: dict) -> str:
+def _save_clip(video, render: dict, metadata: dict | None = None) -> str:
     """Save a scene's clip under output/h3studio; its media ref (`output/h3studio/…`)."""
     import os
 
@@ -1266,7 +1284,7 @@ def _save_clip(video, render: dict) -> str:
         f"h3studio/scene{scene:02}", folder_paths.get_output_directory()
     )
     file = f"{name}_{counter:05}_.mp4"
-    video.save_to(os.path.join(folder, file))
+    video.save_to(os.path.join(folder, file), metadata=metadata)
     return "/".join(p for p in ("output", subfolder, file) if p)
 
 
