@@ -74,24 +74,50 @@ S.append(
 )
 # The gable walls under the slope's sides, so it doesn't float.
 for side, x in (("l", 4.9), ("r", -4.9)):
-    span(f"c-gable-{side}", x - 0.1, x + 0.1, slope_y(C_Z1) - 0.2, C_TOP - 0.3, C_Z0, C_Z0 + 1.0, 0.5)
+    span(
+        f"c-gable-{side}", x - 0.1, x + 0.1, slope_y(C_Z1) - 0.2, C_TOP - 0.3, C_Z0, C_Z0 + 1.0, 0.5
+    )
 
 # What's on the roofs: a stair bulkhead and AC units on A, a water tank on B, an antenna on D.
 span("a-bulkhead", 1.6, 4.2, 12.0, 14.6, 0.0, 3.0, 0.62)
 span("a-door", 2.2, 3.4, 12.0, 14.1, 2.98, 3.04, 0.2)
 for i, z in enumerate((8.0, 13.0)):
     span(f"a-ac-{i}", 2.6, 4.2, 12.0, 13.1, z, z + 1.4, 0.72)
-S.append({"id": "b-tank", "type": "cylinder", "at": [-3.0, 11.0, 30.0], "radius": 1.0, "height": 2.6, "tone": 0.66})
+S.append(
+    {
+        "id": "b-tank",
+        "type": "cylinder",
+        "at": [-3.0, 11.0, 30.0],
+        "radius": 1.0,
+        "height": 2.6,
+        "tone": 0.66,
+    }
+)
 span("b-pipe-rack", -4.6, -3.6, 11.0, 11.6, 25.0, 36.0, 0.58)
-S.append({"id": "d-antenna", "type": "capsule", "a": [3.4, 6.0, 66.0], "b": [3.4, 10.5, 66.0], "radius": 0.06, "tone": 0.8})
+S.append(
+    {
+        "id": "d-antenna",
+        "type": "capsule",
+        "a": [3.4, 6.0, 66.0],
+        "b": [3.4, 10.5, 66.0],
+        "radius": 0.06,
+        "tone": 0.8,
+    }
+)
 span("d-ac", -4.2, -2.4, 6.0, 7.0, 60.0, 62.0, 0.72)
 
 # Towers around the roofs, for depth and edges: taller across the street, lower beyond.
 for i, (x0, x1, z0, z1, h) in enumerate(
     [
-        (-30, -16, -10, 8, 34), (-30, -18, 12, 30, 26), (-28, -16, 34, 56, 40),
-        (-30, -17, 60, 84, 22), (16, 30, -8, 14, 30), (17, 32, 18, 40, 44),
-        (16, 28, 46, 70, 28), (-12, 12, 90, 104, 48), (-14, 14, -40, -26, 36),
+        (-30, -16, -10, 8, 34),
+        (-30, -18, 12, 30, 26),
+        (-28, -16, 34, 56, 40),
+        (-30, -17, 60, 84, 22),
+        (16, 30, -8, 14, 30),
+        (17, 32, 18, 40, 44),
+        (16, 28, 46, 70, 28),
+        (-12, 12, 90, 104, 48),
+        (-14, 14, -40, -26, 36),
     ]
 ):
     span(f"tower-{i}", x0, x1, 0, h, z0, z1, 0.46 + 0.04 * (i % 3))
@@ -128,8 +154,22 @@ DRONE = {
             item
             for i, (x, z) in enumerate([(0.38, 0.38), (-0.38, 0.38), (0.38, -0.38), (-0.38, -0.38)])
             for item in (
-                {"id": f"arm-{i}", "type": "capsule", "a": [0, 0.15, 0], "b": [x, 0.17, z], "radius": 0.025, "tone": 0.3},
-                {"id": f"rotor-{i}", "type": "cylinder", "at": [x, 0.18, z], "radius": 0.2, "height": 0.02, "tone": 0.55},
+                {
+                    "id": f"arm-{i}",
+                    "type": "capsule",
+                    "a": [0, 0.15, 0],
+                    "b": [x, 0.17, z],
+                    "radius": 0.025,
+                    "tone": 0.3,
+                },
+                {
+                    "id": f"rotor-{i}",
+                    "type": "cylinder",
+                    "at": [x, 0.18, z],
+                    "radius": 0.2,
+                    "height": 0.02,
+                    "tone": 0.55,
+                },
             )
         ],
         {"id": "light", "type": "sphere", "at": [0, 0.2, -0.22], "radius": 0.03, "tone": 0.98},
@@ -144,7 +184,13 @@ def key(t, at, face="path", **more):
 
 
 def cam(t, at, look, lens, ease="smooth"):
-    return {"t": t, "at": r(at), "look": look if isinstance(look, str) else r(look), "lens": lens, "ease": ease}
+    return {
+        "t": t,
+        "at": r(at),
+        "look": look if isinstance(look, str) else r(look),
+        "lens": lens,
+        "ease": ease,
+    }
 
 
 def along(t0, t1, z0, z1, height, pose=None, step=0.1):
@@ -195,21 +241,30 @@ SCENE = {
             "name": "3A",
             "start": 0,
             "end": 2.7,
-            "camera": [cam(0, (-7.5, 13.4, 9.0), "@ren", 38), cam(2.7, (-7.0, 13.6, 23.0), "@ren", 34)],
+            "camera": [
+                cam(0, (-7.5, 13.4, 9.0), "@ren", 38),
+                cam(2.7, (-7.0, 13.6, 23.0), "@ren", 34),
+            ],
         },
         {
             # From the drone's side, behind and above: Ren running for the slope.
             "name": "3B",
             "start": 2.7,
             "end": 4.6,
-            "camera": [cam(2.7, (1.4, 14.4, 18.5), "@ren", 28), cam(4.6, (0.8, 13.6, 33.0), "@ren", 28)],
+            "camera": [
+                cam(2.7, (1.4, 14.4, 18.5), "@ren", 28),
+                cam(4.6, (0.8, 13.6, 33.0), "@ren", 28),
+            ],
         },
         {
             # Low on roof D, looking back up the slope: the slide, the drop and the landing.
             "name": "3C",
             "start": 4.6,
             "end": 7.0,
-            "camera": [cam(4.6, (2.6, 7.0, 66.0), "@ren", 32), cam(7.0, (2.2, 6.8, 65.0), "@ren", 30)],
+            "camera": [
+                cam(4.6, (2.6, 7.0, 66.0), "@ren", 32),
+                cam(7.0, (2.2, 6.8, 65.0), "@ren", 30),
+            ],
         },
     ],
 }

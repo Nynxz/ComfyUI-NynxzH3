@@ -51,7 +51,16 @@ span("shop-front", -3.0, 3.0, 0.15, 6.6, 0, 0.08, 0.18)
 # Ledges every six metres, the drainpipe Ren climbs down.
 for y in (8, 14, 20, 26):
     span(f"ledge-{y}", -10, 10, y - 0.25, y, 0, 0.45, 0.62)
-S.append({"id": "drainpipe", "type": "cylinder", "a": [4.7, 0.15, 0.16], "b": [4.7, 30.4, 0.16], "radius": 0.08, "tone": 0.66})
+S.append(
+    {
+        "id": "drainpipe",
+        "type": "cylinder",
+        "a": [4.7, 0.15, 0.16],
+        "b": [4.7, 30.4, 0.16],
+        "radius": 0.08,
+        "tone": 0.66,
+    }
+)
 
 # Blade signs standing out from the wall; the two either side of the bar hold it up.
 for id, x, y0, y1, depth in (
@@ -61,7 +70,16 @@ for id, x, y0, y1, depth in (
     ("sign-tall-r", 7.6, 15.0, 27.5, 1.8),
 ):
     span(id, x - 0.14, x + 0.14, y0, y1, 0, depth, 0.86)
-S.append({"id": "bar", "type": "capsule", "a": [-2.55, BAR_Y, BAR_Z], "b": [2.55, BAR_Y, BAR_Z], "radius": 0.045, "tone": 0.8})
+S.append(
+    {
+        "id": "bar",
+        "type": "capsule",
+        "a": [-2.55, BAR_Y, BAR_Z],
+        "b": [2.55, BAR_Y, BAR_Z],
+        "radius": 0.045,
+        "tone": 0.8,
+    }
+)
 # Billboards flat on the wall, and the marquee over the shop.
 span("billboard-high", -6.0, -1.2, 21.0, 25.0, 0, 0.2, 0.9)
 span("billboard-low", 4.0, 9.2, 9.4, 12.6, 0, 0.2, 0.88)
@@ -105,7 +123,13 @@ def key(t, at, face="path", **more):
 
 
 def cam(t, at, look, lens, ease="smooth"):
-    return {"t": t, "at": r(at), "look": look if isinstance(look, str) else r(look), "lens": lens, "ease": ease}
+    return {
+        "t": t,
+        "at": r(at),
+        "look": look if isinstance(look, str) else r(look),
+        "lens": lens,
+        "ease": ease,
+    }
 
 
 def hanging(angle):
@@ -179,28 +203,40 @@ SCENE = {
             "name": "4A",
             "start": 0,
             "end": 2.5,
-            "camera": [cam(0, (3.5, 24.0, 12.0), "@ren", 32), cam(2.5, (2.6, 20.5, 11.5), "@ren", 32)],
+            "camera": [
+                cam(0, (3.5, 24.0, 12.0), "@ren", 32),
+                cam(2.5, (2.6, 20.5, 11.5), "@ren", 32),
+            ],
         },
         {
             # Three-quarters from the street side, up at the bar between the signs: the leap and the swing.
             "name": "4B",
             "start": 2.5,
             "end": 4.9,
-            "camera": [cam(2.5, (-4.5, 16.2, 9.5), "@ren", 30), cam(4.9, (-4.0, 14.0, 10.5), "@ren", 30)],
+            "camera": [
+                cam(2.5, (-4.5, 16.2, 9.5), "@ren", 30),
+                cam(4.9, (-4.0, 14.0, 10.5), "@ren", 30),
+            ],
         },
         {
             # Street level: the drop onto the marquee, off it, and the run toward the camera.
             "name": "4C",
             "start": 4.9,
             "end": 7.0,
-            "camera": [cam(4.9, (3.4, 1.5, 15.0), "@ren", 30), cam(7.0, (3.0, 1.4, 15.5), "@ren", 30)],
+            "camera": [
+                cam(4.9, (3.4, 1.5, 15.0), "@ren", 30),
+                cam(7.0, (3.0, 1.4, 15.5), "@ren", 30),
+            ],
         },
     ],
 }
 
 if __name__ == "__main__":
     out = Path(sys.argv[1] if len(sys.argv) > 1 else ".")
-    for path, data in ((out / "sets" / "neon-wall.json", SET), (out / "scenes" / "neon-wall.json", SCENE)):
+    for path, data in (
+        (out / "sets" / "neon-wall.json", SET),
+        (out / "scenes" / "neon-wall.json", SCENE),
+    ):
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp = path.with_suffix(".json.new")
         tmp.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
