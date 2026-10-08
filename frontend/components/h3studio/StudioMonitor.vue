@@ -633,9 +633,9 @@ watch(
 .control.overlay {
   inset: 0;
 }
+/* Cropped to the scene's frame as the ControlNet crops it (centred), so what shows is what steers. */
 .control video {
-  object-fit: contain;
-  background: #000;
+  object-fit: cover;
 }
 /* Over the picture, the control's light lines show through and the dark falls away. */
 .control.overlay video {
