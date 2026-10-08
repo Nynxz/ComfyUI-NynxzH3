@@ -29,7 +29,7 @@ from .._base import NynxzNode
 from . import _carry, _reuse
 from ._loras import apply as apply_loras
 from ._media import has_audio, load_audio, load_image, load_video, path_of
-from ._project import FPS, PREVIOUS_FRAME, compile_scene, normalize
+from ._project import FPS, PREVIOUS_FRAME, PREVIOUS_SOUND, compile_scene, normalize
 from .io_types import H3StudioLinkType, H3StudioRenderType, H3StudioSetupType, H3StudioType
 
 LOG = logging.getLogger(__name__)
@@ -63,6 +63,54 @@ def _previous_last_frame(setup: dict, project: dict, index: int):
         )
     video, _ = load_video(ref, FPS)
     return video[-1:], _reuse.digest(_reuse.media_stat(ref))
+
+
+#: A sound reference's length: 39 frames (1.6 s), the longest of H3's short-clip lengths.
+SOUND_SNIPPET = 39
+
+
+def _previous_clip(setup: dict, project: dict, index: int):
+    """The previous scene's clip (frames, audio) and a fingerprint of it: the one a loop carried in
+    (Setup's `previous`), else the previous scene's latest render."""
+    frames = setup.get("previous_frames")
+    if frames is not None and setup.get("previous_scene") in (None, index - 1):
+        key = setup.get("previous_key") or _reuse.frames_key(
+            frames[-1:], setup.get("previous_audio")
+        )
+        return frames, setup.get("previous_audio"), key
+    record = _reuse.latest(project["scenes"][index - 1]["id"])
+    if record is None:
+        raise ValueError(
+            f"H3 Studio: scene {index + 1} carries scene {index}'s sound, but scene {index} hasn't "
+            "been rendered. Render it first."
+        )
+    frames, audio = load_video(record["ref"], FPS)
+    return frames, audio, _clip_key(record)
+
+
+def _clip_key(record: dict) -> str:
+    """A saved clip's fingerprint: the one it was made under, else its file's."""
+    return record.get("key") or _reuse.digest(_reuse.media_stat(record["ref"]))
+
+
+def _sound_snippet(clip, media: str, black: bool):
+    """The k-th of n snippets of the previous clip (`previous:sound:k/n`), spread across it so the
+    last ends where the clip does: frames (black when only the sound is wanted) and its sound."""
+    import torch
+
+    frames, audio, _ = clip
+    k, n = (int(x) for x in media[len(PREVIOUS_SOUND) :].split("/"))
+    length = min(SOUND_SNIPPET, frames.shape[0])
+    start = round((frames.shape[0] - length) * (k + 1) / max(n, 1))
+    part = frames[start : start + length]
+    if black:
+        part = torch.zeros_like(part)
+    track = None
+    if audio is not None:
+        rate = audio["sample_rate"]
+        a, b = round(start / FPS * rate), round((start + length) / FPS * rate)
+        track = {"waveform": audio["waveform"][..., a:b], "sample_rate": rate}
+    return part, track
 
 
 def _from_latest(setup: dict, scene_id: str) -> dict:
@@ -164,6 +212,9 @@ def scene_status(project) -> list[dict]:
             if i > 0 and plan.continuation.get("mode") not in (None, "cut"):
                 previous = _reuse.latest(proj["scenes"][i - 1]["id"])
                 carried = previous.get("key") if previous else None
+            if any(r["role"] == "sound" for r in plan.refs):
+                previous = _reuse.latest(proj["scenes"][i - 1]["id"])
+                carried = f"{carried}|{_clip_key(previous) if previous else None}"
             now = _reuse.scene_key(plan.as_dict(), i, carried)
             state = "current" if now == record.get("scene_key") else "stale"
         out.append(
@@ -284,6 +335,7 @@ def render_scene(setup: dict, project, scene: int | None) -> dict:
         image = h3._resize(picture(k["media"]), width, height, fit)
         keyframes.append({"resolved_frame_index": min(k["frame"], frame_count - 1), "image": image})
 
+    previous_clip = None
     if plan.task == "ref2va":
         # Same presentation and payload as core's MiniMax H3 Reference to Video, per reference:
         # pictures, then videos (a soundtrack's <Audio j> label right before its <Video k>), then
@@ -311,7 +363,16 @@ def render_scene(setup: dict, project, scene: int | None) -> dict:
                         }
                     )
             elif ref["kind"] == "video":
-                video_frames, track = load_video(ref["media"], h3.FPS)
+                if ref["media"].startswith(PREVIOUS_SOUND):
+                    if previous_clip is None:
+                        previous_clip = _previous_clip(setup, proj, index)
+                    video_frames, track = _sound_snippet(
+                        previous_clip,
+                        ref["media"],
+                        proj["scenes"][index]["continuation"]["sound_picture"] == "black",
+                    )
+                else:
+                    video_frames, track = load_video(ref["media"], h3.FPS)
                 soundtrack = track if ref["soundtrack_tag"] else None
                 vh, vw = video_frames.shape[1], video_frames.shape[2]
                 cw, ch = h3.adapt_canvas(vw, vh)
@@ -478,7 +539,12 @@ def render_scene(setup: dict, project, scene: int | None) -> dict:
         "seed": plan.seed,
         "noise_carry": noise_carry,
         "carries_picture": mode == "guide",
-        "scene_key": _reuse.scene_key(plan.as_dict(), index, carried),
+        # A scene carrying the previous one's sound is out of date when that clip changes.
+        "scene_key": _reuse.scene_key(
+            plan.as_dict(),
+            index,
+            f"{carried}|{previous_clip[2]}" if previous_clip is not None else carried,
+        ),
         "film": _film_after(proj, index),
     }
 

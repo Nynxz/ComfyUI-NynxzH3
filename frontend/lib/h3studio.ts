@@ -195,7 +195,14 @@ export interface Scene {
   direction: string;
   soundscape: string;
   music: string;
-  continuation: { mode: Continuation; frames: number };
+  continuation: {
+    mode: Continuation;
+    frames: number;
+    /** Experimental: snippets of the previous scene shown to H3 for their sound (0–3). */
+    soundRefs?: number;
+    /** Those snippets' picture: black (only their sound counts) or the clip's own. */
+    soundPicture?: "black" | "real";
+  };
   /** The scene's finished clip (`output/h3studio/…`), saved by H3 Studio Clip on its last run. */
   render?: string;
 }

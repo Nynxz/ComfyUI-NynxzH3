@@ -233,6 +233,35 @@
                 {{ continuationOf(scene.continuation.mode).title }}.
               </span>
             </div>
+            <div
+              v-if="sel.sceneIndex > 0"
+              class="row"
+              title="Experimental. Snippets of the previous scene, spread across it, shown to H3 for the whole scene so its ambience, engines and music carry on past the first second. Sound only shows them as black video; with picture, its look can pull this scene towards the previous one."
+            >
+              <span class="lbl">carry sound</span>
+              <ZenToggleGroup
+                :model-value="String(scene.continuation.soundRefs ?? 0)"
+                :options="[
+                  { value: '0', label: 'Off' },
+                  { value: '1', label: '1' },
+                  { value: '2', label: '2' },
+                  { value: '3', label: '3' },
+                ]"
+                @update:model-value="(v: string) => (scene!.continuation.soundRefs = Number(v))"
+              />
+              <ZenToggleGroup
+                v-if="(scene.continuation.soundRefs ?? 0) > 0"
+                :model-value="scene.continuation.soundPicture ?? 'black'"
+                :options="[
+                  { value: 'black', label: 'Sound only' },
+                  { value: 'real', label: 'With picture' },
+                ]"
+                @update:model-value="
+                  (v: string) => (scene!.continuation.soundPicture = v as 'black' | 'real')
+                "
+              />
+              <span class="soft">experimental</span>
+            </div>
             <div class="kfs">
               <span class="lbl">keyframes</span>
               <button
