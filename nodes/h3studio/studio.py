@@ -714,6 +714,102 @@ def _control_patch(name: str):
     return _control_cache[1]
 
 
+class _ControlLog:
+    """What a control video actually did while sampling, step by step: when it was on, and how
+    far it pushed the model's stream (the change at the first injected block, as a share of the
+    stream there). Logged when it switches off, and when sampling ends if it never did."""
+
+    def __init__(self, name: str, until: float, strength: float, sigma_end: float):
+        self.name, self.until, self.strength, self.sigma_end = name, until, strength, sigma_end
+        self.sigmas: list[float] = []
+        self.on: list[bool] = []
+        self.nudges: list = []
+        self.reported = False
+
+    def step(self, sigma: float, active: bool) -> None:
+        if self.sigmas and abs(self.sigmas[-1] - sigma) < 1e-6:
+            return
+        if active and not any(self.on):
+            LOG.info(
+                "H3 Studio: @%s control on at step %d (sigma %.3f), strength %.2f",
+                self.name,
+                len(self.sigmas) + 1,
+                sigma,
+                self.strength,
+            )
+        if not active and self.on and self.on[-1]:
+            LOG.info(
+                "H3 Studio: @%s control off from step %d (sigma %.3f < %.3f, until %d%%) — %s",
+                self.name,
+                len(self.sigmas) + 1,
+                sigma,
+                self.sigma_end,
+                round(self.until * 100),
+                self.summary(),
+            )
+            self.reported = True
+        self.sigmas.append(sigma)
+        self.on.append(active)
+
+    def summary(self) -> str:
+        steered = sum(self.on)
+        nudges = [float(n) for n in self.nudges]
+        push = (
+            f", moving the stream {100 * sum(nudges) / len(nudges):.1f}% on average"
+            if nudges
+            else ""
+        )
+        return f"steered {steered} of {len(self.on)} steps so far{push}"
+
+    def end(self) -> None:
+        if self.on and not self.reported:
+            LOG.info(
+                "H3 Studio: @%s control finished: %s",
+                self.name,
+                self.summary().replace(" so far", ""),
+            )
+        self.sigmas, self.on, self.nudges, self.reported = [], [], [], False
+
+
+def _WatchedControl(
+    name: str, until: float, model_patch, vae, video, mask, source, strength, sigma_start, sigma_end
+):
+    """Core's MiniMaxH3FunControlPatch, logging what it does (see `_ControlLog`)."""
+    from comfy_extras.nodes_minimax_h3 import MiniMaxH3FunControlPatch
+
+    class Watched(MiniMaxH3FunControlPatch):
+        def diffusion_model_wrapper(
+            self, executor, x, timestep, context, transformer_options=None, **kwargs
+        ):
+            transformer_options = transformer_options or {}
+            sigmas = transformer_options.get("sigmas")
+            sigma = float(sigmas[0]) if sigmas is not None else float(timestep.flatten()[0]) / 1000
+            self.log.step(sigma, self.sigma_end <= sigma <= self.sigma_start)
+            return super().diffusion_model_wrapper(
+                executor, x, timestep, context, transformer_options, **kwargs
+            )
+
+        def after_block(self, block_index, args, out):
+            first = self.active and block_index == self.model_patch.model.injection_layers[0]
+            if not first:
+                return super().after_block(block_index, args, out)
+            import torch
+
+            before = out["img"][:, :1024].detach().clone()
+            out = super().after_block(block_index, args, out)
+            moved = torch.linalg.vector_norm((out["img"][:, :1024] - before).float())
+            self.log.nudges.append(moved / torch.linalg.vector_norm(before.float()).clamp_min(1e-6))
+            return out
+
+        def cleanup(self):
+            self.log.end()
+            super().cleanup()
+
+    patch = Watched(model_patch, vae, video, mask, source, strength, sigma_start, sigma_end)
+    patch.log = _ControlLog(name, until, strength, sigma_end)
+    return patch
+
+
 def _apply_control(setup: dict, model, vae, control: dict, trim: int, warnings: list[str]):
     """The scene's model steered by its control video through H3's Fun ControlNet — core's Apply
     MiniMax H3 Fun ControlNet, done here so it follows each scene's own video."""
@@ -729,7 +825,6 @@ def _apply_control(setup: dict, model, vae, control: dict, trim: int, warnings: 
         )
         return model
     import torch
-    from comfy_extras.nodes_minimax_h3 import MiniMaxH3FunControlPatch
 
     frames, _ = load_video(control["media"], FPS)
     if trim:
@@ -740,14 +835,17 @@ def _apply_control(setup: dict, model, vae, control: dict, trim: int, warnings: 
     sampling = patched.get_model_object("model_sampling")
     LOG.info(
         "H3 Studio: @%s steers the scene through %s (strength %.2f until %d%%, %d frames). "
-        "Sample with H3 Studio Outputs' model, or it does nothing.",
+        "Sample with H3 Studio Outputs' model — a 'control on' line follows once sampling starts; "
+        "without one, the sampler isn't using it.",
         control["name"],
         setup["controlnet"],
         control["strength"],
         round(control["until"] * 100),
         frames.shape[0],
     )
-    MiniMaxH3FunControlPatch(
+    _WatchedControl(
+        control["name"],
+        control["until"],
         _control_patch(setup["controlnet"]),
         vae,
         frames[..., :3].movedim(-1, 1),
