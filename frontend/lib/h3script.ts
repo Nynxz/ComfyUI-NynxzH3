@@ -100,29 +100,38 @@ export function toScript(project: Project): string {
     }
     out.push("");
   }
-  project.scenes.forEach((scene, i) => {
-    const how = i === 0 ? "" : `, ${continuationOf(scene.continuation.mode).script}`;
-    out.push(
-      `## Scene ${i + 1}${scene.title ? `: ${scene.title}` : ""} (${secs(scene.seconds)}${how})`,
-    );
-    if (scene.direction.trim()) out.push(`direction: ${scene.direction.trim()}`);
-    if (scene.soundscape.trim()) out.push(`ambience: ${scene.soundscape.trim()}`);
-    if (scene.music.trim()) out.push(`music: ${scene.music.trim()}`);
-    const marked = project.refs.filter(
-      (r) =>
-        Array.isArray(r.scenes) && r.scenes.includes(scene.id) && !refUsedIn(project, r, scene),
-    );
-    if (marked.length) out.push(`with: ${marked.map((r) => `@${r.name}`).join(", ")}`);
-    out.push("");
-    scene.shots.forEach((shot, j) => {
-      const t = shot.transition ?? "cut";
-      out.push(`### ${clock(shot.at)}${j > 0 && t !== "cut" ? ` (${TRANSITION_WORDS[t]})` : ""}`);
-      if (shot.text.trim()) out.push(shot.text.trim());
-      for (const line of shot.lines ?? []) if (line.words.trim()) out.push(lineOut(project, line));
-      out.push("");
-    });
-  });
+  project.scenes.forEach((_, i) => out.push(...sceneLines(project, i)));
   return `${out.join("\n").trim()}\n`;
+}
+
+function sceneLines(project: Project, i: number): string[] {
+  const scene = project.scenes[i]!;
+  const out: string[] = [];
+  const how = i === 0 ? "" : `, ${continuationOf(scene.continuation.mode).script}`;
+  out.push(
+    `## Scene ${i + 1}${scene.title ? `: ${scene.title}` : ""} (${secs(scene.seconds)}${how})`,
+  );
+  if (scene.direction.trim()) out.push(`direction: ${scene.direction.trim()}`);
+  if (scene.soundscape.trim()) out.push(`ambience: ${scene.soundscape.trim()}`);
+  if (scene.music.trim()) out.push(`music: ${scene.music.trim()}`);
+  const marked = project.refs.filter(
+    (r) => Array.isArray(r.scenes) && r.scenes.includes(scene.id) && !refUsedIn(project, r, scene),
+  );
+  if (marked.length) out.push(`with: ${marked.map((r) => `@${r.name}`).join(", ")}`);
+  out.push("");
+  scene.shots.forEach((shot, j) => {
+    const t = shot.transition ?? "cut";
+    out.push(`### ${clock(shot.at)}${j > 0 && t !== "cut" ? ` (${TRANSITION_WORDS[t]})` : ""}`);
+    if (shot.text.trim()) out.push(shot.text.trim());
+    for (const line of shot.lines ?? []) if (line.words.trim()) out.push(lineOut(project, line));
+    out.push("");
+  });
+  return out;
+}
+
+/** One scene in the script format: its heading, its own direction and sound, and its shots. */
+export function sceneToScript(project: Project, i: number): string {
+  return `${sceneLines(project, i).join("\n").trim()}\n`;
 }
 
 // --- reading a script in -----------------------------------------------------------------------
@@ -489,19 +498,9 @@ export function replaceDrops(project: Project, script: ScriptResult) {
   };
 }
 
-/** Put a read script into the project, as one change (one undo).
- *  - "replace": the script becomes the film — its scenes, style, ambience and music, its voices,
- *    and only the references it uses (those keep their pictures). LoRA lanes stay, with their
- *    per-scene strengths and step shapes reset; render settings and the canvas stay. With
- *    `keepUnused`, references and voices the script doesn't use are kept too.
- *  - "append": its scenes go after the ones there; voices are merged, nothing is removed. */
-export function applyScript(
-  project: Project,
-  script: ScriptResult,
-  how: "replace" | "append",
-  keepUnused = false,
-) {
-  const drops = how === "replace" && !keepUnused ? replaceDrops(project, script) : null;
+/** What a script brings besides its scenes: placeholders for the references the studio lacks, the
+ *  roles and descriptions it gives the ones it has, and its voices (new, or brought up to date). */
+function mergeRefsAndCast(project: Project, script: ScriptResult) {
   for (const p of script.placeholders) addProxy(project, p.name, p.note, p.kind, p.role);
   for (const x of script.roles) {
     const r = project.refs.find((ref) => ref.id === x.id);
@@ -523,6 +522,22 @@ export function applyScript(
     else cast.push(v);
   }
   project.cast = cast;
+}
+
+/** Put a read script into the project, as one change (one undo).
+ *  - "replace": the script becomes the film — its scenes, style, ambience and music, its voices,
+ *    and only the references it uses (those keep their pictures). LoRA lanes stay, with their
+ *    per-scene strengths and step shapes reset; render settings and the canvas stay. With
+ *    `keepUnused`, references and voices the script doesn't use are kept too.
+ *  - "append": its scenes go after the ones there; voices are merged, nothing is removed. */
+export function applyScript(
+  project: Project,
+  script: ScriptResult,
+  how: "replace" | "append",
+  keepUnused = false,
+) {
+  const drops = how === "replace" && !keepUnused ? replaceDrops(project, script) : null;
+  mergeRefsAndCast(project, script);
   // Where each reference shows without being used: "(every scene)" and "with:" set it; replacing
   // starts every other reference from none, as the old scenes it was marked for are gone.
   for (const r of project.refs) {
@@ -545,7 +560,7 @@ export function applyScript(
     }
     if (drops) {
       project.refs = project.refs.filter((r) => !drops.refs.includes(r));
-      project.cast = project.cast.filter((v) => !drops.voices.includes(v));
+      project.cast = (project.cast ?? []).filter((v) => !drops.voices.includes(v));
     }
     project.active = 0;
   } else {
@@ -554,6 +569,34 @@ export function applyScript(
     if (script.direction !== undefined && !project.direction.trim())
       project.direction = script.direction;
   }
+}
+
+/** A one-scene script over scene `i`. Its text becomes the scene's — heading, direction, sound,
+ *  shots and dialogue — and what text can't hold stays: the scene's id (its renders, takes and
+ *  per-scene LoRA strengths are kept by it), seed and keyframes. */
+export function applySceneScript(project: Project, i: number, script: ScriptResult) {
+  const target = project.scenes[i];
+  const from = script.scenes[0];
+  if (!target || !from) return;
+  mergeRefsAndCast(project, script);
+  for (const r of project.refs) {
+    const name = r.name.toLowerCase();
+    if (script.every.includes(name)) r.scenes = "all";
+    if (r.scenes === "all") continue;
+    const marked = script.with.some((w) => w.scene === from.id && w.names.includes(name));
+    const others = r.scenes.filter((id) => id !== target.id);
+    r.scenes = marked ? [...others, target.id] : others;
+  }
+  const was = target.seconds;
+  target.title = from.title;
+  target.seconds = from.seconds;
+  target.shots = from.shots;
+  target.direction = from.direction;
+  target.soundscape = from.soundscape;
+  target.music = from.music;
+  if (i > 0) target.continuation.mode = from.continuation.mode;
+  for (const k of target.keyframes)
+    k.at = k.at >= was ? target.seconds : Math.min(k.at, target.seconds);
 }
 
 // --- exact copies ------------------------------------------------------------------------------

@@ -394,6 +394,7 @@
 
     <StudioSettings v-model:open="settingsOpen" :project="project" />
     <StudioScript v-model:open="scriptOpen" :project="project" />
+    <StudioSceneText :project="project" :scene="sceneTextOf" @close="sceneTextOf = null" />
     <StudioSheet v-model:open="sheetOpen" :project="project" :scene-index="place.scene" />
     <ZenContextMenu ref="menu" :items="menuItems" />
     <LoraBrowser v-model:open="loraBrowserOpen" @pick="addLora" />
@@ -478,8 +479,10 @@ import StudioRefs from "./StudioRefs.vue";
 import StudioCast from "./StudioCast.vue";
 import StudioSettings from "./StudioSettings.vue";
 import StudioScript from "./StudioScript.vue";
+import StudioSceneText from "./StudioSceneText.vue";
 import StudioSheet from "./StudioSheet.vue";
 import { studioMenus } from "./studioMenus";
+import { sceneToScript } from "@/lib/h3script";
 
 const props = defineProps<{
   project: Project;
@@ -495,6 +498,8 @@ const history = useProjectHistory(project);
 loadCapabilities();
 const settingsOpen = ref(false);
 const scriptOpen = ref(false);
+/** The scene open as script text, or null. */
+const sceneTextOf = ref<number | null>(null);
 const sheetOpen = ref(false);
 
 // --- monitor modes and renders --------------------------------------------------------------------
@@ -1160,6 +1165,8 @@ const menus = studioMenus(project, {
   playFrom,
   togglePlay,
   copyPrompt: () => void copyPrompt(),
+  copySceneText: (i) => void navigator.clipboard.writeText(sceneToScript(project, i)),
+  editSceneText: (i) => (sceneTextOf.value = i),
   seek,
   render,
   staleIds: () => outOfDate.value,

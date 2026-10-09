@@ -44,6 +44,10 @@ export interface MenuActions {
   togglePlay: () => void;
   /** The scene's prompt, as H3 gets it, onto the clipboard. */
   copyPrompt: () => void;
+  /** Scene `i` in the script format, onto the clipboard. */
+  copySceneText: (i: number) => void;
+  /** Open scene `i` as script text, to edit or paste over. */
+  editSceneText: (i: number) => void;
   seek: (t: number) => void;
   /** Render these scenes (by id), or all of them (lib/h3render.ts). */
   render: (ids: string[] | null) => void;
@@ -70,6 +74,14 @@ export function studioMenus(project: Project, a: MenuActions) {
       },
       { label: "Duplicate", icon: "mdi mdi-content-duplicate", run: () => a.duplicateScene(i) },
       { label: "Re-roll seed", icon: "mdi mdi-dice-5-outline", run: () => (s.seed = randomSeed()) },
+      "-",
+      { heading: "As text" },
+      {
+        label: "Edit as text…",
+        icon: "mdi mdi-text-box-edit-outline",
+        run: () => a.editSceneText(i),
+      },
+      { label: "Copy as text", icon: "mdi mdi-content-copy", run: () => a.copySceneText(i) },
       "-",
       { heading: "Render" },
       ...(a.pickedScenes().length > 1 && a.pickedScenes().includes(s.id)
