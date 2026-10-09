@@ -1413,6 +1413,9 @@ class NynxzH3StudioClip(NynxzNode):
                 CLIP_EVENT,
                 {"node_id": render["studio_node"], "scene": render.get("scene"), "media": ref},
             )
+            # Handed on as the saved file, not its decoded frames: a loop's cache keeps every pass's
+            # outputs, and a few GB of frames per scene ran a full render out of memory.
+            video = _as_file(video, ref)
         return io.NodeOutput(cls._finish(video, render, keep))
 
     @classmethod
@@ -1427,6 +1430,18 @@ class NynxzH3StudioClip(NynxzNode):
             except Exception:
                 LOG.exception("H3 Studio: couldn't save the film (Renders ▸ Export film retries)")
         return video
+
+
+def _as_file(video, ref: str):
+    """`video` as its saved file, decoded only when something reads it, keeping what the studio
+    hangs on it (its scene, fingerprint, latent, head and handle)."""
+    from comfy_api.latest import InputImpl
+
+    saved = InputImpl.VideoFromFile(path_of(ref))
+    for name in ("h3_scene", "h3_key", "h3_latent", "h3_head", "h3_tail", "h3_blank"):
+        if hasattr(video, name):
+            setattr(saved, name, getattr(video, name))
+    return saved
 
 
 def _blank_video(render: dict):
