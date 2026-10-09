@@ -625,8 +625,8 @@ function watchRender() {
 watch(
   () => ({ ...live.clips }),
   (clips) => {
-    for (const [i, media] of Object.entries(clips)) {
-      const scene = project.scenes[Number(i)];
+    for (const [id, media] of Object.entries(clips)) {
+      const scene = project.scenes.find((s) => s.id === id);
       if (scene && scene.render !== media) scene.render = media;
     }
   },

@@ -1370,6 +1370,7 @@ class NynxzH3StudioClip(NynxzNode):
                     {
                         "node_id": render["studio_node"],
                         "scene": render.get("scene"),
+                        "scene_id": render.get("scene_id"),
                         "media": saved,
                     },
                 )
@@ -1443,7 +1444,12 @@ class NynxzH3StudioClip(NynxzNode):
             )
             _send(
                 CLIP_EVENT,
-                {"node_id": render["studio_node"], "scene": render.get("scene"), "media": ref},
+                {
+                    "node_id": render["studio_node"],
+                    "scene": render.get("scene"),
+                    "scene_id": render.get("scene_id"),
+                    "media": ref,
+                },
             )
             # Handed on as the saved file, not its decoded frames: a loop's cache keeps every pass's
             # outputs, and a few GB of frames per scene ran a full render out of memory.

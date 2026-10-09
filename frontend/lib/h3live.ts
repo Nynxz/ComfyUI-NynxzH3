@@ -48,8 +48,9 @@ export interface StudioLive {
   rendering: number | null;
   /** Each scene's latest run. */
   runs: Record<number, LiveRun>;
-  /** Finished clips reported this session, by scene — the editor moves them into the project. */
-  clips: Record<number, string>;
+  /** Finished clips reported this session, by scene id — the editor moves them into the project.
+   *  By id, not position: the studio may hold another film by the time a clip lands. */
+  clips: Record<string, string>;
 }
 
 const studios = reactive(new Map<string, StudioLive>());
@@ -127,8 +128,8 @@ function listen() {
   });
 
   target.addEventListener(CLIP_EVENT, (e) => {
-    const d = (e as Detail<{ node_id?: string; scene?: number; media?: string }>).detail;
-    if (d?.node_id && typeof d.scene === "number" && d.media) entry(d.node_id).clips[d.scene] = d.media;
+    const d = (e as Detail<{ node_id?: string; scene_id?: string; media?: string }>).detail;
+    if (d?.node_id && d.scene_id && d.media) entry(d.node_id).clips[d.scene_id] = d.media;
   });
 
   target.addEventListener(OVERRIDE_EVENT, (e) => {
