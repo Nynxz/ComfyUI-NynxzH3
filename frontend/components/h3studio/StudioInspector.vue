@@ -251,8 +251,14 @@
               />
               <ZenToggleGroup
                 v-if="(scene.continuation.soundRefs ?? 0) > 0"
-                :model-value="scene.continuation.soundPicture ?? 'audio'"
+                :model-value="scene.continuation.soundPicture ?? 'guides'"
                 :options="[
+                  {
+                    value: 'guides',
+                    label: 'Guides',
+                    title:
+                      'Pinned through the scene as audio guides: H3 reproduces each where it sits, so the sound can\'t drop away; the picture is untouched',
+                  },
                   {
                     value: 'audio',
                     label: 'Audio',
@@ -273,7 +279,7 @@
                 ]"
                 @update:model-value="
                   (v: string) =>
-                    (scene!.continuation.soundPicture = v as 'audio' | 'black' | 'real')
+                    (scene!.continuation.soundPicture = v as 'guides' | 'audio' | 'black' | 'real')
                 "
               />
               <span class="soft">experimental</span>

@@ -95,18 +95,12 @@
         Render<span v-if="outOfDate.length" class="due">{{ outOfDate.length }}</span>
       </ZenButton>
       <span
-        class="task"
-        :class="{ warned: compiled?.warnings.length }"
+        v-if="compiled?.warnings.length"
+        class="task warned"
         :title="taskTitle"
         @click="copyPrompt"
       >
-        <b>S{{ place.scene + 1 }}</b>
-        <span>{{
-          copied ? "Prompt copied" : compiled ? (TASK_SHORT[compiled.task] ?? compiled.task) : "…"
-        }}</span>
-        <template v-if="compiled?.warnings.length"
-          ><i class="mdi mdi-alert-outline" />{{ compiled.warnings.length }}</template
-        >
+        <i class="mdi mdi-alert-outline" />{{ compiled.warnings.length }}
       </span>
       <ZenPopover placement="bottom-end">
         <template #trigger="{ toggle }">
@@ -1164,6 +1158,7 @@ const menus = studioMenus(project, {
   openLoraBrowser: () => (loraBrowserOpen.value = true),
   playFrom,
   togglePlay,
+  copyPrompt: () => void copyPrompt(),
   seek,
   render,
   staleIds: () => outOfDate.value,
@@ -1296,13 +1291,6 @@ const TASKS: Record<string, string> = {
   fl2va: "Between a first and last frame",
   ref2va: "From references",
 };
-const TASK_SHORT: Record<string, string> = {
-  t2va: "Text",
-  i2va: "First frame",
-  l2va: "Last frame",
-  fl2va: "First + last",
-  ref2va: "References",
-};
 /** The scene chip's details: what H3 is asked to do, the scene's length, and any warnings. */
 const taskTitle = computed(() => {
   const c = compiled.value;
@@ -1312,7 +1300,7 @@ const taskTitle = computed(() => {
     ? `Shown to H3:\n${c.refs.map((r) => `${r.tag}  @${r.name}${r.role === "blocking" ? " (blocking)" : ""}${r.alias ? " (same file)" : ""}`).join("\n")}`
     : "Shown to H3: no references (words only)";
   const warned = c.warnings.length ? `\n\n${c.warnings.map((w) => `⚠ ${w}`).join("\n")}` : "";
-  return `${head}\n\n${shown}${warned}\n\nClick to copy the prompt H3 gets.`;
+  return `${head}\n\n${shown}${warned}\n\nClick to copy the prompt H3 gets (also on the monitor's right-click menu).`;
 });
 /** The exact prompt for this scene, on the clipboard — to see what H3 is told. */
 const copied = ref(false);

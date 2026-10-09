@@ -113,6 +113,42 @@ def _sound_snippet(clip, media: str, black: bool):
     return part, track
 
 
+#: An audio guide's length: 22 frames (0.9 s), one of H3's short-clip lengths.
+GUIDE_SNIPPET = 22
+#: The guides' level against the previous scene's sound: a bed under this scene's own.
+GUIDE_GAIN = 0.7
+#: Where the guides' snippets come from: the previous clip's last seconds, the sound at the cut.
+GUIDE_SOURCE_SECONDS = 3.0
+
+
+def _sound_guides(clip, n: int, frame_count: int, after: int, audio_vae, h3) -> list[dict]:
+    """The previous scene's sound pinned through this one: n snippets from its last seconds, as
+    audio-only guides from where the carried head ends (`after` frames) on through the scene. H3
+    reproduces a guide where it's placed, so the sound world can't drop away between them."""
+    _, audio, _ = clip
+    if audio is None:
+        return []
+    rate = audio["sample_rate"]
+    total = audio["waveform"].shape[-1]
+    length = round(GUIDE_SNIPPET / FPS * rate)
+    first = max(0, total - round(GUIDE_SOURCE_SECONDS * rate))
+    room = frame_count - after - GUIDE_SNIPPET
+    if room <= 0 or total < length:
+        return []
+    out = []
+    for k in range(n):
+        a = first + round((total - length - first) * (k / (n - 1) if n > 1 else 1.0))
+        snippet = {
+            "waveform": audio["waveform"][..., a : a + length] * GUIDE_GAIN,
+            "sample_rate": rate,
+        }
+        latent, _ = h3._encode_ref_audio(audio_vae, snippet)
+        # The first starts as the carried head ends (where H3 lets the sound go), the rest spread on.
+        at = after + round(room * k / n)
+        out.append({"resolved_frame_index": at, "audio_latent": latent, "image": None})
+    return out
+
+
 def _from_latest(setup: dict, scene_id: str) -> dict:
     """`setup` with the previous scene's latest clip as the one to continue from — for a scene
     rendered on its own, outside a loop that would carry the previous scene in."""
@@ -212,7 +248,7 @@ def scene_status(project) -> list[dict]:
             if i > 0 and plan.continuation.get("mode") not in (None, "cut"):
                 previous = _reuse.latest(proj["scenes"][i - 1]["id"])
                 carried = previous.get("key") if previous else None
-            if any(r["role"] == "sound" for r in plan.refs):
+            if plan.continuation.get("sound_refs"):
                 previous = _reuse.latest(proj["scenes"][i - 1]["id"])
                 carried = f"{carried}|{_clip_key(previous) if previous else None}"
             now = _reuse.scene_key(plan.as_dict(), i, carried)
@@ -495,6 +531,14 @@ def render_scene(setup: dict, project, scene: int | None) -> dict:
             plan.warnings.append(
                 "The previous scene has no sound to carry over, so this scene just cuts."
             )
+
+    cont = plan.continuation
+    if cont.get("sound_refs") and cont.get("sound_picture") == "guides" and audio_vae is not None:
+        if previous_clip is None:
+            previous_clip = _previous_clip(setup, proj, index)
+        keyframes += _sound_guides(
+            previous_clip, cont["sound_refs"], frame_count, trim, audio_vae, h3
+        )
 
     conditioning_keyframes = []
     for k in keyframes:

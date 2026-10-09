@@ -200,8 +200,9 @@ export interface Scene {
     frames: number;
     /** Experimental: snippets of the previous scene shown to H3 for their sound (0–3). */
     soundRefs?: number;
-    /** How those snippets are shown: as audio alone, or as video, black or with their picture. */
-    soundPicture?: "audio" | "black" | "real";
+    /** How those snippets are given to H3: pinned through the scene as audio guides, or as
+     *  references — audio alone, or video, black or with their picture. */
+    soundPicture?: "guides" | "audio" | "black" | "real";
   };
   /** The scene's finished clip (`output/h3studio/…`), saved by H3 Studio Clip on its last run. */
   render?: string;

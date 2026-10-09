@@ -58,9 +58,10 @@ PREVIOUS_FRAME = "previous:last"
 #: The media of a sound reference cut from the previous scene's clip: `previous:sound:<k>/<n>` is
 #: the k-th of n snippets spread across it, filled in when the scene renders.
 PREVIOUS_SOUND = "previous:sound:"
-#: How the sound references are shown: as audio alone, or as video — black (only their sound
-#: guides) or with the clip's own picture.
-SOUND_PICTURES = ("audio", "black", "real")
+#: How the previous scene's sound is carried: as audio guides pinned through the scene (H3
+#: reproduces a guide where it's placed), or as references — audio alone, or video, black (only
+#: their sound counts) or with the clip's own picture.
+SOUND_PICTURES = ("guides", "audio", "black", "real")
 RETENTION = ("fully_preserved", "partially_preserved", "attribute_transfer", "weak_reference")
 AUDIO_RETENTION = ("fully_copy", "partially_copy", "reference", "weak_reference")
 ROLES = ("reference", "semantic", "blocking", "control")
@@ -253,7 +254,7 @@ def normalize(raw: Any) -> dict[str, Any]:
                     "sound_refs": int(_num(cont.get("soundRefs", cont.get("sound_refs")), 0, 0, 3)),
                     "sound_picture": cont.get("soundPicture", cont.get("sound_picture"))
                     if cont.get("soundPicture", cont.get("sound_picture")) in SOUND_PICTURES
-                    else "audio",
+                    else "guides",
                 },
             }
         )
@@ -645,8 +646,9 @@ def compile_scene(project: dict[str, Any], index: int, has_audio=None) -> Compil
             "scenes": "all",
         }
         in_scene = [*in_scene, setting]
-    n_sound = scene["continuation"]["sound_refs"] if index > 0 else 0
     shown_as = scene["continuation"]["sound_picture"]
+    # Guides are pinned into the timeline when the scene renders; only references are shown here.
+    n_sound = scene["continuation"]["sound_refs"] if index > 0 and shown_as != "guides" else 0
     sound_refs = [
         {
             "id": f"carry{k + 1}",

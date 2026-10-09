@@ -42,6 +42,8 @@ export interface MenuActions {
   openLoraBrowser: () => void;
   playFrom: (t: number) => void;
   togglePlay: () => void;
+  /** The scene's prompt, as H3 gets it, onto the clipboard. */
+  copyPrompt: () => void;
   seek: (t: number) => void;
   /** Render these scenes (by id), or all of them (lib/h3render.ts). */
   render: (ids: string[] | null) => void;
@@ -458,6 +460,11 @@ export function studioMenus(project: Project, a: MenuActions) {
         label: "Split the shot at the playhead",
         icon: "mdi mdi-content-cut",
         run: () => a.splitAt(t),
+      },
+      {
+        label: "Copy this scene's prompt",
+        icon: "mdi mdi-content-copy",
+        run: a.copyPrompt,
       },
       ...(project.scenes[scene]?.render
         ? [
