@@ -78,6 +78,7 @@ export function buildTracks(project: Project, ctx: TrackContext): TimelineTrack[
     color: ctx.status?.get(s.id)?.state === "stale" ? "#8a6a2c" : "var(--zen-muted, #5b6b8c)",
     resize: "end" as const,
     progress: ctx.rendering === i ? ctx.renderProgress : undefined,
+    peek: s.render ? peekOf(s.render, `Scene ${i + 1} · latest render`) : undefined,
   }));
   const shots = project.scenes.flatMap((s, si) => {
     const colours = shotColors(s);
@@ -100,13 +101,12 @@ export function buildTracks(project: Project, ctx: TrackContext): TimelineTrack[
   const keyframes = project.scenes.flatMap((s, si) => {
     const set = s.keyframes.map((k) => {
       const title = `Keyframe · scene ${si + 1} · ${edgeOf(project, si, k.at) ?? `at ${formatTime(k.at)}`}`;
-      const kind = mediaKind(k.media) === "video" ? ("video" as const) : ("image" as const);
       return {
         id: k.id,
         start: starts[si]! + k.at,
         kind: "marker" as const,
         thumb: thumbUrl(k.media, 96),
-        peek: k.media ? { src: stableUrl(k.media), kind, label: title } : undefined,
+        peek: k.media ? peekOf(k.media, title) : undefined,
         title,
       };
     });
@@ -154,6 +154,7 @@ export function buildTracks(project: Project, ctx: TrackContext): TimelineTrack[
                     ? "mdi-eye"
                     : "mdi-text-box-outline",
             ghost: proxy,
+            peek: proxy ? undefined : peekOf(r.media, `@${r.name}${r.note ? ` — ${r.note}` : ""}`),
             color:
               kind === "audio"
                 ? "#3d8f7a"
@@ -335,9 +336,20 @@ function controlItems(project: Project, r: Ref, starts: number[]): TimelineItem[
         title: `@${r.name} steers scene ${i + 1}: ${span}. Drag its ends, or the bar, to steer just part of it; stretch it to the scene's ends to steer all of it`,
         icon: "mdi-vector-square",
         color: "#b5684a",
+        peek: peekOf(r.media, `@${r.name} · control video`),
         resize: "both" as const,
         movable: true,
       },
     ];
   });
+}
+
+/** What Shift over a timeline item shows large (ZenPeek): its picture, video or sound. */
+function peekOf(media: string, label: string): TimelineItem["peek"] {
+  const kind = mediaKind(media);
+  return {
+    src: stableUrl(media),
+    kind: kind === "video" || kind === "audio" ? kind : "image",
+    label,
+  };
 }
