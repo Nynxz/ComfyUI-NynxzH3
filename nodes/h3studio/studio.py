@@ -69,6 +69,17 @@ def _previous_last_frame(setup: dict, project: dict, index: int):
 SOUND_SNIPPET = 39
 
 
+def _mem(label: str) -> None:
+    """TEMPORARY: ComfyUI's memory at a step, to find what runs it out of RAM."""
+    try:
+        with open("/proc/self/status") as status:
+            for line in status:
+                if line.startswith("VmRSS:"):
+                    LOG.info("H3MEM %-34s %6.1f GB", label, int(line.split()[1]) / 1048576)
+    except OSError:
+        pass
+
+
 def _previous_clip(setup: dict, project: dict, index: int):
     """The previous scene's clip (frames, audio) and a fingerprint of it: the one a loop carried in
     (Setup's `previous`), else the previous scene's latest render."""
@@ -147,6 +158,16 @@ def _sound_guides(clip, n: int, frame_count: int, after: int, audio_vae, h3) -> 
         at = after + round(room * k / n)
         out.append({"resolved_frame_index": at, "audio_latent": latent, "image": None})
     return out
+
+
+def _decoded(setup: dict) -> dict:
+    """`setup` with the previous clip (Setup's `previous`) decoded into frames and sound — a copy
+    for this scene alone, dropped when it has rendered."""
+    video = setup.get("previous_video")
+    if video is None or setup.get("previous_frames") is not None:
+        return setup
+    components = video.get_components()
+    return {**setup, "previous_frames": components.images, "previous_audio": components.audio}
 
 
 def _from_latest(setup: dict, scene_id: str) -> dict:
@@ -311,6 +332,7 @@ def _film_after(proj: dict, index: int) -> dict | None:
 
 
 def render_scene(setup: dict, project, scene: int | None) -> dict:
+    _mem("render_scene start")
     """One scene of the project as H3 conditioning, a sized AV latent and the head trim."""
     clip, vae = setup["clip"], setup["vae"]
     audio_vae = setup.get("audio_vae")
@@ -330,6 +352,8 @@ def render_scene(setup: dict, project, scene: int | None) -> dict:
             return _held(plan, index, scene_id, record, setup)
         if index not in _needed(proj, only):
             return _blank(plan, index, scene_id, setup)
+    setup = _decoded(setup)
+    _mem("previous clip decoded")
     carried = setup.get("previous_scene")
     if setup.get("previous_frames") is not None and carried is not None and carried != index - 1:
         # A loop over only the picked scenes carries the clip of the pass before, which isn't the
@@ -351,6 +375,7 @@ def render_scene(setup: dict, project, scene: int | None) -> dict:
         previous_frames, previous_audio = setup.get("previous_frames"), setup.get("previous_audio")
     width, height = plan.width, plan.height
     latent, frame_count = h3._empty_av_latent(width, height, plan.frames)
+    _mem("latent made")
     last_frame, last_key = None, None
     if plan.continuation.get("mode") in ("first_frame", "reference"):
         last_frame, last_key = _previous_last_frame(setup, proj, index)
@@ -471,6 +496,7 @@ def render_scene(setup: dict, project, scene: int | None) -> dict:
                     ref_blocks.append(
                         {"kind": "audio", "ref_audio_t": ref_audio_t, "audio_latent": audio_latent}
                     )
+        _mem("references encoded")
         tokens = clip.tokenize(plan.prompt, minimax_ref_items=ref_items)
     else:
         # i2va/l2va/fl2va present their keyframes to the text encoder as <Picture 1..2>, in
@@ -481,6 +507,7 @@ def render_scene(setup: dict, project, scene: int | None) -> dict:
         tokens = clip.tokenize(plan.prompt, images=pictures)
         ref_blocks = []
     positive = clip.encode_from_tokens_scheduled(tokens)
+    _mem("text encoded")
 
     trim = 0
     noise_carry = None
@@ -722,10 +749,10 @@ class NynxzH3StudioSetup(NynxzNode):
         scene=None,
     ):
         previous_key = previous_latent = previous_scene = None
-        previous_frames = previous_audio = None
+        # The previous clip goes on as it came (a saved file, not decoded): this output stays in a
+        # loop's cache for the whole render, and decoded frames there ran full renders out of RAM.
+        # The scene decodes it when it needs its frames.
         if previous is not None:
-            components = previous.get_components()
-            previous_frames, previous_audio = components.images, components.audio
             previous_key = getattr(previous, "h3_key", None)
             previous_latent = getattr(previous, "h3_latent", None)
             previous_scene = getattr(previous, "h3_scene", None)
@@ -740,8 +767,9 @@ class NynxzH3StudioSetup(NynxzNode):
                 "clip": clip,
                 "vae": vae,
                 "audio_vae": audio_vae,
-                "previous_frames": previous_frames,
-                "previous_audio": previous_audio,
+                "previous_frames": None,
+                "previous_audio": None,
+                "previous_video": previous,
             }
         )
 
@@ -957,6 +985,7 @@ def _WatchedControl(
 
 
 def _apply_control(setup: dict, model, vae, control: dict, trim: int, warnings: list[str]):
+    _mem("control start")
     """The scene's model steered by its control video through H3's Fun ControlNet — core's Apply
     MiniMax H3 Fun ControlNet, done here so it follows each scene's own video."""
     if not setup.get("controlnet"):
@@ -1313,6 +1342,7 @@ class NynxzH3StudioClip(NynxzNode):
 
     @classmethod
     def execute(cls, render, images=None, audio=None, latent=None, keep=True, reuse=True):
+        _mem(f"clip start (images {'yes' if images is not None else 'no'})")
         from fractions import Fraction
 
         from comfy_api.latest import InputImpl, Types
@@ -1393,7 +1423,9 @@ class NynxzH3StudioClip(NynxzNode):
         video.h3_tail = tail_sound
         video.h3_head = head
         if keep and render.get("studio_node") is not None:
+            _mem("clip: before save")
             ref = _save_clip(video, render, cls._metadata())
+            _mem("clip: saved")
             _carry.save_sidecar(path_of(ref), video.h3_latent, head, tail_sound)
             if key:
                 _reuse.remember(key, ref, cls._models(render))
@@ -1416,6 +1448,7 @@ class NynxzH3StudioClip(NynxzNode):
             # Handed on as the saved file, not its decoded frames: a loop's cache keeps every pass's
             # outputs, and a few GB of frames per scene ran a full render out of memory.
             video = _as_file(video, ref)
+            _mem("clip: handed on as file")
         return io.NodeOutput(cls._finish(video, render, keep))
 
     @classmethod
@@ -1425,6 +1458,7 @@ class NynxzH3StudioClip(NynxzNode):
             from . import film
 
             try:
+                _mem("film: before save")
                 record = film.save(render["film"], cls._metadata())
                 _send(FILM_EVENT, {"node_id": render["studio_node"], **record})
             except Exception:
