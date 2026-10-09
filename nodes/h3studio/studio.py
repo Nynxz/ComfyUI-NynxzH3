@@ -177,7 +177,7 @@ def _held(plan, index: int, scene_id: str, record: dict, setup: dict) -> dict:
         "latent": None,
         "prompt": plan.prompt,
         "trim_frames": 0,
-        "frames": plan.frames,
+        "frames": plan.keep,
         "width": plan.width,
         "height": plan.height,
         "scene": index,
@@ -369,7 +369,10 @@ def render_scene(setup: dict, project, scene: int | None) -> dict:
         # A keyframe fills the canvas: cropped to its shape, or stretched onto it.
         fit = "disabled" if k.get("fit") == "stretch" else "center"
         image = h3._resize(picture(k["media"]), width, height, fit)
-        keyframes.append({"resolved_frame_index": min(k["frame"], frame_count - 1), "image": image})
+        # Scene time, after the carried head of a continued scene.
+        keyframes.append(
+            {"resolved_frame_index": min(k["frame"] + plan.lead, frame_count - 1), "image": image}
+        )
 
     previous_clip = None
     if plan.task == "ref2va":
@@ -519,8 +522,12 @@ def render_scene(setup: dict, project, scene: int | None) -> dict:
         if not picture:
             guide.pop("latent", None)
         if "latent" in guide or "audio_latent" in guide:
+            # The previous clip's tail ends where this scene starts, after the head.
+            guide["resolved_frame_index"] = max(0, plan.lead - context)
             # The carried head is cut off after decoding; a keyframe inside it would fight it.
-            keyframes = [k for k in keyframes if k["resolved_frame_index"] >= context]
+            keyframes = [
+                k for k in keyframes if k["resolved_frame_index"] >= max(context, plan.lead)
+            ]
             keyframes.insert(0, {**guide, "image": None})
             trim = context
             noise_carry = _carry.noise_carry(proj, index, context, latent, picture=picture)
@@ -532,12 +539,15 @@ def render_scene(setup: dict, project, scene: int | None) -> dict:
                 "The previous scene has no sound to carry over, so this scene just cuts."
             )
 
+    # A continued scene's head is cut off whatever it was guided by: the scene starts after it.
+    if plan.lead:
+        trim = plan.lead
     cont = plan.continuation
     if cont.get("sound_refs") and cont.get("sound_picture") == "guides" and audio_vae is not None:
         if previous_clip is None:
             previous_clip = _previous_clip(setup, proj, index)
         keyframes += _sound_guides(
-            previous_clip, cont["sound_refs"], frame_count, trim, audio_vae, h3
+            previous_clip, cont["sound_refs"], trim + plan.keep, trim, audio_vae, h3
         )
 
     conditioning_keyframes = []
@@ -585,6 +595,8 @@ def render_scene(setup: dict, project, scene: int | None) -> dict:
         "prompt": plan.prompt,
         "trim_frames": trim,
         "frames": frame_count,
+        #: The scene's own frames, kept after the head: H3's grid can make the render longer.
+        "keep_frames": plan.keep,
         "width": width,
         "height": height,
         "scene": index,
@@ -1325,6 +1337,15 @@ class NynxzH3StudioClip(NynxzNode):
                 head_audio = {**audio, "waveform": audio["waveform"][..., :cut]}
                 audio = {**audio, "waveform": audio["waveform"][..., cut:]}
             head = (images[:trim], head_audio, bool(render.get("carries_picture", True)))
+        # Just the scene's own length: H3's frame grid can make the render a little longer.
+        keep = int(render.get("keep_frames") or 0)
+        if keep and frames.shape[0] > keep:
+            frames = frames[:keep]
+            if audio is not None:
+                audio = {
+                    **audio,
+                    "waveform": audio["waveform"][..., : round(keep / FPS * audio["sample_rate"])],
+                }
         video = InputImpl.VideoFromComponents(
             Types.VideoComponents(images=frames, frame_rate=Fraction(FPS), audio=audio)
         )

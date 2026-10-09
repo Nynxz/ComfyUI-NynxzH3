@@ -422,7 +422,9 @@ class Compiled:
 
     task: str
     prompt: str
+    #: Frames H3 renders: the carried head (`lead`) and the scene, on H3's 17-frame grid.
     frames: int
+    #: The scene's own length, as it plays (what H3 Studio Clip keeps).
     seconds: float
     #: The scene's noise seed (H3 Studio Outputs' `seed`).
     seed: int
@@ -441,6 +443,10 @@ class Compiled:
     #: `[{id, name, media, strength, until}]`: videos that steer the scene through the Fun
     #: ControlNet (role `control`). H3 never sees them as references.
     controls: list[dict[str, Any]] = field(default_factory=list)
+    #: Frames of the carried head before the scene starts (H3 Studio Clip cuts them off), and the
+    #: scene's own frames after it.
+    lead: int = 0
+    keep: int = 0
 
     def as_dict(self) -> dict[str, Any]:
         return dict(self.__dict__)
@@ -625,11 +631,13 @@ def compile_scene(project: dict[str, Any], index: int, has_audio=None) -> Compil
     scenes = project["scenes"]
     scene = scenes[max(0, min(index, len(scenes) - 1))]
     frames = frames_for(scene["seconds"])
+    scene_frames = frames
     seconds = frames / FPS
     width, height = project["canvas"]["width"], project["canvas"]["height"]
     warnings: list[str] = []
 
     carry = scene["continuation"]["mode"] if index > 0 else "cut"
+    head = scene["continuation"]["frames"] if carry in ("guide", "sound") else 0
     in_scene = refs_in_scene(project, scene)
     setting = None
     if carry == "reference":
@@ -760,6 +768,10 @@ def compile_scene(project: dict[str, Any], index: int, has_audio=None) -> Compil
         return MENTION.sub(swap, text)
 
     shots = [s for s in scene["shots"] if s["at"] < seconds or s is scene["shots"][0]]
+    # A continued scene renders the carried head first, and the scene after it: everything said
+    # to happen is told where it lands, so the scene keeps its length once the head is cut off.
+    if head:
+        shots = [{**s, "at": round(s["at"] + head / FPS, 3)} for s in shots]
     dialogue = Dialogue(project["cast"], refs, warnings, subjects=bool(refs))
     cast_names = frozenset(v["name"].lower() for v in project["cast"])
     # A shot either starts a new [Shot N] (a cut, or a dissolve / fade / wipe) or carries on the
@@ -984,8 +996,10 @@ def compile_scene(project: dict[str, Any], index: int, has_audio=None) -> Compil
         settings=project["settings"],
         task=task,
         prompt=prompt,
-        frames=frames,
+        frames=align_frame_count(scene_frames + head) if head else scene_frames,
         seconds=round(seconds, 3),
+        lead=head,
+        keep=scene_frames,
         seed=scene["seed"],
         width=width,
         height=height,
