@@ -546,8 +546,17 @@ def render_scene(setup: dict, project, scene: int | None) -> dict:
     if cont.get("sound_refs") and cont.get("sound_picture") == "guides" and audio_vae is not None:
         if previous_clip is None:
             previous_clip = _previous_clip(setup, proj, index)
-        keyframes += _sound_guides(
+        guides = _sound_guides(
             previous_clip, cont["sound_refs"], trim + plan.keep, trim, audio_vae, h3
+        )
+        keyframes += guides
+        LOG.info(
+            "H3 Studio: scene %d carries scene %d's sound: %d guide(s) at %s into the scene",
+            index + 1,
+            index,
+            len(guides),
+            ", ".join(f"{(g['resolved_frame_index'] - trim) / FPS:.1f}s" for g in guides)
+            or "none (too short)",
         )
 
     conditioning_keyframes = []
@@ -786,6 +795,17 @@ def _summary(
         edges.append("first" if f == 0 else "last" if f == frame_count - 1 else f"frame {f}")
     if edges:
         lines.append(f"  keyframes: {', '.join(edges)}")
+    guides = [
+        k["resolved_frame_index"]
+        for k in keyframes
+        if k.get("image") is None
+        and "latent" not in k
+        and k["resolved_frame_index"] > 0
+        and k["resolved_frame_index"] >= trim
+    ]
+    if guides:
+        at = ", ".join(f"{(f - trim) / FPS:.1f}s" for f in guides)
+        lines.append(f"  carry sound: the previous scene's sound pinned at {at} into the scene")
 
     if trim:
         what = "picture and sound" if mode == "guide" else "sound only"
