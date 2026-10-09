@@ -196,6 +196,7 @@
                     :scene-seconds="project.scenes[place.scene]?.seconds ?? 0"
                     :rendering="live.rendering === place.scene"
                     :clip="project.scenes[place.scene]?.render"
+                    :next-clip="project.scenes[place.scene + 1]?.render"
                     :offset="playhead - (starts[place.scene] ?? 0)"
                     :playing="playing"
                     :volume="volume"

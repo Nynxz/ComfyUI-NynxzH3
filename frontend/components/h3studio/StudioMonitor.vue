@@ -3,19 +3,21 @@
     <div class="screen" :style="{ '--ar': project.canvas.width / project.canvas.height }">
       <!-- Render: the scene's finished clip, driven by the studio's transport -->
       <template v-if="view === 'render'">
+        <!-- The next scene's clip waits loaded and hidden, so the cut to it is instant. -->
         <video
-          v-if="clip"
-          ref="clipEl"
-          :key="clip"
+          v-for="c in clips"
+          :key="c"
+          :ref="(el) => c === clip && (clipEl = el as HTMLVideoElement | null)"
           class="render"
-          :src="clipUrl"
-          :muted="props.muted || props.volume === 0"
+          :class="{ waiting: c !== clip }"
+          :src="stableUrl(c)"
+          :muted="c !== clip || props.muted || props.volume === 0"
           :volume="props.volume"
           playsinline
           preload="auto"
-          @loadedmetadata="syncClip(true)"
+          @loadedmetadata="c === clip && syncClip(true)"
         />
-        <div v-else class="card">
+        <div v-if="!clip" class="card">
           <i class="mdi mdi-movie-open-off-outline" />
           <span class="card-shot">Scene {{ place.scene + 1 }} has no render yet</span>
           <span class="card-hint"
@@ -189,7 +191,7 @@
 //   • render  — the scene's finished clip, following the studio's playhead: play, scrub and step
 //               shots with the transport and timeline as for the animatic.
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
-import { mediaKind, mediaRefUrl } from "@/framework";
+import { mediaKind } from "@/framework";
 import {
   pictureAt,
   refInScene,
@@ -220,6 +222,8 @@ const props = withDefaults(
     rendering?: boolean;
     /** Render: the scene's finished clip, and where the playhead is in it. */
     clip?: string;
+    /** The next scene's clip, loaded ahead so the cut to it doesn't wait. */
+    nextClip?: string;
     offset?: number;
     playing?: boolean;
     /** The studio's volume (its transport owns the control). */
@@ -233,6 +237,7 @@ const props = withDefaults(
     sceneSeconds: 0,
     rendering: false,
     clip: undefined,
+    nextClip: undefined,
     offset: 0,
     playing: false,
     volume: 0.8,
@@ -284,7 +289,10 @@ const spoken = computed(() => {
     lineTimes(scene).find((x) => props.place.local >= x.start && props.place.local < x.end) ?? null
   );
 });
-const clipUrl = computed(() => (props.clip ? mediaRefUrl(props.clip) : ""));
+/** The clips kept loaded: this scene's, and the next one's. */
+const clips = computed(() =>
+  [...new Set([props.clip, props.nextClip])].filter((c): c is string => !!c),
+);
 const caption = computed(
   () => props.project.scenes[props.place.scene]?.shots[props.place.shot]?.text.trim() ?? "",
 );
@@ -393,8 +401,13 @@ function syncClip(force = false) {
   if (view.value === "render") syncVideo(clipEl.value, () => props.offset, force);
 }
 watch(
-  () => [props.offset, props.playing, props.clip, view.value] as const,
+  () => [props.offset, props.playing, view.value] as const,
   () => syncClip(),
+);
+// At a cut the waiting clip becomes the shown one: already loaded, so place it straight away.
+watch(
+  () => props.clip,
+  () => void nextTick(() => syncClip(true)),
 );
 watch(hasSound, (sound) => emit("sound", sound), { immediate: true });
 
@@ -512,6 +525,9 @@ watch(
 .screen .render {
   object-fit: contain;
   background: #000;
+}
+.screen .render.waiting {
+  visibility: hidden;
 }
 .soft {
   opacity: 0.6;
