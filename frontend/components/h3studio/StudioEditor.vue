@@ -246,6 +246,7 @@
                         @seconds="setSeconds"
                         @remove-keyframe="removeKeyframe"
                         @replace-keyframe="dropKeyframeMedia"
+                        @drop-edge-keyframe="dropEdgeKeyframe"
                         @set-keyframe="pickEdgeKeyframe"
                         @remove-shot="removeShot"
                         @add-shot="addShotTo"
@@ -948,12 +949,6 @@ function onTimelineSelect(itemId: string | null, trackId: string, e?: PointerEve
   }
   if (trackId === "scenes" && pickScene(itemId, e)) return;
   if (itemId.startsWith("curve:lora:")) return select("lora", trackId.replace(/^lora:/, ""));
-  if (itemId.startsWith("ghost:")) {
-    const [, edge, sceneId] = itemId.split(":");
-    const i = project.scenes.findIndex((s) => s.id === sceneId);
-    if (i >= 0) void pickEdgeKeyframe(i, edge as "first" | "last");
-    return;
-  }
   if (trackId === "scenes") select("scene", itemId);
   else if (trackId === "shots") select("shot", itemId);
   else if (trackId === "keyframes") select("keyframe", itemId);
@@ -991,6 +986,14 @@ async function onTimelineDrop(trackId: string, t: number, e: DragEvent, itemId: 
 function replaceKeyframe(id: string, media: string) {
   edit.setKeyframeMedia(project, id, media);
   select("keyframe", id);
+}
+/** New media dropped on a scene's empty first or last frame slot in the inspector. */
+async function dropEdgeKeyframe(sceneIndex: number, edge: "first" | "last", e: DragEvent) {
+  const [media] = await readDrop(e);
+  const scene = project.scenes[sceneIndex];
+  if (!media || !scene) return;
+  const at = edge === "first" ? 0 : scene.seconds;
+  select("keyframe", edit.setKeyframe(project, sceneIndex, at, media).id);
 }
 /** New media dropped on the selected keyframe's picture in the inspector. */
 async function dropKeyframeMedia(id: string, e: DragEvent) {

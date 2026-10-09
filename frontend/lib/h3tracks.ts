@@ -105,25 +105,11 @@ export function buildTracks(project: Project, ctx: TrackContext): TimelineTrack[
         start: starts[si]! + k.at,
         kind: "marker" as const,
         thumb: thumbUrl(k.media, 96),
-        peek: k.media
-          ? { src: stableUrl(k.media), kind, label: title }
-          : undefined,
+        peek: k.media ? { src: stableUrl(k.media), kind, label: title } : undefined,
         title,
       };
     });
-    // Empty first / last slots, just inside the scene, so there is always somewhere to put them.
-    const inset = Math.min(0.3, s.seconds / 6);
-    const ghosts = (["first", "last"] as const)
-      .filter((edge) => !s.keyframes.some((k) => edgeOf(project, si, k.at) === `${edge} frame`))
-      .map((edge) => ({
-        id: `ghost:${edge}:${s.id}`,
-        start: starts[si]! + (edge === "first" ? inset : s.seconds - inset),
-        kind: "marker" as const,
-        ghost: true,
-        icon: edge === "first" ? "mdi-page-first" : "mdi-page-last",
-        title: `Scene ${si + 1}: set the ${edge} frame — click, or drop an image here`,
-      }));
-    return [...set, ...ghosts];
+    return set;
   });
   const refTracks: TimelineTrack[] = project.refs.map((r) => {
     // One bar per run of consecutive scenes the reference is used in.

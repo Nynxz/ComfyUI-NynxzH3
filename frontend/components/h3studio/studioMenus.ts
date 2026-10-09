@@ -424,7 +424,6 @@ export function studioMenus(project: Project, a: MenuActions) {
     if (itemId && trackId === "scenes")
       return sceneMenu(project.scenes.findIndex((s) => s.id === itemId));
     if (itemId && trackId === "shots") return shotMenu(itemId, t);
-    if (itemId?.startsWith("ghost:")) return null;
     if (itemId && trackId === "keyframes") return keyframeMenu(itemId);
     if (itemId) return refMenu(itemId.split("|")[0]!, t);
     const p = placeAt(project, t);

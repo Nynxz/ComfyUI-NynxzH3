@@ -291,12 +291,15 @@
                 :key="edge"
                 type="button"
                 class="kf"
-                :class="{ set: !!edgeKeyframe(edge) }"
+                :class="{ set: !!edgeKeyframe(edge), dropping: edgeDropping === edge }"
                 :title="
                   edgeKeyframe(edge)
-                    ? `The ${edge} frame — click to select`
-                    : `Set the ${edge} frame`
+                    ? `The ${edge} frame — click to select, or drop a picture to replace it`
+                    : `Set the ${edge} frame — click, or drop a picture here`
                 "
+                @dragover="onEdgeDragOver($event, edge)"
+                @dragleave="edgeDropping = null"
+                @drop="onEdgeDrop($event, edge)"
                 @click="
                   edgeKeyframe(edge)
                     ? emit('select', { kind: 'keyframe', id: edgeKeyframe(edge)!.id })
@@ -768,6 +771,7 @@ const emit = defineEmits<{
   seconds: [scene: number, seconds: number];
   removeKeyframe: [id: string];
   replaceKeyframe: [id: string, event: DragEvent];
+  dropEdgeKeyframe: [scene: number, edge: "first" | "last", event: DragEvent];
   setKeyframe: [scene: number, edge: "first" | "last"];
   removeShot: [id: string];
   addShot: [scene: number];
@@ -786,6 +790,22 @@ function onKeyframeDragOver(e: DragEvent) {
 function onKeyframeDragLeave(e: DragEvent) {
   const to = e.relatedTarget as Node | null;
   if (!(e.currentTarget as HTMLElement).contains(to)) keyframeDropping.value = false;
+}
+const edgeDropping = ref<"first" | "last" | null>(null);
+function onEdgeDragOver(e: DragEvent, edge: "first" | "last") {
+  if (!hasMediaDrop(e)) return;
+  e.preventDefault();
+  e.stopPropagation();
+  edgeDropping.value = edge;
+}
+function onEdgeDrop(e: DragEvent, edge: "first" | "last") {
+  edgeDropping.value = null;
+  if (!hasMediaDrop(e)) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const set = edgeKeyframe(edge);
+  if (set) emit("replaceKeyframe", set.id, e);
+  else emit("dropEdgeKeyframe", props.sel.sceneIndex, edge, e);
 }
 function onKeyframeDrop(e: DragEvent) {
   keyframeDropping.value = false;
@@ -1602,6 +1622,10 @@ function mention(name: string) {
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
+}
+.kf.dropping {
+  border: 1px solid var(--zen-accent, #6366f1);
+  background: color-mix(in srgb, var(--zen-accent, #6366f1) 22%, var(--h3-field));
 }
 .kf {
   position: relative;
