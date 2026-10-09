@@ -9,6 +9,7 @@ import {
   refInScene,
   sceneLoraStrength,
   shotColors,
+  stableUrl,
   thumbUrl,
   type Project,
 } from "./h3studio";
@@ -96,13 +97,20 @@ export function buildTracks(project: Project, ctx: TrackContext): TimelineTrack[
     });
   });
   const keyframes = project.scenes.flatMap((s, si) => {
-    const set = s.keyframes.map((k) => ({
-      id: k.id,
-      start: starts[si]! + k.at,
-      kind: "marker" as const,
-      thumb: thumbUrl(k.media, 96),
-      title: `Keyframe · scene ${si + 1} · ${edgeOf(project, si, k.at) ?? `at ${formatTime(k.at)}`}`,
-    }));
+    const set = s.keyframes.map((k) => {
+      const title = `Keyframe · scene ${si + 1} · ${edgeOf(project, si, k.at) ?? `at ${formatTime(k.at)}`}`;
+      const kind = mediaKind(k.media) === "video" ? ("video" as const) : ("image" as const);
+      return {
+        id: k.id,
+        start: starts[si]! + k.at,
+        kind: "marker" as const,
+        thumb: thumbUrl(k.media, 96),
+        peek: k.media
+          ? { src: stableUrl(k.media), kind, label: title }
+          : undefined,
+        title,
+      };
+    });
     // Empty first / last slots, just inside the scene, so there is always somewhere to put them.
     const inset = Math.min(0.3, s.seconds / 6);
     const ghosts = (["first", "last"] as const)
@@ -286,6 +294,9 @@ export function buildTracks(project: Project, ctx: TrackContext): TimelineTrack[
             label: "Keyframes",
             icon: "mdi mdi-rhombus-outline",
             height: 32,
+            // A keyframe belongs where a shot starts (or on a scene's edge): catch those, from further.
+            snapTo: ["shots", "scenes"],
+            magnet: 14,
             items: keyframes,
           },
         ]),
