@@ -58,8 +58,9 @@ PREVIOUS_FRAME = "previous:last"
 #: The media of a sound reference cut from the previous scene's clip: `previous:sound:<k>/<n>` is
 #: the k-th of n snippets spread across it, filled in when the scene renders.
 PREVIOUS_SOUND = "previous:sound:"
-#: Sound references: the snippets' picture, black (only their sound guides) or the clip's own.
-SOUND_PICTURES = ("black", "real")
+#: How the sound references are shown: as audio alone, or as video — black (only their sound
+#: guides) or with the clip's own picture.
+SOUND_PICTURES = ("audio", "black", "real")
 RETENTION = ("fully_preserved", "partially_preserved", "attribute_transfer", "weak_reference")
 AUDIO_RETENTION = ("fully_copy", "partially_copy", "reference", "weak_reference")
 ROLES = ("reference", "semantic", "blocking", "control")
@@ -252,7 +253,7 @@ def normalize(raw: Any) -> dict[str, Any]:
                     "sound_refs": int(_num(cont.get("soundRefs", cont.get("sound_refs")), 0, 0, 3)),
                     "sound_picture": cont.get("soundPicture", cont.get("sound_picture"))
                     if cont.get("soundPicture", cont.get("sound_picture")) in SOUND_PICTURES
-                    else "black",
+                    else "audio",
                 },
             }
         )
@@ -645,21 +646,30 @@ def compile_scene(project: dict[str, Any], index: int, has_audio=None) -> Compil
         }
         in_scene = [*in_scene, setting]
     n_sound = scene["continuation"]["sound_refs"] if index > 0 else 0
+    shown_as = scene["continuation"]["sound_picture"]
     sound_refs = [
         {
             "id": f"carry{k + 1}",
             "media": f"{PREVIOUS_SOUND}{k}/{n_sound}",
-            "kind": "video",
+            "kind": "audio" if shown_as == "audio" else "video",
             "name": f"carry{k + 1}",
             "note": "",
             "role": "sound",
             "retain": RETENTION[0],
             "soundtrack": True,
-            "size": 0.5 if scene["continuation"]["sound_picture"] == "black" else 1.0,
+            "size": 0.5 if shown_as == "black" else 1.0,
             "scenes": "all",
         }
         for k in range(n_sound)
     ]
+    if sound_refs and shown_as == "audio":
+        voices = sum(1 for r in in_scene if r["kind"] == "audio" and r["media"])
+        if voices + n_sound > LIMITS["audio"]:
+            warnings.append(
+                f"Carry sound needs {n_sound} free audio slot{'s' if n_sound > 1 else ''}, and this "
+                f"scene's sounds use {voices} of {LIMITS['audio']}: "
+                f"{voices + n_sound - LIMITS['audio']} snippet(s) left out. Show them with picture instead."
+            )
     in_scene = [*in_scene, *sound_refs]
     # Control videos go to the ControlNet, not into H3's references or its prompt.
     controls = [
@@ -822,6 +832,10 @@ def compile_scene(project: dict[str, Any], index: int, has_audio=None) -> Compil
         subjects = [r for r in shown if r["subject"]]
         blocking = [r for r in shown if r["role"] == "blocking"]
         carried = [r for r in shown if r["role"] == "sound"]
+
+        def heard(r: dict[str, Any]) -> str:
+            return r["soundtrack_tag"] or r["tag"]
+
         sounds = [r for r in shown if r["kind"] == "audio" or r["soundtrack_tag"]]
 
         def sharing(r: dict[str, Any]) -> list[dict[str, Any]]:
@@ -852,6 +866,8 @@ def compile_scene(project: dict[str, Any], index: int, has_audio=None) -> Compil
                 + [
                     f"{r['tag']} is a moment from just before this scene; only its sound, "
                     f"{r['soundtrack_tag']}, matters — take nothing from its picture."
+                    if r["kind"] == "video"
+                    else f"{r['tag']} is the sound from just before this scene."
                     for r in carried
                 ]
                 + dialogue.timbres
@@ -877,12 +893,12 @@ def compile_scene(project: dict[str, Any], index: int, has_audio=None) -> Compil
             f"{r['tag']} (appears in [Shot {_first_shot(sharing(r), shots, numbers)}]): {r['retain']} - "
             f"{note(r)[2:] or names(r)} guides the sound."
             for r in shown
-            if r["kind"] == "audio"
+            if r["kind"] == "audio" and r["role"] != "sound"
         ]
         retention += [
-            f"{r['soundtrack_tag']} (throughout): fully_preserved - the ambience, engines, weather "
-            f"and music heard in {r['soundtrack_tag']} carry on without a break; nothing of "
-            f"{r['tag']}'s picture is kept."
+            f"{heard(r)} (throughout): fully_preserved - the ambience, engines, weather and music "
+            f"heard in {heard(r)} carry on without a break"
+            + (f"; nothing of {r['tag']}'s picture is kept." if r["kind"] == "video" else ".")
             for r in carried
         ]
         retention += [
@@ -912,8 +928,10 @@ def compile_scene(project: dict[str, Any], index: int, has_audio=None) -> Compil
             tags = " and ".join(r["tag"] for r in unmentioned)
             lead += f" The staging, timing and camera movement follow {tags}."
         if carried:
-            heard = " and ".join(r["soundtrack_tag"] for r in carried)
-            soundscape = f"{soundscape} The sound of {heard} carries on, uninterrupted, from the first frame."
+            tags = " and ".join(heard(r) for r in carried)
+            soundscape = (
+                f"{soundscape} The sound of {tags} carries on, uninterrupted, from the first frame."
+            )
         prompt = (
             f"subject_definitions:\n{definitions}\n\n"
             f"summary:\n[{directive}] The target video features {features}.{follows}\n\n"

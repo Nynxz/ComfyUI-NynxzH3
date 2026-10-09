@@ -416,10 +416,19 @@ def render_scene(setup: dict, project, scene: int | None) -> dict:
                 )
             else:
                 ref_items.append({"type": "audio"})
-                if audio_vae is not None:
-                    audio_latent, ref_audio_t = h3._encode_ref_audio(
-                        audio_vae, load_audio(ref["media"])
-                    )
+                if ref["media"].startswith(PREVIOUS_SOUND):
+                    if previous_clip is None:
+                        previous_clip = _previous_clip(setup, proj, index)
+                    sound = _sound_snippet(previous_clip, ref["media"], black=True)[1]
+                    if sound is None:
+                        raise ValueError(
+                            f"H3 Studio: scene {index + 1} carries scene {index}'s sound, but "
+                            f"scene {index}'s clip has none."
+                        )
+                else:
+                    sound = load_audio(ref["media"])
+                if audio_vae is not None and sound is not None:
+                    audio_latent, ref_audio_t = h3._encode_ref_audio(audio_vae, sound)
                     ref_blocks.append(
                         {"kind": "audio", "ref_audio_t": ref_audio_t, "audio_latent": audio_latent}
                     )

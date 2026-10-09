@@ -236,7 +236,7 @@
             <div
               v-if="sel.sceneIndex > 0"
               class="row"
-              title="Experimental. Snippets of the previous scene, spread across it, shown to H3 for the whole scene so its ambience, engines and music carry on past the first second. Sound only shows them as black video; with picture, its look can pull this scene towards the previous one."
+              title="Experimental. Snippets of the previous scene, spread across it, shown to H3 for the whole scene so its ambience, engines and music carry on past the first second. Audio shows them as sound alone (sharing H3's 3 audio slots with voices); black video can cost picture detail; with picture, its look can pull this scene towards the previous one."
             >
               <span class="lbl">carry sound</span>
               <ZenToggleGroup
@@ -251,13 +251,29 @@
               />
               <ZenToggleGroup
                 v-if="(scene.continuation.soundRefs ?? 0) > 0"
-                :model-value="scene.continuation.soundPicture ?? 'black'"
+                :model-value="scene.continuation.soundPicture ?? 'audio'"
                 :options="[
-                  { value: 'black', label: 'Sound only' },
-                  { value: 'real', label: 'With picture' },
+                  {
+                    value: 'audio',
+                    label: 'Audio',
+                    title:
+                      'As audio references: nothing to see, but they share H3\'s 3 audio slots with voices',
+                  },
+                  {
+                    value: 'black',
+                    label: 'Black video',
+                    title: 'As black video with their sound: can cost the picture detail',
+                  },
+                  {
+                    value: 'real',
+                    label: 'With picture',
+                    title:
+                      'As the clip itself: its look can pull this scene towards the previous one',
+                  },
                 ]"
                 @update:model-value="
-                  (v: string) => (scene!.continuation.soundPicture = v as 'black' | 'real')
+                  (v: string) =>
+                    (scene!.continuation.soundPicture = v as 'audio' | 'black' | 'real')
                 "
               />
               <span class="soft">experimental</span>
