@@ -101,7 +101,14 @@ def noise_carry(
 
     if index < 1 or context < 5:
         return None
+    from ._project import compile_scene
+
     before = project["scenes"][index - 1]
+    # The previous scene's noise is drawn again at the shape it rendered; when it rendered more than
+    # its own length (a head of its own, or a handle), its last tokens aren't its end: no sharing.
+    previous = compile_scene(project, index - 1)
+    if previous.frames != previous.keep:
+        return None
     _, latent_t, audio_t = h3.temporal_shape(frames_for(before["seconds"]))
     video, audio = latent["samples"].unbind()
     return {
@@ -116,10 +123,15 @@ def noise_carry(
 # --- beside a saved clip: its latent and its regenerated head, so a reused clip carries them too ---
 
 
-def save_sidecar(clip_path: str, latent, head) -> None:
+def save_sidecar(clip_path: str, latent, head, tail=None) -> None:
+    """Beside a clip: its latent, the head it regenerated over the previous scene, and the sound
+    past its end (its handle, see `_project.HANDLE`) that the next scene's start can fade over."""
     from safetensors.torch import save_file
 
     tensors, meta = {}, {}
+    if tail is not None:
+        tensors["tail_audio"] = tail["waveform"].detach().cpu().float().contiguous()
+        meta["tail_rate"] = str(tail["sample_rate"])
     if latent is not None:
         tensors["video"], tensors["audio"] = (t.detach().cpu().contiguous() for t in latent)
     if head is not None:
@@ -131,6 +143,20 @@ def save_sidecar(clip_path: str, latent, head) -> None:
             meta["sample_rate"] = str(sound["sample_rate"])
     if tensors:
         save_file(tensors, clip_path + SIDECAR, metadata=meta)
+
+
+def load_tail(clip_path: str) -> dict | None:
+    """The sound past a clip's end (its handle), saved beside it, or None."""
+    from safetensors import safe_open
+
+    path = clip_path + SIDECAR
+    if not os.path.isfile(path):
+        return None
+    with safe_open(path, framework="pt") as f:
+        if "tail_audio" not in set(f.keys()):
+            return None
+        rate = int((f.metadata() or {}).get("tail_rate", 44100))
+        return {"waveform": f.get_tensor("tail_audio"), "sample_rate": rate}
 
 
 def load_sidecar(clip_path: str):
@@ -207,7 +233,10 @@ def join(
 
     frames: list[torch.Tensor] = []
     sound: list[torch.Tensor] = []
-    for images, audio, head in parts:
+    # The sound past each clip's end (its handle), where it rendered one.
+    tails = [getattr(v, "h3_tail", None) for v in videos]
+    for i, (images, audio, head) in enumerate(parts):
+        handle = tails[i - 1] if i > 0 and head is not None and crossfade > 0 else None
         if like is not None and audio is None:
             audio = {
                 "waveform": _silence(images.shape[0], like),
@@ -224,7 +253,8 @@ def join(
                 w = torch.linspace(1, k, k, dtype=frames[-1].dtype).div(k + 1).view(k, 1, 1, 1)
                 tail = frames[-1][-k:] * (1 - w) + head_frames[-k:].to(frames[-1].dtype) * w
                 frames[-1] = torch.cat([frames[-1][:-k], tail])
-            if sound and head_audio is not None and like is not None:
+            # With a handle the previous scene's own sound runs on past the cut instead (below).
+            if sound and head_audio is not None and like is not None and handle is None:
                 n = min(
                     round(k / FPS * like["sample_rate"]),
                     sound[-1].shape[-1],
@@ -238,7 +268,10 @@ def join(
                     sound[-1] = torch.cat([sound[-1][..., :-n], faded], dim=-1)
         frames.append(images)
         if audio is not None:
-            sound.append(audio["waveform"])
+            waveform = audio["waveform"]
+            if handle is not None and like is not None:
+                waveform = _over(waveform, handle, like["sample_rate"])
+            sound.append(waveform)
     out_audio = (
         {"waveform": torch.cat(sound, dim=-1), "sample_rate": like["sample_rate"]}
         if sound and like is not None
@@ -251,6 +284,24 @@ def join(
     return InputImpl.VideoFromComponents(
         Types.VideoComponents(images=images, frame_rate=Fraction(FPS), audio=out_audio)
     )
+
+
+def _over(scene: torch.Tensor, handle: dict, rate: int) -> torch.Tensor:
+    """A scene's start with the previous scene's handle laid over it: the previous scene's own
+    sound running on past the cut and fading out (equal-power) as this scene's fades in."""
+    import comfy.audio
+
+    tail = handle["waveform"].to(scene.dtype)
+    if handle["sample_rate"] != rate:
+        tail = comfy.audio.resample(tail, handle["sample_rate"], rate)
+    if tail.shape[:-1] != scene.shape[:-1]:
+        tail = tail.mean(dim=1, keepdim=True).expand(*scene.shape[:-1], tail.shape[-1])
+    n = min(tail.shape[-1], scene.shape[-1])
+    if n <= 0:
+        return scene
+    t = torch.linspace(0, 1, n, dtype=scene.dtype) * (math.pi / 2)
+    mixed = scene[..., :n] * torch.sin(t) + tail[..., :n] * torch.cos(t)
+    return torch.cat([mixed, scene[..., n:]], dim=-1)
 
 
 def _under(film: dict | None, music: dict, seconds: float, volume: float, fade: float) -> dict:

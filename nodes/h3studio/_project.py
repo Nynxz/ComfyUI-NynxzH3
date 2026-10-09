@@ -55,6 +55,10 @@ CONTINUATIONS = ("cut", "guide", "first_frame", "reference", "sound")
 #: The media of a keyframe or reference that is the previous scene's last frame, filled in when the
 #: scene renders.
 PREVIOUS_FRAME = "previous:last"
+#: Frames a scene renders past its end when the next scene carries its sound on: its handle, laid
+#: over the next scene's start as the cut's sound fades across (H3 tends to dip where a carried
+#: head ends, so the previous scene's own sound covers that moment).
+HANDLE = 22
 #: The media of a sound reference cut from the previous scene's clip: `previous:sound:<k>/<n>` is
 #: the k-th of n snippets spread across it, filled in when the scene renders.
 PREVIOUS_SOUND = "previous:sound:"
@@ -447,6 +451,8 @@ class Compiled:
     #: scene's own frames after it.
     lead: int = 0
     keep: int = 0
+    #: Frames of handle past the scene's end (see `HANDLE`): their sound is kept beside the clip.
+    tail: int = 0
 
     def as_dict(self) -> dict[str, Any]:
         return dict(self.__dict__)
@@ -638,6 +644,8 @@ def compile_scene(project: dict[str, Any], index: int, has_audio=None) -> Compil
 
     carry = scene["continuation"]["mode"] if index > 0 else "cut"
     head = scene["continuation"]["frames"] if carry in ("guide", "sound") else 0
+    following = scenes[index + 1] if 0 <= index < len(scenes) - 1 else None
+    handle = HANDLE if following and following["continuation"]["mode"] in ("guide", "sound") else 0
     in_scene = refs_in_scene(project, scene)
     setting = None
     if carry == "reference":
@@ -996,10 +1004,11 @@ def compile_scene(project: dict[str, Any], index: int, has_audio=None) -> Compil
         settings=project["settings"],
         task=task,
         prompt=prompt,
-        frames=align_frame_count(scene_frames + head) if head else scene_frames,
+        frames=align_frame_count(scene_frames + head + handle) if head or handle else scene_frames,
         seconds=round(seconds, 3),
         lead=head,
         keep=scene_frames,
+        tail=handle,
         seed=scene["seed"],
         width=width,
         height=height,

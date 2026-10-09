@@ -41,6 +41,7 @@ def assemble(proj: dict, music: dict | None = None, volume: float = 0.8, fade: f
             video = InputImpl.VideoFromFile(path_of(record["ref"]))
             video.h3_scene = i
             video.h3_latent, video.h3_head = _carry.load_sidecar(path_of(record["ref"]))
+            video.h3_tail = _carry.load_tail(path_of(record["ref"]))
         else:
             missing.append(i + 1)
             video = _blank_video(

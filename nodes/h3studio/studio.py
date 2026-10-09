@@ -606,6 +606,8 @@ def render_scene(setup: dict, project, scene: int | None) -> dict:
         "frames": frame_count,
         #: The scene's own frames, kept after the head: H3's grid can make the render longer.
         "keep_frames": plan.keep,
+        #: Frames of handle after them, whose sound is kept beside the clip.
+        "tail_frames": plan.tail,
         "width": width,
         "height": height,
         "scene": index,
@@ -1331,6 +1333,7 @@ class NynxzH3StudioClip(NynxzNode):
             video.h3_scene = render.get("scene")
             video.h3_key = key
             video.h3_latent, video.h3_head = _carry.load_sidecar(path_of(saved))
+            video.h3_tail = _carry.load_tail(path_of(saved))
             if render.get("studio_node") is not None:
                 _send(
                     CLIP_EVENT,
@@ -1357,30 +1360,41 @@ class NynxzH3StudioClip(NynxzNode):
                 head_audio = {**audio, "waveform": audio["waveform"][..., :cut]}
                 audio = {**audio, "waveform": audio["waveform"][..., cut:]}
             head = (images[:trim], head_audio, bool(render.get("carries_picture", True)))
-        # Just the scene's own length: H3's frame grid can make the render a little longer.
-        keep = int(render.get("keep_frames") or 0)
-        if keep and frames.shape[0] > keep:
-            frames = frames[:keep]
+        # Just the scene's own length (H3's grid can make the render longer), and the sound of its
+        # handle past it, kept beside the clip for the cut into the next scene.
+        scene_frames = int(render.get("keep_frames") or 0)
+        rendered = frames.shape[0]
+        tail_sound = None
+        if scene_frames and frames.shape[0] > scene_frames:
+            frames = frames[:scene_frames]
             if audio is not None:
-                audio = {
-                    **audio,
-                    "waveform": audio["waveform"][..., : round(keep / FPS * audio["sample_rate"])],
-                }
+                rate = audio["sample_rate"]
+                end = round(scene_frames / FPS * rate)
+                handle = int(render.get("tail_frames") or 0)
+                if handle:
+                    tail_sound = {
+                        **audio,
+                        "waveform": audio["waveform"][..., end : end + round(handle / FPS * rate)],
+                    }
+                audio = {**audio, "waveform": audio["waveform"][..., :end]}
         video = InputImpl.VideoFromComponents(
             Types.VideoComponents(images=frames, frame_rate=Fraction(FPS), audio=audio)
         )
         samples = latent["samples"] if latent is not None else None
         video.h3_scene = render.get("scene")
         video.h3_key = key
+        # The next scene continues from this latent's last tokens: only when they are the clip's
+        # own end (no head, no grid padding or handle after it); else from the decoded clip.
         video.h3_latent = (
             tuple(t.detach().cpu() for t in samples.unbind())
-            if getattr(samples, "is_nested", False)
+            if getattr(samples, "is_nested", False) and not trim and rendered == frames.shape[0]
             else None
         )
+        video.h3_tail = tail_sound
         video.h3_head = head
         if keep and render.get("studio_node") is not None:
             ref = _save_clip(video, render, cls._metadata())
-            _carry.save_sidecar(path_of(ref), video.h3_latent, head)
+            _carry.save_sidecar(path_of(ref), video.h3_latent, head, tail_sound)
             if key:
                 _reuse.remember(key, ref, cls._models(render))
             _reuse.remember_scene(render.get("scene_id"), ref, key, render.get("scene_key"))
