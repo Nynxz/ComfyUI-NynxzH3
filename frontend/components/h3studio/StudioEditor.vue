@@ -245,6 +245,7 @@
                         @select="(t) => selectAndShow(t.kind, t.id)"
                         @seconds="setSeconds"
                         @remove-keyframe="removeKeyframe"
+                        @replace-keyframe="dropKeyframeMedia"
                         @set-keyframe="pickEdgeKeyframe"
                         @remove-shot="removeShot"
                         @add-shot="addShotTo"
@@ -977,13 +978,24 @@ function onTimelineMove(itemId: string, trackId: string, change: { start?: numbe
 function onTimelineDblClick(trackId: string, t: number) {
   if (trackId === "shots") splitAt(t);
 }
-async function onTimelineDrop(trackId: string, t: number, e: DragEvent) {
+async function onTimelineDrop(trackId: string, t: number, e: DragEvent, itemId: string | null) {
   if (!hasMediaDrop(e)) return;
   e.preventDefault();
   e.stopPropagation();
   const media = await readDrop(e);
-  if (trackId === "keyframes" && media[0]) addKeyframe(t, media[0]);
+  const onto = project.scenes.some((s) => s.keyframes.some((k) => k.id === itemId));
+  if (trackId === "keyframes" && media[0] && onto) replaceKeyframe(itemId!, media[0]);
+  else if (trackId === "keyframes" && media[0]) addKeyframe(t, media[0]);
   else addRefs(media);
+}
+function replaceKeyframe(id: string, media: string) {
+  edit.setKeyframeMedia(project, id, media);
+  select("keyframe", id);
+}
+/** New media dropped on the selected keyframe's picture in the inspector. */
+async function dropKeyframeMedia(id: string, e: DragEvent) {
+  const [media] = await readDrop(e);
+  if (media) replaceKeyframe(id, media);
 }
 
 // --- edits (lib/h3edits), and what each selects ---------------------------------------------------

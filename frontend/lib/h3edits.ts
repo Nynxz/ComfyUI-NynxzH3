@@ -216,6 +216,11 @@ export function moveKeyframe(project: Project, id: string, t: number) {
   const local = t - sceneStarts(project)[si]!;
   k.at = local < 0.1 ? 0 : local > s.seconds - 0.1 ? s.seconds : Math.round(local * 100) / 100;
 }
+/** A new picture for a keyframe; its place and fit stay. */
+export function setKeyframeMedia(project: Project, id: string, media: string) {
+  const k = project.scenes.flatMap((s) => s.keyframes).find((x) => x.id === id);
+  if (k) k.media = media;
+}
 export function removeKeyframe(project: Project, id: string) {
   for (const s of project.scenes) s.keyframes = s.keyframes.filter((k) => k.id !== id);
 }

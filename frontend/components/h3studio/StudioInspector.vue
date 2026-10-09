@@ -655,8 +655,16 @@
       <div
         class="fitframe"
         :style="{ aspectRatio: `${project.canvas.width} / ${project.canvas.height}` }"
+        title="Drop a picture here to replace it"
+        @dragover="onKeyframeDragOver"
+        @dragleave="onKeyframeDragLeave"
+        @drop="onKeyframeDrop"
       >
         <img :class="keyframe.fit ?? 'crop'" :src="stableUrl(keyframe.media)" alt="" />
+        <div v-if="keyframeDropping" class="replacing">
+          <i class="mdi mdi-swap-horizontal" />
+          <span>Replace</span>
+        </div>
       </div>
       <div class="row">
         <span class="lbl">fit</span>
@@ -739,6 +747,7 @@ import {
   type Shot,
 } from "@/lib/h3studio";
 import { isShaped } from "@/lib/h3tracks";
+import { hasMediaDrop } from "@/framework";
 import { reorderShot } from "@/lib/h3edits";
 
 export interface Selection {
@@ -758,6 +767,7 @@ const emit = defineEmits<{
   select: [target: { kind: Selection["kind"]; id: string }];
   seconds: [scene: number, seconds: number];
   removeKeyframe: [id: string];
+  replaceKeyframe: [id: string, event: DragEvent];
   setKeyframe: [scene: number, edge: "first" | "last"];
   removeShot: [id: string];
   addShot: [scene: number];
@@ -765,6 +775,25 @@ const emit = defineEmits<{
 }>();
 
 const scene = computed(() => props.project.scenes[props.sel.sceneIndex]);
+// --- keyframe: new media dropped on its picture replaces it ----------------------------------------
+const keyframeDropping = ref(false);
+function onKeyframeDragOver(e: DragEvent) {
+  if (!hasMediaDrop(e)) return;
+  e.preventDefault();
+  e.stopPropagation();
+  keyframeDropping.value = true;
+}
+function onKeyframeDragLeave(e: DragEvent) {
+  const to = e.relatedTarget as Node | null;
+  if (!(e.currentTarget as HTMLElement).contains(to)) keyframeDropping.value = false;
+}
+function onKeyframeDrop(e: DragEvent) {
+  keyframeDropping.value = false;
+  if (!hasMediaDrop(e) || !keyframe.value) return;
+  e.preventDefault();
+  e.stopPropagation();
+  emit("replaceKeyframe", keyframe.value.id, e);
+}
 // --- scene panel ---------------------------------------------------------------------------------
 // Selecting a shot opens its card; selecting the scene opens its settings (and keeps whichever
 // card you last had open). Cards are opened by selecting the shot, so the timeline follows.
@@ -1168,11 +1197,29 @@ function mention(name: string) {
   width: 110px;
 }
 .fitframe {
+  position: relative;
   width: 100%;
   max-height: 220px;
   overflow: hidden;
   border-radius: var(--h3-radius);
   background: #000;
+}
+.replacing {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  background: color-mix(in srgb, var(--zen-accent, #6366f1) 55%, rgb(0 0 0 / 60%));
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+  pointer-events: none;
+}
+.replacing .mdi {
+  font-size: 20px;
 }
 .fitframe img {
   display: block;
