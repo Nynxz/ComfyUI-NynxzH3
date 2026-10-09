@@ -216,6 +216,27 @@ export function moveKeyframe(project: Project, id: string, t: number) {
   const local = t - sceneStarts(project)[si]!;
   k.at = local < 0.1 ? 0 : local > s.seconds - 0.1 ? s.seconds : Math.round(local * 100) / 100;
 }
+/** The stretch of a scene (`seconds` long) a control video steers, from scene-clock times; the
+ *  whole scene clears it, so the control steers everywhere again. */
+export function setControlWindow(
+  project: Project,
+  refId: string,
+  from: number,
+  to: number,
+  seconds: number,
+) {
+  const r = project.refs.find((x) => x.id === refId);
+  if (!r) return;
+  const start = Math.round(Math.min(Math.max(from, 0), seconds) * 20) / 20;
+  const end = Math.round(Math.min(Math.max(to, start + 0.25), seconds) * 20) / 20;
+  if (start <= 0.05 && end >= seconds - 0.05) {
+    delete r.controlFrom;
+    delete r.controlTo;
+  } else {
+    r.controlFrom = start;
+    r.controlTo = end;
+  }
+}
 /** A new picture for a keyframe; its place and fit stay. */
 export function setKeyframeMedia(project: Project, id: string, media: string) {
   const k = project.scenes.flatMap((s) => s.keyframes).find((x) => x.id === id);

@@ -958,6 +958,7 @@ function onTimelineSelect(itemId: string | null, trackId: string, e?: PointerEve
   } else select("ref", itemId.split("|")[0]!);
 }
 function onTimelineMove(itemId: string, trackId: string, change: { start?: number; end?: number }) {
+  if (trackId.startsWith("ref:") && moveControlWindow(itemId, change)) return;
   if (trackId === "scenes" && change.end !== undefined) {
     const i = project.scenes.findIndex((s) => s.id === itemId);
     if (i >= 0) setSeconds(i, change.end - starts.value[i]!);
@@ -969,6 +970,25 @@ function onTimelineMove(itemId: string, trackId: string, change: { start?: numbe
   else if (trackId.startsWith("voice:"))
     edit.dropLine(project, itemId.split("@")[0]!, change.start);
   else if (trackId === "keyframes") edit.moveKeyframe(project, itemId, change.start);
+}
+/** A control video's bar on its track: moved, or an end dragged — the stretch of the scene it
+ *  steers. Returns whether the item was one. */
+function moveControlWindow(itemId: string, change: { start?: number; end?: number }): boolean {
+  const [refId, part, at] = itemId.split("|");
+  if (part !== "ctl" || !refId) return false;
+  const i = Number(at);
+  const scene = project.scenes[i];
+  const r = project.refs.find((x) => x.id === refId);
+  if (!scene || !r) return true;
+  const start = starts.value[i]!;
+  const from = change.start !== undefined ? change.start - start : (r.controlFrom ?? 0);
+  const to = change.end !== undefined ? change.end - start : (r.controlTo ?? scene.seconds);
+  if (change.start !== undefined && change.end !== undefined) {
+    const length = to - from;
+    const shifted = Math.min(Math.max(from, 0), scene.seconds - length);
+    edit.setControlWindow(project, refId, shifted, shifted + length, scene.seconds);
+  } else edit.setControlWindow(project, refId, from, to, scene.seconds);
+  return true;
 }
 function onTimelineDblClick(trackId: string, t: number) {
   if (trackId === "shots") splitAt(t);

@@ -1,6 +1,6 @@
 // H3 Studio's timeline, from the project: scenes, shots, keyframes, a lane per voice, a lane per
 // LoRA and one per reference. Pure — the editor wraps it in a computed.
-import { loraLibrary as lib, type TimelineTrack } from "@nynxz/zenkit-ui";
+import { loraLibrary as lib, type TimelineItem, type TimelineTrack } from "@nynxz/zenkit-ui";
 import { mediaKind } from "@/framework";
 import {
   TRANSITIONS,
@@ -12,6 +12,7 @@ import {
   stableUrl,
   thumbUrl,
   type Project,
+  type Ref,
 } from "./h3studio";
 import { lineTimes, speakerNames, voiceColor, voiceThumb } from "./h3dialogue";
 import type { SceneState, SceneStatus } from "./h3render";
@@ -123,6 +124,7 @@ export function buildTracks(project: Project, ctx: TrackContext): TimelineTrack[
     });
     const kind = r.kind ?? mediaKind(r.media);
     const proxy = !r.media;
+    const control = r.role === "control" && kind === "video" && !proxy;
     return {
       id: `ref:${r.id}`,
       label: `@${r.name}`,
@@ -136,30 +138,32 @@ export function buildTracks(project: Project, ctx: TrackContext): TimelineTrack[
             : "mdi mdi-image-outline",
       height: 26,
       movable: true,
-      items: runs.map((run, i) => ({
-        id: `${r.id}|${i}`,
-        ...run,
-        label: `@${r.name}${r.note ? ` — ${r.note}` : ""}`,
-        icon: proxy
-          ? "mdi-account-question-outline"
-          : kind === "video"
-            ? "mdi-video-outline"
-            : kind === "audio"
-              ? "mdi-waveform"
-              : r.role === "reference"
-                ? "mdi-eye"
-                : "mdi-text-box-outline",
-        ghost: proxy,
-        color:
-          kind === "audio"
-            ? "#3d8f7a"
-            : kind === "video"
-              ? "#b5684a"
-              : r.role === "reference"
-                ? "#8b6fd6"
-                : "#5f6a7a",
-        resize: false as const,
-      })),
+      items: control
+        ? controlItems(project, r, starts)
+        : runs.map((run, i) => ({
+            id: `${r.id}|${i}`,
+            ...run,
+            label: `@${r.name}${r.note ? ` — ${r.note}` : ""}`,
+            icon: proxy
+              ? "mdi-account-question-outline"
+              : kind === "video"
+                ? "mdi-video-outline"
+                : kind === "audio"
+                  ? "mdi-waveform"
+                  : r.role === "reference"
+                    ? "mdi-eye"
+                    : "mdi-text-box-outline",
+            ghost: proxy,
+            color:
+              kind === "audio"
+                ? "#3d8f7a"
+                : kind === "video"
+                  ? "#b5684a"
+                  : r.role === "reference"
+                    ? "#8b6fd6"
+                    : "#5f6a7a",
+            resize: false as const,
+          })),
     };
   });
   // A LoRA's strength is one value per scene: a flat bar each, dragged up or down. In the steps
@@ -309,4 +313,31 @@ export function filterCount(project: Project, id: string): number {
     );
   if (id === "loras") return (project.loras ?? []).length;
   return project.refs.length;
+}
+
+/** A control video's track: per scene it steers, the scene (dashed) and the stretch it steers on
+ *  top — drag its ends or the whole bar (ids `<ref>|ctl|<scene index>`). */
+function controlItems(project: Project, r: Ref, starts: number[]): TimelineItem[] {
+  return project.scenes.flatMap((s, i) => {
+    if (!refInScene(project, r, s)) return [];
+    const at = starts[i]!;
+    const from = r.controlFrom ?? 0;
+    const to = r.controlTo ?? s.seconds;
+    const whole = r.controlFrom === undefined && r.controlTo === undefined;
+    const span = whole ? "the whole scene" : `${formatTime(from)}–${formatTime(to)}`;
+    return [
+      { id: `${r.id}|scene|${i}`, start: at, end: at + s.seconds, ghost: true, color: "#b5684a" },
+      {
+        id: `${r.id}|ctl|${i}`,
+        start: at + Math.min(from, s.seconds),
+        end: at + Math.min(to, s.seconds),
+        label: `@${r.name} steers ${span}`,
+        title: `@${r.name} steers scene ${i + 1}: ${span}. Drag its ends, or the bar, to steer just part of it; stretch it to the scene's ends to steer all of it`,
+        icon: "mdi-vector-square",
+        color: "#b5684a",
+        resize: "both" as const,
+        movable: true,
+      },
+    ];
+  });
 }
