@@ -302,7 +302,7 @@ async function use(g: { id: string; index: number }, t: Take) {
       };
       return;
     }
-    const scene = doc.value.scenes[g.index];
+    const scene = doc.value.scenes.find((s) => s.id === g.id);
     if (scene) {
       scene.render = t.ref;
       // Its own seed back too: the scene then matches the take, instead of reading as changed.
