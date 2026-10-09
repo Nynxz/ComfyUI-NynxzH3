@@ -196,7 +196,8 @@ def normalize(raw: Any) -> dict[str, Any]:
                 "control_until": _num(
                     ref.get("controlUntil", ref.get("control_until")), 0.75, 0.05, 1.0
                 ),
-                # When in the scene it steers (seconds of the scene's own clock); None = open end.
+                # Where in the scene it steers (seconds of the scene's own clock; None = open end):
+                # the video starts at `from`, like a clip placed on the timeline.
                 "control_from": _opt_seconds(ref.get("controlFrom", ref.get("control_from"))),
                 "control_to": _opt_seconds(ref.get("controlTo", ref.get("control_to"))),
                 # Scenes that show it without using it (see `refs_in_scene`): a list of scene ids, or

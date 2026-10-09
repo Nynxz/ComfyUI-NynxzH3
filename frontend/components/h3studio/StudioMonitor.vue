@@ -112,7 +112,7 @@
       <div
         v-if="control && controlView !== 'off'"
         class="control"
-        :class="controlView"
+        :class="[controlView, { idle: !controlSteering }]"
         :title="`@${control.name}: the control video steering this scene`"
       >
         <video
@@ -426,8 +426,27 @@ const control = computed(() => {
 });
 const controlUrl = computed(() => (control.value ? stableUrl(control.value.media) : ""));
 const controlEl = ref<HTMLVideoElement | null>(null);
+/** Where the control's stretch of the scene starts and ends: its video starts at `from`. */
+const controlSpan = computed(() => ({
+  from: control.value?.controlFrom ?? 0,
+  to: control.value?.controlTo ?? Number.POSITIVE_INFINITY,
+}));
+/** Whether the control steers at the playhead; outside its stretch it holds a frame, dimmed. */
+const controlSteering = computed(
+  () => props.offset >= controlSpan.value.from && props.offset <= controlSpan.value.to,
+);
 function syncControl(force = false) {
-  syncVideo(controlEl.value, () => props.offset, force);
+  const v = controlEl.value;
+  const { from, to } = controlSpan.value;
+  if (v && !controlSteering.value) {
+    // Before its stretch: its first frame; after: the last frame it steered with. Held, not played.
+    if (!v.paused) v.pause();
+    const at = props.offset < from ? 0 : Math.max(0, to - from);
+    if (Number.isFinite(v.duration) && Math.abs(v.currentTime - Math.min(at, v.duration)) > 1 / 48)
+      v.currentTime = Math.min(at, v.duration);
+    return;
+  }
+  syncVideo(v, () => props.offset - from, force);
 }
 watch(
   () => [props.offset, props.playing, control.value, props.controlView] as const,
@@ -658,6 +677,9 @@ watch(
   background: transparent;
   mix-blend-mode: screen;
   opacity: 0.6;
+}
+.control.idle video {
+  opacity: 0.25;
 }
 .control-bar {
   position: absolute;

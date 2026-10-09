@@ -70,10 +70,11 @@ reference, a grey-box render tends to come back looking like a grey box.
   Setup needs the `model` wired. It loads only when a scene that renders has a control video.
 - **Strength** (0–2, default 1) is how hard it steers; **until** (default 75%) is how far
   through the sampling: after that, H3 draws the detail on its own.
-- **Only part of the scene** limits it to a stretch of the scene's own clock (**from**–**to**,
-  in seconds): it eases in and out over a quarter second at the ends, and outside that H3 moves
-  freely. The video still lines up with the scene from its start, so frame *n* of it steers frame
-  *n* of the scene.
+- **Only part of the scene** places it on a stretch of the scene's own clock (**from**–**to**,
+  in seconds), like a clip on the timeline: the video starts at **from** and steers until **to**,
+  easing in and out over a quarter second at the ends; outside that H3 moves freely. Drag or trim
+  its bar on the control's timeline track, and the monitor's control view plays it in place (dimmed
+  where it doesn't steer).
 - One control video per scene. Show it in its scene with the scene chips (or `with:` in a script:
   `@depth: … (video, control)`).
 - The ControlNet takes depth, edges (canny, HED, MLSD), pose, scribbles, layout boxes or a

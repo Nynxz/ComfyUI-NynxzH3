@@ -1060,10 +1060,12 @@ def _apply_control(setup: dict, model, vae, control: dict, trim: int, warnings: 
     import torch
 
     frames, _ = load_video(control["media"], FPS)
-    if trim:
-        # A continuation's carried head comes first in the latent: hold the video's first frame
-        # under it, so the video lines up with the scene's own frames.
-        frames = torch.cat([frames[:1].repeat(trim, 1, 1, 1), frames])
+    # The video starts where its stretch of the scene does (`from`, like a clip placed on the
+    # timeline), and a continuation's carried head comes first in the latent: hold the video's first
+    # frame under both, so its frame 0 meets the scene at `from`.
+    hold = trim + round((control.get("from") or 0.0) * FPS)
+    if hold:
+        frames = torch.cat([frames[:1].repeat(hold, 1, 1, 1), frames])
     patched = model.clone()
     sampling = patched.get_model_object("model_sampling")
     window = (control.get("from"), control.get("to"))
