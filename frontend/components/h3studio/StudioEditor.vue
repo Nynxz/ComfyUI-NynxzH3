@@ -508,6 +508,17 @@ const sheetOpen = ref(false);
 const live = useStudioLive(props.nodeId ?? "");
 // --- partial renders: which scenes are up to date, and rendering just some (lib/h3render.ts) -----
 const renderStatus = useRenderStatus(project);
+// The server's record of each scene's latest clip is the truth; the clip event is only the fast
+// path, and misses clips made while the studio was closed or by an older server.
+watch(
+  () => [...renderStatus.status.values()].map((st) => `${st.id}:${st.ref ?? ""}`).join(),
+  () => {
+    for (const scene of project.scenes) {
+      const latest = renderStatus.status.get(scene.id)?.ref;
+      if (latest && scene.render !== latest) scene.render = latest;
+    }
+  },
+);
 // The Renders sidebar: toggled from the toolbar, remembered.
 const rendersOpen = ref(
   (() => {
