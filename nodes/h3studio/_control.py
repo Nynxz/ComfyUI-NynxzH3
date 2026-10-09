@@ -40,6 +40,21 @@ def latent_weights(
     return out
 
 
+def landed(weights: list[float], lead: int = 0, fps: int = FPS) -> str:
+    """Where the weights put the steering, on the scene's clock: '3.85-8.96 s (full 4.10-8.71 s)'."""
+    times, first = [], 0
+    for k in range(len(weights)):
+        span = FRAMES_PER_LATENT[k % 5]
+        times.append(((first - lead) / fps, (first + span - lead) / fps))
+        first += span
+    on = [t for t, w in zip(times, weights, strict=True) if w > 0]
+    full = [t for t, w in zip(times, weights, strict=True) if w >= 1]
+    if not on:
+        return "nowhere"
+    out = f"{on[0][0]:.2f}-{on[-1][1]:.2f} s"
+    return f"{out} (full {full[0][0]:.2f}-{full[-1][1]:.2f} s)" if full else out
+
+
 def describe(start: float | None, end: float | None) -> str:
     """'from 1.5 s to 3 s', 'from 2 s', 'until 2.5 s', or '' for the whole scene."""
     num = lambda s: f"{s:g} s"  # noqa: E731

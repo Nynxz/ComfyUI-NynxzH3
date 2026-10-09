@@ -984,6 +984,15 @@ def _WatchedControl(
                 rows[start:stop] = per_frame.repeat_interleave((stop - start) // latent_t)
                 self.row_weights = rows.to(skip.device).unsqueeze(-1)
                 self.weights_for = key
+                LOG.info(
+                    "H3 Studio: @%s steers %d of %d latent frames: %s of the scene; its video's "
+                    "first frame is at %.2f s",
+                    name,
+                    sum(1 for w in per_frame.tolist() if w > 0),
+                    latent_t,
+                    _control.landed(per_frame.tolist(), lead),
+                    window[0] or 0.0,
+                )
             return self.row_weights
 
         def _step(self, block_index, args, out):
