@@ -26,7 +26,7 @@ import node_helpers
 from comfy_api.latest import io
 
 from .._base import NynxzNode
-from . import _carry, _reuse
+from . import _carry, _control, _reuse
 from ._loras import apply as apply_loras
 from ._media import has_audio, load_audio, load_image, load_video, path_of
 from ._project import FPS, PREVIOUS_FRAME, PREVIOUS_SOUND, compile_scene, normalize
@@ -607,9 +607,10 @@ def render_scene(setup: dict, project, scene: int | None) -> dict:
         before = model
         model = _apply_control(setup, model, vae, plan.controls[0], trim, plan.warnings)
         c = plan.controls[0]
+        span = _control.describe(c.get("from"), c.get("to"))
         control_note = (
             f"@{c['name']} through {setup.get('controlnet')}, strength {c['strength']:.2f} "
-            f"until {round(c['until'] * 100)}%"
+            f"until {round(c['until'] * 100)}%{f', {span} of the scene' if span else ''}"
             if model is not before
             else f"@{c['name']} skipped (see warnings)"
         )
@@ -946,12 +947,69 @@ class _ControlLog:
 
 
 def _WatchedControl(
-    name: str, until: float, model_patch, vae, video, mask, source, strength, sigma_start, sigma_end
+    name: str,
+    until: float,
+    model_patch,
+    vae,
+    video,
+    mask,
+    source,
+    strength,
+    sigma_start,
+    sigma_end,
+    window: tuple[float | None, float | None] = (None, None),
+    lead: int = 0,
 ):
-    """Core's MiniMaxH3FunControlPatch, logging what it does (see `_ControlLog`)."""
+    """Core's MiniMaxH3FunControlPatch, logging what it does (see `_ControlLog`), and — when the
+    control steers only a stretch of the scene (`window`, seconds) — scaling its push on each
+    latent frame by how far into that stretch the frame is (`_control.latent_weights`)."""
     from comfy_extras.nodes_minimax_h3 import MiniMaxH3FunControlPatch
 
     class Watched(MiniMaxH3FunControlPatch):
+        weights_for: tuple | None = None
+        row_weights = None
+
+        def _rows(self, layout, skip):
+            """A weight per packed row: the target video's rows by their latent frame, 1 elsewhere."""
+            key = (layout.signature, skip.device, skip.dtype)
+            if self.weights_for != key:
+                import torch
+
+                latent_t = layout.signature[1]
+                start, stop = next((a, b) for a, b, kind in layout.segments if kind == "video")
+                per_frame = torch.tensor(
+                    _control.latent_weights(latent_t, *window, lead=lead), dtype=skip.dtype
+                )
+                rows = torch.ones(skip.shape[-2], dtype=skip.dtype)
+                rows[start:stop] = per_frame.repeat_interleave((stop - start) // latent_t)
+                self.row_weights = rows.to(skip.device).unsqueeze(-1)
+                self.weights_for = key
+            return self.row_weights
+
+        def _step(self, block_index, args, out):
+            if window == (None, None) or not self.active:
+                return super().after_block(block_index, args, out)
+            # Core's after_block, with the ControlNet's push weighted per row before it's added.
+            control_index = self.model_patch.model.injection_layers.index(block_index)
+            if control_index == 0:
+                self.control_latent = self.control_latent.to(out["img"].device)
+                self.control_stream = self.model_patch.model.init_stream(
+                    self.pristine_stream, self.control_latent, args["layout"], args["t_emb"]
+                )
+                self.pristine_stream = None
+            self.control_stream, skip = self.model_patch.model.step(
+                control_index,
+                self.control_stream,
+                args["t_emb"],
+                args["mod_segments"],
+                args["rope_freqs"],
+                transformer_options=args["transformer_options"],
+            )
+            skip[args["layout"].audio_pos.to(skip.device)] = 0
+            skip.mul_(self._rows(args["layout"], skip))
+            out["img"].add_(skip, alpha=self.strength)
+            return out
+
         def diffusion_model_wrapper(
             self, executor, x, timestep, context, transformer_options=None, **kwargs
         ):
@@ -966,11 +1024,11 @@ def _WatchedControl(
         def after_block(self, block_index, args, out):
             first = self.active and block_index == self.model_patch.model.injection_layers[0]
             if not first:
-                return super().after_block(block_index, args, out)
+                return self._step(block_index, args, out)
             import torch
 
             before = out["img"][:, :1024].detach().clone()
-            out = super().after_block(block_index, args, out)
+            out = self._step(block_index, args, out)
             moved = torch.linalg.vector_norm((out["img"][:, :1024] - before).float())
             self.log.nudges.append(moved / torch.linalg.vector_norm(before.float()).clamp_min(1e-6))
             return out
@@ -1008,8 +1066,9 @@ def _apply_control(setup: dict, model, vae, control: dict, trim: int, warnings: 
         frames = torch.cat([frames[:1].repeat(trim, 1, 1, 1), frames])
     patched = model.clone()
     sampling = patched.get_model_object("model_sampling")
+    window = (control.get("from"), control.get("to"))
     LOG.info(
-        "H3 Studio: @%s steers the scene through %s (strength %.2f until %d%%, %d frames). "
+        "H3 Studio: @%s steers the scene through %s (strength %.2f until %d%%, %d frames%s). "
         "Sample with H3 Studio Outputs' model — a 'control on' line follows once sampling starts; "
         "without one, the sampler isn't using it.",
         control["name"],
@@ -1017,6 +1076,7 @@ def _apply_control(setup: dict, model, vae, control: dict, trim: int, warnings: 
         control["strength"],
         round(control["until"] * 100),
         frames.shape[0],
+        f", {_control.describe(*window)} of the scene" if window != (None, None) else "",
     )
     _WatchedControl(
         control["name"],
@@ -1029,6 +1089,8 @@ def _apply_control(setup: dict, model, vae, control: dict, trim: int, warnings: 
         control["strength"],
         float(sampling.percent_to_sigma(0.0)),
         float(sampling.percent_to_sigma(control["until"])),
+        window,
+        trim,
     ).register(patched)
     return patched
 

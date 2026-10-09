@@ -178,6 +178,9 @@ export interface Ref {
   /** A control video: how hard it steers (0–2), and until how far through the sampling (0–1). */
   controlStrength?: number;
   controlUntil?: number;
+  /** When in the scene it steers, in seconds of the scene's own clock; unset = an open end. */
+  controlFrom?: number;
+  controlTo?: number;
   retain: string;
   /** Scenes that show it without using it — a scene that @mentions it (or where its voice speaks)
    *  always does. A list of scene ids, or "all". */

@@ -263,6 +263,37 @@
           />
           <span class="soft">%</span>
         </div>
+        <div class="erow">
+          <ZenCheckbox
+            :model-value="controlLimited"
+            label="Only part of the scene"
+            title="Steer just a stretch of the scene: it eases in and out over a quarter second at the ends, and H3 has the rest to itself"
+            @update:model-value="limitControl"
+          />
+          <template v-if="controlLimited">
+            <span class="lbl">from</span>
+            <ZenNumber
+              size="sm"
+              :model-value="current.controlFrom ?? 0"
+              :min="0"
+              :max="sceneSeconds"
+              :step="0.25"
+              :precision="2"
+              @update:model-value="(v: number) => (current!.controlFrom = v)"
+            />
+            <span class="lbl">to</span>
+            <ZenNumber
+              size="sm"
+              :model-value="current.controlTo ?? sceneSeconds"
+              :min="0"
+              :max="sceneSeconds"
+              :step="0.25"
+              :precision="2"
+              @update:model-value="(v: number) => (current!.controlTo = v)"
+            />
+            <span class="soft">s</span>
+          </template>
+        </div>
       </template>
       <ZenCheckbox
         v-if="current.kind === 'video' && current.media && current.role === 'reference'"
@@ -490,6 +521,22 @@ const tagOf = (id: string) => {
 const numberOf = (id: string) => compiledRef(id)?.tag.replace(/\D/g, "") || "–";
 const soundtrackOf = (id: string) => compiledRef(id)?.soundtrack_tag ?? null;
 const current = computed(() => props.project.refs.find((r) => r.id === props.selected) ?? null);
+// A control steering only a stretch of the scene (seconds of the scene's own clock).
+const sceneSeconds = computed(() => props.project.scenes[props.sceneIndex]?.seconds ?? 5);
+const controlLimited = computed(
+  () => current.value?.controlFrom !== undefined || current.value?.controlTo !== undefined,
+);
+function limitControl(on: boolean) {
+  const r = current.value;
+  if (!r) return;
+  if (on) {
+    r.controlFrom = 0;
+    r.controlTo = Math.round((sceneSeconds.value / 2) * 4) / 4;
+  } else {
+    delete r.controlFrom;
+    delete r.controlTo;
+  }
+}
 // A reference picked elsewhere (the timeline, a shot) comes into view — after its highlight has
 // been drawn, so the card is already lit when it slides in, and only as far as it needs to.
 watch(

@@ -126,7 +126,7 @@
         />
         <div class="control-bar">
           <span
-            :title="`@${control.name}: strength ${(control.controlStrength ?? 1).toFixed(2)}, steering until ${Math.round((control.controlUntil ?? 0.75) * 100)}% of the sampling`"
+            :title="`@${control.name}: strength ${(control.controlStrength ?? 1).toFixed(2)}, steering until ${Math.round((control.controlUntil ?? 0.75) * 100)}% of the sampling${control.controlFrom !== undefined || control.controlTo !== undefined ? `, from ${control.controlFrom ?? 0} s to ${control.controlTo ?? 'the end'}${control.controlTo !== undefined ? ' s' : ''} of the scene` : ''}`"
             >@{{ control.name }} · {{ +(control.controlStrength ?? 1).toFixed(2) }}/{{
               Math.round((control.controlUntil ?? 0.75) * 100)
             }}%</span

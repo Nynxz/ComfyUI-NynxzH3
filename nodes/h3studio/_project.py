@@ -128,6 +128,16 @@ def _num(value: Any, default: float, lo: float, hi: float) -> float:
     return min(hi, max(lo, v))
 
 
+def _opt_seconds(value: Any) -> float | None:
+    """A time in a scene (seconds), or None when not given."""
+    if value is None or value == "":
+        return None
+    try:
+        return min(60.0, max(0.0, float(value)))
+    except (TypeError, ValueError):
+        return None
+
+
 def _str(value: Any) -> str:
     return value if isinstance(value, str) else ""
 
@@ -186,6 +196,9 @@ def normalize(raw: Any) -> dict[str, Any]:
                 "control_until": _num(
                     ref.get("controlUntil", ref.get("control_until")), 0.75, 0.05, 1.0
                 ),
+                # When in the scene it steers (seconds of the scene's own clock); None = open end.
+                "control_from": _opt_seconds(ref.get("controlFrom", ref.get("control_from"))),
+                "control_to": _opt_seconds(ref.get("controlTo", ref.get("control_to"))),
                 # Scenes that show it without using it (see `refs_in_scene`): a list of scene ids, or
                 # "all". Before version 2 every reference was "all" by default, so that is read as none.
                 "scenes": scenes
@@ -444,8 +457,9 @@ class Compiled:
     #: The project's render settings (`normalize_settings`).
     settings: dict[str, Any] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
-    #: `[{id, name, media, strength, until}]`: videos that steer the scene through the Fun
-    #: ControlNet (role `control`). H3 never sees them as references.
+    #: `[{id, name, media, strength, until, from, to}]`: videos that steer the scene through the
+    #: Fun ControlNet (role `control`), `from` to `to` the stretch of the scene they steer (None: the
+    #: whole of it). H3 never sees them as references.
     controls: list[dict[str, Any]] = field(default_factory=list)
     #: Frames of the carried head before the scene starts (H3 Studio Clip cuts them off), and the
     #: scene's own frames after it.
@@ -697,10 +711,24 @@ def compile_scene(project: dict[str, Any], index: int, has_audio=None) -> Compil
             "media": r["media"],
             "strength": r["control_strength"],
             "until": r["control_until"],
+            "from": r["control_from"],
+            "to": r["control_to"],
         }
         for r in in_scene
         if r["role"] == "control" and r["media"]
     ]
+    for c in controls:
+        if c["from"] is not None and c["to"] is not None and c["from"] >= c["to"]:
+            warnings.append(
+                f"@{c['name']} steers from {c['from']:g} s to {c['to']:g} s, which is no time at "
+                "all: it steers the whole scene instead."
+            )
+            c["from"] = c["to"] = None
+        elif c["from"] is not None and c["from"] >= seconds:
+            warnings.append(
+                f"@{c['name']} starts steering at {c['from']:g} s, after this {seconds:.2f} s "
+                "scene ends: it does nothing here."
+            )
     if len(controls) > 1:
         warnings.append(
             f"One control video per scene: @{controls[0]['name']} steers it, the others are left out."
