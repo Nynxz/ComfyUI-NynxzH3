@@ -374,13 +374,13 @@
 // which is the same thing as changing where H3 numbers it.
 import { computed, nextTick, ref, watch } from "vue";
 import { ZenButton, ZenCheckbox, ZenIconButton, ZenNumber, ZenToggleGroup } from "@nynxz/zenkit-ui";
-import { hasMediaDrop, mediaKind, setImageDragData } from "@/framework";
+import { hasMediaDrop } from "@/framework";
+import { carryMedia } from "@/lib/dragOut";
 import {
   LIMITS,
   REF_SIZES,
   refInScene,
   refUsedIn,
-  stableUrl,
   type Compiled,
   type Project,
   type Ref,
@@ -579,31 +579,10 @@ function startDrag(id: string, e: DragEvent) {
   const r = props.project.refs.find((x) => x.id === id);
   const dt = e.dataTransfer;
   if (!dt) return;
-  if (r?.media) carryMedia(dt, e, r.media);
+  if (r?.media) carryMedia(e, r.media);
   else dt.setData("application/x-nynxz-ref", id);
   // Reordering moves the card; anywhere else the drag is a copy of its file.
   dt.effectAllowed = "copyMove";
-}
-/** The reference's file on the drag, as ComfyUI's asset browser carries one: another app (a chat
- *  box, say) fetches it from its URL, ComfyUI and ZenKit take it as that file, and Chrome can drop
- *  it on the desktop. */
-function carryMedia(dt: DataTransfer, e: DragEvent, media: string) {
-  const parts = media.split("/");
-  const filename = parts.pop()!;
-  const [type, ...subfolder] = parts;
-  const comfyType = type === "input" || type === "output" || type === "temp" ? type : undefined;
-  setImageDragData(e, {
-    url: stableUrl(media),
-    ref: media,
-    filename,
-    ...(comfyType ? { type: comfyType, subfolder: subfolder.join("/") } : {}),
-  });
-  // A plain-text copy makes some chat boxes paste the address instead of the picture.
-  dt.clearData("text/plain");
-  const absolute = new URL(stableUrl(media), location.href).href;
-  const mime = { image: "image", video: "video", audio: "audio" }[mediaKind(media)];
-  const ext = filename.split(".").pop()?.toLowerCase() ?? "";
-  dt.setData("DownloadURL", `${mime}/${ext === "jpg" ? "jpeg" : ext}:${filename}:${absolute}`);
 }
 function endDrag() {
   dragId.value = null;

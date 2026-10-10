@@ -174,6 +174,17 @@ Save Video; it runs again whenever a scene gets a new take.
 
 Use it in its own small workflow, or beside the render loop with the loop's nodes bypassed.
 
+### Contact sheets (a render at a glance)
+
+Right-click a take or a film in the Renders panel, or a scene on the timeline (*Contact sheet of its
+clip…*), for its **contact sheet**: 8 to 24 frames evenly through the clip in a grid, each marked
+with its time and, for a take of the scene as it is now, its shot. Drag it straight into a chat
+(or onto the desktop or a node), copy it, download it, or copy its path for an agent that reads
+files. Sheets are saved under `output/h3studio/sheets`, one per clip and layout.
+
+Agents in ZenAgent have two tools for this: `h3studio.scenes` lists the studio's scenes and their
+clips, and `h3studio.look` makes a scene's sheet (or the latest film's) to look at.
+
 ### Seeds, reuse and rendering part of the film
 
 Every scene has its own seed (Outputs' `noise`): the one shown in its settings, which a

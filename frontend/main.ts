@@ -28,5 +28,8 @@ void registerCodex();
 // Grey box: the tools agents use to read, change and look at grey box scenes.
 import { registerGreyBoxCapabilities } from "@/lib/greyboxAgent";
 registerGreyBoxCapabilities();
+// H3 Studio: agents list a studio's scenes and see what each rendered, as a contact sheet.
+import { registerH3StudioCapabilities } from "@/lib/h3studioAgent";
+registerH3StudioCapabilities();
 
 console.log(`[${DISPLAY_NAME}] widgets: ${widgetTypes(widgets).join(", ") || "(none)"}`);

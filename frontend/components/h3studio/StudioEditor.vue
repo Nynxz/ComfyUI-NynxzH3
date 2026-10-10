@@ -398,6 +398,7 @@
     <StudioSettings v-model:open="settingsOpen" :project="project" />
     <StudioScript v-model:open="scriptOpen" :project="project" />
     <StudioSceneText :project="project" :scene="sceneTextOf" @close="sceneTextOf = null" />
+    <StudioContactSheet :target="sheetOf" @close="sheetOf = null" />
     <StudioSheet v-model:open="sheetOpen" :project="project" :scene-index="place.scene" />
     <ZenContextMenu ref="menu" :items="menuItems" />
     <LoraBrowser v-model:open="loraBrowserOpen" @pick="addLora" />
@@ -483,6 +484,8 @@ import StudioCast from "./StudioCast.vue";
 import StudioSettings from "./StudioSettings.vue";
 import StudioScript from "./StudioScript.vue";
 import StudioSceneText from "./StudioSceneText.vue";
+import StudioContactSheet from "./StudioContactSheet.vue";
+import { sceneTitle, shotStarts, type ContactRequest } from "@/lib/h3contact";
 import StudioSheet from "./StudioSheet.vue";
 import { studioMenus } from "./studioMenus";
 import { sceneToScript } from "@/lib/h3script";
@@ -503,6 +506,12 @@ const settingsOpen = ref(false);
 const scriptOpen = ref(false);
 /** The scene open as script text, or null. */
 const sceneTextOf = ref<number | null>(null);
+const sheetOf = ref<ContactRequest | null>(null);
+function contactSheetOf(i: number) {
+  const scene = project.scenes[i];
+  if (scene?.render)
+    sheetOf.value = { ref: scene.render, title: sceneTitle(scene, i), shots: shotStarts(scene) };
+}
 const sheetOpen = ref(false);
 
 // --- monitor modes and renders --------------------------------------------------------------------
@@ -1225,6 +1234,7 @@ const menus = studioMenus(project, {
   copyPrompt: () => void copyPrompt(),
   copySceneText: (i) => void navigator.clipboard.writeText(sceneToScript(project, i)),
   editSceneText: (i) => (sceneTextOf.value = i),
+  contactSheet: contactSheetOf,
   seek,
   render,
   staleIds: () => outOfDate.value,

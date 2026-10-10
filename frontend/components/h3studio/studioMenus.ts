@@ -48,6 +48,8 @@ export interface MenuActions {
   copySceneText: (i: number) => void;
   /** Open scene `i` as script text, to edit or paste over. */
   editSceneText: (i: number) => void;
+  /** Scene `i`'s clip as a contact sheet. */
+  contactSheet: (i: number) => void;
   seek: (t: number) => void;
   /** Render these scenes (by id), or all of them (lib/h3render.ts). */
   render: (ids: string[] | null, next?: boolean) => void;
@@ -82,6 +84,12 @@ export function studioMenus(project: Project, a: MenuActions) {
         run: () => a.editSceneText(i),
       },
       { label: "Copy as text", icon: "mdi mdi-content-copy", run: () => a.copySceneText(i) },
+      {
+        label: "Contact sheet of its clip…",
+        icon: "mdi mdi-view-grid-outline",
+        disabled: !s.render,
+        run: () => a.contactSheet(i),
+      },
       "-",
       { heading: "Render" },
       ...(a.pickedScenes().length > 1 && a.pickedScenes().includes(s.id)

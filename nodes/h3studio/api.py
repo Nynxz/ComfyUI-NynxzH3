@@ -130,6 +130,33 @@ if _routes is not None:
             return web.json_response({"error": str(e)}, status=500)
         return web.json_response(take)
 
+    @_routes.post("/nynxz/h3studio/sheet")
+    async def h3studio_sheet(request: web.Request) -> web.Response:
+        """A render's contact sheet (frames evenly through it, in a grid); its media ref. CPU only,
+        on a thread of its own."""
+        if (denied := request_allowed(request)) is not None:
+            return denied
+        import asyncio
+
+        from . import sheet
+
+        body = await request.json()
+        shots = body.get("shots")
+        try:
+            made = await asyncio.to_thread(
+                sheet.make,
+                str(body.get("ref", "")),
+                int(body.get("count", 12)),
+                int(body.get("columns", sheet.COLUMNS)),
+                [int(s) for s in shots] if isinstance(shots, list) else None,
+                str(body.get("title", "")),
+            )
+        except ValueError as e:
+            return web.json_response({"error": str(e)}, status=400)
+        except Exception as e:  # noqa: BLE001 - reported to the editor
+            return web.json_response({"error": str(e)}, status=500)
+        return web.json_response(made)
+
     @_routes.get("/nynxz/h3studio/writer-guide")
     async def h3studio_writer_guide(_request: web.Request) -> web.Response:
         return web.Response(text=WRITER_GUIDE.read_text(encoding="utf-8"))

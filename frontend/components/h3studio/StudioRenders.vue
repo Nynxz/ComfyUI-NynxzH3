@@ -304,6 +304,7 @@
       <p v-if="groups.length" class="soft small hint">Hold Shift over a take to see it large.</p>
     </div>
     <ZenContextMenu ref="menu" :items="menuItems" />
+    <StudioContactSheet :target="sheetOf" @close="sheetOf = null" />
   </aside>
 </template>
 
@@ -323,7 +324,9 @@ import {
 } from "@nynxz/zenkit-ui";
 import type { StudioLive } from "@/lib/h3live";
 import { framesFor, stableUrl, type Project } from "@/lib/h3studio";
+import { sceneTitle, shotStarts, type ContactRequest } from "@/lib/h3contact";
 import MediaThumb from "./MediaThumb.vue";
+import StudioContactSheet from "./StudioContactSheet.vue";
 
 interface Take {
   ref: string;
@@ -733,8 +736,17 @@ function download(ref: string) {
   a.download = ref.split("/").pop() ?? "clip.mp4";
   a.click();
 }
+const sheetOf = ref<ContactRequest | null>(null);
+const SHEET_ICON = "mdi mdi-view-grid-outline";
 function fileMenu(e: MouseEvent, ref: string) {
-  menuItems.value = [{ label: "Download", icon: "mdi mdi-download", run: () => download(ref) }];
+  menuItems.value = [
+    { label: "Download", icon: "mdi mdi-download", run: () => download(ref) },
+    {
+      label: "Contact sheet…",
+      icon: SHEET_ICON,
+      run: () => (sheetOf.value = { ref, title: "Film" }),
+    },
+  ];
   void menu.value?.show(e);
 }
 function takeMenu(e: MouseEvent, g: Group, t: Take) {
@@ -746,8 +758,20 @@ function takeMenu(e: MouseEvent, g: Group, t: Take) {
       run: () => void use(g, t),
     },
     { label: "Download", icon: "mdi mdi-download", run: () => download(t.ref) },
+    { label: "Contact sheet…", icon: SHEET_ICON, run: () => (sheetOf.value = takeSheet(g, t)) },
   ];
   void menu.value?.show(e);
+}
+
+/** A take's sheet, its frames marked by shot when it was made from the scene as it is now. */
+function takeSheet(g: Group, t: Take): ContactRequest {
+  const scene = doc.value.scenes[g.index];
+  if (!scene) return { ref: t.ref };
+  return {
+    ref: t.ref,
+    title: `${sceneTitle(scene, g.index)}${t.seed !== undefined ? ` · seed ${t.seed}` : ""}`,
+    ...(t.fits !== false ? { shots: shotStarts(scene) } : {}),
+  };
 }
 
 function parts(takes: Take[]) {
