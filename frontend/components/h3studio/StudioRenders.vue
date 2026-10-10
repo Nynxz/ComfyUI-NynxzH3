@@ -145,18 +145,18 @@
                   v-if="t.fits === false"
                   class="mdi mdi-history"
                   title="Made before the scene was last edited"
-              /></span>
+                /><ZenButton
+                  v-if="t.ref !== g.current"
+                  size="sm"
+                  variant="ghost"
+                  class="use"
+                  title="Make this the scene's clip"
+                  :disabled="!!using"
+                  @click="use(g, t)"
+                  >{{ using === t.ref ? "…" : "Use" }}</ZenButton
+                ></span
+              >
             </span>
-            <ZenButton
-              v-if="t.ref !== g.current"
-              size="sm"
-              variant="ghost"
-              class="use"
-              title="Make this the scene's clip"
-              :disabled="!!using"
-              @click="use(g, t)"
-              >{{ using === t.ref ? "…" : "Use" }}</ZenButton
-            >
           </div>
         </template>
         <div v-for="g in historyView === 'scene' ? groups : []" :key="g.id" class="group">
@@ -755,14 +755,12 @@ h4 {
   width: 96px;
   height: 54px;
 }
-/* In the latest list, Use floats over the row's end on hover rather than holding space. */
+/* In the latest list, Use sits at the end of the age line, clear of the title. */
 .take.big .use {
-  position: absolute;
-  top: 50%;
-  right: 6px;
-  transform: translateY(-50%);
-  background: var(--h3-field);
-  box-shadow: 0 0 0 1px var(--h3-line);
+  height: 18px;
+  margin-left: auto;
+  padding: 0 8px;
+  color: var(--h3-text);
 }
 .take.big .what {
   display: flex;
