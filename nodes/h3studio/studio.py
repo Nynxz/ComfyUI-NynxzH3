@@ -1392,7 +1392,13 @@ class NynxzH3StudioClip(NynxzNode):
         key = cls._key(render)
         if not (key and keep and reuse):
             return key, None
-        return key, _reuse.lookup(key, cls._models(render))
+        saved = _reuse.lookup(key, cls._models(render))
+        # The clip the scene uses, when it was made under this same fingerprint: a take made
+        # current again, or a mix of takes (which shares its last part's fingerprint).
+        current = _reuse.latest(render.get("scene_id")) if saved else None
+        if current and current.get("key") == key:
+            saved = current["ref"]
+        return key, saved
 
     @classmethod
     def _models(cls, render) -> str | None:

@@ -145,6 +145,10 @@
                   v-if="t.fits === false"
                   class="mdi mdi-history"
                   title="Made before the scene was last edited"
+                /><i
+                  v-if="t.mix"
+                  class="mdi mdi-vector-combine mixmark"
+                  title="Mixed from several takes"
                 /><ZenButton
                   v-if="t.ref !== g.current"
                   size="sm"
@@ -164,9 +168,50 @@
             <i class="mdi" :class="open.has(g.id) ? 'mdi-chevron-down' : 'mdi-chevron-right'" />
             <b>S{{ g.index + 1 }}</b>
             <span class="ellipsis soft">{{ g.title }}</span>
+            <i
+              v-if="mixOf(g)"
+              class="mdi mdi-vector-combine mixmark"
+              title="Its clip is mixed from several takes"
+            />
             <span class="count">{{ g.takes.length }}</span>
           </button>
           <template v-if="open.has(g.id)">
+            <div v-if="mixOf(g) || draftChanged(g)" class="mixbar">
+              <template v-if="draftChanged(g)">
+                <span class="ellipsis" :title="describeDraft(g)">
+                  <i class="mdi mdi-vector-combine" />
+                  {{ describeDraft(g) }}
+                </span>
+                <ZenButton
+                  size="sm"
+                  variant="primary"
+                  :disabled="mixing === g.id"
+                  @click="makeMix(g)"
+                  >{{ mixing === g.id ? "Mixing…" : "Make clip" }}</ZenButton
+                >
+                <ZenIconButton
+                  icon="mdi mdi-undo-variant"
+                  size="sm"
+                  title="Back to the scene's clip as it is"
+                  @click="drafts.delete(g.id)"
+                />
+              </template>
+              <template v-else>
+                <span class="ellipsis"
+                  ><i class="mdi mdi-vector-combine" /> Mixed from
+                  {{ new Set(mixOf(g)!.map((p) => p.ref)).size }} takes</span
+                >
+                <ZenButton
+                  size="sm"
+                  variant="ghost"
+                  icon="mdi mdi-vector-difference"
+                  title="Use the take its last shot comes from, whole"
+                  :disabled="!!using"
+                  @click="unmix(g)"
+                  >Unmix</ZenButton
+                >
+              </template>
+            </div>
             <template v-for="part in parts(g.takes)" :key="part.label">
               <h5
                 v-if="part.label"
@@ -192,7 +237,32 @@
                     class="mdi mdi-check tick"
                     title="The scene's clip"
                 /></span>
-                <span class="when">{{ ago(t.time) }}</span>
+                <span class="what">
+                  <span class="when"
+                    >{{ ago(t.time)
+                    }}<i
+                      v-if="t.mix"
+                      class="mdi mdi-vector-combine mixmark"
+                      title="Mixed from several takes"
+                  /></span>
+                  <span
+                    v-if="!part.stale && !t.mix && unitsOf(g).length > 1"
+                    class="shots"
+                    title="Pick the shots this take gives the scene's clip"
+                  >
+                    <button
+                      v-for="(u, ui) in unitsOf(g)"
+                      :key="u.start"
+                      type="button"
+                      class="shotchip"
+                      :class="{ on: draftOf(g)[ui] === t.ref }"
+                      :title="`Shot ${u.label} from this take`"
+                      @click="pickShot(g, ui, t.ref)"
+                    >
+                      {{ u.label }}
+                    </button>
+                  </span>
+                </span>
                 <ZenButton
                   v-if="t.ref !== g.current"
                   size="sm"
@@ -234,6 +304,8 @@ interface Take {
   prompt?: string;
   /** False when it was made from an earlier version of the scene (not just another seed). */
   fits?: boolean;
+  /** A mix: the takes its parts come from, each from the frame it starts at. */
+  mix?: { ref: string; start: number }[];
 }
 
 const props = defineProps<{ project: Project; nodeId: string; live: StudioLive }>();
@@ -512,6 +584,110 @@ onBeforeUnmount(() => {
 
 /** A scene's takes, the ones from its current version first; split under labels only when some
  *  were made from an earlier version. */
+// --- mixing: a scene's clip from shots of several of its takes (nodes/h3studio/mix.py) -------------
+interface Group {
+  id: string;
+  index: number;
+  title: string;
+  current: string;
+  takes: Take[];
+}
+/** The pieces a scene's clip can be mixed from: its shots, with shots joined by "no cut" kept
+ *  together (cutting between takes there would jump). Each starts at a frame. */
+function unitsOf(g: Group): { label: string; start: number }[] {
+  const scene = doc.value.scenes[g.index];
+  if (!scene) return [];
+  const units: { label: string; start: number; last: number }[] = [];
+  scene.shots.forEach((sh, i) => {
+    const joined = i > 0 && (sh.transition === "continue" || sh.transition === "continue_timed");
+    const prev = units[units.length - 1];
+    if (joined && prev) prev.last = i + 1;
+    else units.push({ label: "", start: Math.round(sh.at * 24), last: i + 1 });
+  });
+  let first = 1;
+  return units.map((u) => {
+    const label = u.last > first ? `${first}–${u.last}` : `${first}`;
+    first = u.last + 1;
+    return { label, start: u.start };
+  });
+}
+const takeOf = (g: Group, ref: string) => g.takes.find((t) => t.ref === ref);
+/** The parts of the scene's clip when it's a mix. */
+const mixOf = (g: Group) => takeOf(g, g.current)?.mix ?? null;
+/** Which take each piece of the scene's clip comes from, as it is now. */
+function currentPieces(g: Group): string[] {
+  const mix = mixOf(g);
+  return unitsOf(g).map((u) =>
+    mix ? ([...mix].reverse().find((p) => p.start <= u.start)?.ref ?? mix[0]!.ref) : g.current,
+  );
+}
+/** Pieces picked but not made into a clip yet, by scene. */
+const drafts = reactive(new Map<string, string[]>());
+const draftOf = (g: Group) => drafts.get(g.id) ?? currentPieces(g);
+const draftChanged = (g: Group) =>
+  drafts.has(g.id) && draftOf(g).join("|") !== currentPieces(g).join("|");
+function pickShot(g: Group, unit: number, ref: string) {
+  const next = [...draftOf(g)];
+  next[unit] = ref;
+  drafts.set(g.id, next);
+}
+function describeDraft(g: Group) {
+  const units = unitsOf(g);
+  return draftOf(g)
+    .map((ref, i) => `${units[i]!.label} ← ${ago(takeOf(g, ref)?.time ?? 0)}`)
+    .join(" · ");
+}
+const mixing = ref("");
+async function makeMix(g: Group) {
+  const pieces = draftOf(g);
+  const units = unitsOf(g);
+  // Every shot from one take is just that take.
+  if (new Set(pieces).size === 1) {
+    const whole = takeOf(g, pieces[0]!);
+    drafts.delete(g.id);
+    if (whole && whole.ref !== g.current) await use(g, whole);
+    return;
+  }
+  mixing.value = g.id;
+  note.value = null;
+  try {
+    const res = await fetch("/nynxz/h3studio/take/mix", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        project: doc.value,
+        scene: g.id,
+        parts: pieces.map((ref, i) => ({ ref, start: units[i]!.start })),
+      }),
+    });
+    const made = (await res.json()) as Take & { error?: string };
+    if (!res.ok || made.error) {
+      note.value = { bad: true, text: made.error || "Couldn't mix those takes." };
+      return;
+    }
+    const scene = doc.value.scenes.find((s) => s.id === g.id);
+    if (scene) {
+      scene.render = made.ref;
+      if (typeof made.seed === "number") scene.seed = made.seed;
+    }
+    drafts.delete(g.id);
+    note.value = { bad: false, text: `S${g.index + 1} is now mixed: ${describeDraft(g)}.` };
+    emit("changed");
+    void fetchTakes();
+  } catch {
+    note.value = { bad: true, text: "Couldn't reach ComfyUI." };
+  } finally {
+    mixing.value = "";
+  }
+}
+/** Back to one take: the one the mix's last shot comes from (its seed is the scene's). */
+async function unmix(g: Group) {
+  const mix = mixOf(g);
+  const base = mix ? takeOf(g, mix[mix.length - 1]!.ref) : undefined;
+  if (base) await use(g, base);
+  else note.value = { bad: true, text: "The take this mix ends with is gone." };
+}
+
 function parts(takes: Take[]) {
   const stale = takes.filter((t) => t.fits === false);
   if (!stale.length) return [{ label: "", stale: false, takes }];
@@ -859,5 +1035,56 @@ h4 {
 }
 .qrow:hover .cancel {
   opacity: 1;
+}
+.mixmark {
+  color: var(--h3-accent);
+  font-size: 13px;
+}
+.mixbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin: 2px 0 4px;
+  padding: 4px 4px 4px 8px;
+  border: 1px dashed color-mix(in srgb, var(--h3-accent) 60%, transparent);
+  border-radius: var(--h3-radius);
+  font-size: 11.5px;
+}
+.mixbar > .ellipsis {
+  flex: 1;
+}
+.take .what {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.shots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+.shotchip {
+  min-width: 18px;
+  height: 16px;
+  padding: 0 4px;
+  border: 1px solid var(--h3-line);
+  border-radius: 4px;
+  background: none;
+  color: var(--h3-muted);
+  font: inherit;
+  font-size: 10px;
+  line-height: 14px;
+  cursor: pointer;
+}
+.shotchip:hover {
+  color: var(--h3-text);
+}
+.shotchip.on {
+  border-color: var(--h3-accent);
+  background: color-mix(in srgb, var(--h3-accent) 30%, transparent);
+  color: var(--h3-text);
 }
 </style>

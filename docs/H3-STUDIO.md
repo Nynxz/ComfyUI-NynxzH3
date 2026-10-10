@@ -120,6 +120,16 @@ render saves the film, are in Settings ▸ Whole film.
 H3 Studio Film (and Join, on End Loop's accumulated output) are still there for putting a score
 under it or feeding it on into a graph.
 
+**A scene from several takes.** When one take has the better first shot and another the better
+second, there's no need to re-render or stitch in post: in Renders ▸ By scene, each take of the
+scene as it stands has a chip per shot — pick which take each shot comes from, then **Make clip**.
+The server cuts the takes together at the shot boundaries (frame-exact: takes of the same scene
+share their timing) and makes the mix the scene's clip, so the monitor, Export film, H3 Studio Film
+and the next scene's continuation all use it; a full render that finds the scene unchanged keeps it.
+Shots joined by *no cut* stay together. The mix keeps the seed of the take its last shot comes from
+(that take's end is what the next scene continues from), and is marked on the scene's timeline bar
+and in Renders; **Unmix** goes back to that take whole, and the mix stays among the takes.
+
 The number of passes needn't be typed in. **H3 Studio Scenes** sits outside the loop and *names*
 the studio rather than being wired to it (a wire from the studio would close a cycle round the loop):
 

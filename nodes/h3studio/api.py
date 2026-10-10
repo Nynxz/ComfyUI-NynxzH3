@@ -109,6 +109,27 @@ if _routes is not None:
             return web.json_response({"error": str(e)}, status=500)
         return web.json_response(record)
 
+    @_routes.post("/nynxz/h3studio/take/mix")
+    async def h3studio_mix_takes(request: web.Request) -> web.Response:
+        """Join shots from several of a scene's takes into one clip and make it the scene's clip.
+        CPU only (files in, a file out), so it runs beside the queue, on a thread of its own."""
+        if (denied := request_allowed(request)) is not None:
+            return denied
+        import asyncio
+
+        from . import mix
+
+        body = await request.json()
+        try:
+            take = await asyncio.to_thread(
+                mix.make, body.get("project"), str(body.get("scene", "")), body.get("parts") or []
+            )
+        except mix.MixError as e:
+            return web.json_response({"error": str(e)}, status=400)
+        except Exception as e:  # noqa: BLE001 - reported to the editor
+            return web.json_response({"error": str(e)}, status=500)
+        return web.json_response(take)
+
     @_routes.get("/nynxz/h3studio/writer-guide")
     async def h3studio_writer_guide(_request: web.Request) -> web.Response:
         return web.Response(text=WRITER_GUIDE.read_text(encoding="utf-8"))

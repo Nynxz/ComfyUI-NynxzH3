@@ -71,14 +71,20 @@ export function buildTracks(project: Project, ctx: TrackContext): TimelineTrack[
       ctx.rendering === i
         ? "mdi-record-circle-outline"
         : (state(i)?.icon ??
+          (s.render && mixed(s.render) ? "mdi-vector-combine" : undefined) ??
           (i > 0 && s.continuation.mode !== "cut"
             ? continuationOf(s.continuation.mode).icon
             : undefined)),
-    title: `Scene ${i + 1} · ${s.seconds.toFixed(2)}s${i > 0 ? ` · ${continuationOf(s.continuation.mode).label.toLowerCase()}` : ""}${state(i) ? ` · ${state(i)!.title}` : ""} — right-click to render it`,
+    title: `Scene ${i + 1} · ${s.seconds.toFixed(2)}s${i > 0 ? ` · ${continuationOf(s.continuation.mode).label.toLowerCase()}` : ""}${state(i) ? ` · ${state(i)!.title}` : ""}${s.render && mixed(s.render) ? " · its clip is mixed from several takes" : ""} — right-click to render it`,
     color: ctx.status?.get(s.id)?.state === "stale" ? "#8a6a2c" : "var(--zen-muted, #5b6b8c)",
     resize: "end" as const,
     progress: ctx.rendering === i ? ctx.renderProgress : undefined,
-    peek: s.render ? peekOf(s.render, `Scene ${i + 1} · latest render`) : undefined,
+    peek: s.render
+      ? peekOf(
+          s.render,
+          `Scene ${i + 1} · ${mixed(s.render) ? "mixed from takes" : "latest render"}`,
+        )
+      : undefined,
   }));
   const shots = project.scenes.flatMap((s, si) => {
     const colours = shotColors(s);
@@ -353,3 +359,6 @@ function peekOf(media: string, label: string): TimelineItem["peek"] {
     label,
   };
 }
+
+/** Whether a scene's clip is mixed from several takes (nodes/h3studio/mix.py names it so). */
+const mixed = (render: string) => /_mix_\d+_\.\w+$/.test(render);
