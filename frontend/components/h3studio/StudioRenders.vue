@@ -40,6 +40,18 @@
             >{{ q.running ? "Running" : `Queued ${i + (queued[0]?.running ? 0 : 1)}` }} ·
             {{ q.what }}</span
           >
+          <ZenIconButton
+            class="cancel"
+            icon="mdi mdi-close"
+            size="sm"
+            :title="
+              q.running
+                ? 'Stop it now (a scene loop stops at this scene; what it finished stays)'
+                : 'Take it out of the queue'
+            "
+            :disabled="cancelling === q.id"
+            @click="cancel(q)"
+          />
         </div>
       </section>
 
@@ -272,6 +284,22 @@ function describe(prompt: QueueRow[2]): string | null {
   if (proj.renderOnly?.length) return proj.renderOnly.map(label).join(", ");
   const loop = Object.values(prompt).some((n) => n.class_type === "StartLoop");
   return loop ? "every scene" : `S${(proj.active ?? 0) + 1}`;
+}
+/** Stop the running job (only if it's still the one running) or drop a waiting one. */
+const cancelling = ref("");
+async function cancel(q: Queued) {
+  cancelling.value = q.id;
+  const comfy = api as unknown as {
+    interrupt(id: string | null): Promise<void>;
+    deleteItem(type: string, id: string): Promise<void>;
+  };
+  try {
+    if (q.running) await comfy.interrupt(q.id);
+    else await comfy.deleteItem("queue", q.id);
+  } finally {
+    cancelling.value = "";
+    void pollQueue();
+  }
 }
 async function pollQueue() {
   try {
@@ -825,5 +853,13 @@ h4 {
 }
 .note.bad {
   background: color-mix(in srgb, var(--zen-danger, #ef4444) 16%, transparent);
+}
+.qrow .cancel {
+  flex: none;
+  margin-left: auto;
+  opacity: 0.6;
+}
+.qrow:hover .cancel {
+  opacity: 1;
 }
 </style>
