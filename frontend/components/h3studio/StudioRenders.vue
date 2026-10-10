@@ -116,23 +116,27 @@
             :class="{ current: t.ref === g.current, stale: t.fits === false }"
             :title="details(t)"
           >
-            <span class="tthumb"><MediaThumb :media="t.ref" :badge="false" /></span>
+            <span class="tthumb"
+              ><MediaThumb :media="t.ref" :badge="false" /><i
+                v-if="t.ref === g.current"
+                class="mdi mdi-check tick"
+                title="The scene's clip"
+            /></span>
             <span class="what">
-              <span class="scenechip" :title="g.title || undefined"
-                ><b>S{{ g.index + 1 }}</b
-                ><span v-if="g.title" class="ellipsis soft"> · {{ g.title }}</span></span
+              <span class="line" :title="g.title || undefined"
+                ><span class="chip">S{{ g.index + 1 }}</span
+                ><span v-if="g.title" class="ellipsis">{{ g.title }}</span></span
               >
-              <span class="when">{{ ago(t.time) }}</span>
-              <span
-                v-if="t.fits === false"
-                class="soft small"
-                title="Made before the scene was last edited"
-                >older version</span
-              >
+              <span class="line meta"
+                >{{ ago(t.time)
+                }}<i
+                  v-if="t.fits === false"
+                  class="mdi mdi-history"
+                  title="Made before the scene was last edited"
+              /></span>
             </span>
-            <span v-if="t.ref === g.current" class="badge">Current</span>
             <ZenButton
-              v-else
+              v-if="t.ref !== g.current"
               size="sm"
               variant="ghost"
               class="use"
@@ -170,11 +174,15 @@
                 :class="{ current: t.ref === g.current, stale: part.stale }"
                 :title="details(t)"
               >
-                <span class="tthumb"><MediaThumb :media="t.ref" :badge="false" /></span>
+                <span class="tthumb"
+                  ><MediaThumb :media="t.ref" :badge="false" /><i
+                    v-if="t.ref === g.current"
+                    class="mdi mdi-check tick"
+                    title="The scene's clip"
+                /></span>
                 <span class="when">{{ ago(t.time) }}</span>
-                <span v-if="t.ref === g.current" class="badge">Current</span>
                 <ZenButton
-                  v-else
+                  v-if="t.ref !== g.current"
                   size="sm"
                   variant="ghost"
                   class="use"
@@ -697,21 +705,66 @@ h4 {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.tthumb {
+  position: relative;
+}
+/* The take a scene uses: a tick on its picture. */
+.tick {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--h3-accent);
+  color: var(--zen-accent-text, #fff);
+  font-size: 12px;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 45%);
+}
 .take.big .tthumb {
-  width: 128px;
-  height: 72px;
+  width: 96px;
+  height: 54px;
+}
+/* In the latest list, Use floats over the row's end on hover rather than holding space. */
+.take.big .use {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  background: var(--h3-field);
+  box-shadow: 0 0 0 1px var(--h3-line);
 }
 .take.big .what {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 1px;
+  justify-content: center;
+  gap: 4px;
   min-width: 0;
 }
-.scenechip {
+.line {
   display: flex;
+  align-items: center;
+  gap: 6px;
   min-width: 0;
-  font-size: 11.5px;
+  font-size: 12px;
+}
+.chip {
+  flex: none;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--h3-text) 12%, transparent);
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 16px;
+}
+.line.meta {
+  white-space: nowrap;
+  color: var(--h3-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
 }
 .take.stale .tthumb {
   opacity: 0.7;
@@ -745,13 +798,6 @@ h4 {
   color: var(--h3-muted);
   font-size: 10.5px;
   font-weight: 600;
-}
-.badge {
-  padding: 0 6px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--h3-accent) 25%, transparent);
-  font-size: 10px;
-  line-height: 16px;
 }
 /* Use waits until a take is pointed at, so the list reads as takes rather than buttons. */
 .take .use {
