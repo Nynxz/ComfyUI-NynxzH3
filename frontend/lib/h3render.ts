@@ -127,11 +127,21 @@ interface GraphNodeWidgets {
   widgets?: { name: string; value: unknown }[];
 }
 
-const queue = () =>
-  (app as unknown as { queuePrompt(n: number, count: number): Promise<unknown> }).queuePrompt(0, 1);
+/** Queue the workflow at the back, or `next`: at the front, to run once the current job ends. */
+const queue = (next: boolean) =>
+  (app as unknown as { queuePrompt(n: number, count: number): Promise<unknown> }).queuePrompt(
+    next ? -1 : 0,
+    1,
+  );
 
-/** Render `ids` (in film order), or every scene when null. Resolves once the runs are queued. */
-export async function renderScenes(project: Project, studioNodeId: string, ids: string[] | null) {
+/** Render `ids` (in film order), or every scene when null. Resolves once the runs are queued.
+ *  `next` puts them at the front of ComfyUI's queue instead of the back. */
+export async function renderScenes(
+  project: Project,
+  studioNodeId: string,
+  ids: string[] | null,
+  next = false,
+) {
   const order = project.scenes.map((s) => s.id);
   const chosen = ids ? order.filter((id) => ids.includes(id)) : order;
   if (!chosen.length) return;
@@ -140,7 +150,7 @@ export async function renderScenes(project: Project, studioNodeId: string, ids: 
     markScenesNodes(studioNodeId, project.renderOnly);
     await nextTick();
     try {
-      await queue();
+      await queue(next);
     } finally {
       project.renderOnly = undefined;
       // Cleared once queued, so the next run (a plain Queue too) isn't served the cached pick.
@@ -150,10 +160,12 @@ export async function renderScenes(project: Project, studioNodeId: string, ids: 
   }
   const active = project.active;
   try {
-    for (const id of chosen) {
+    // Each run queued at the front goes before the last one: queue them last-first so they still
+    // run in film order (a scene continuing from the one before needs it rendered first).
+    for (const id of next ? [...chosen].reverse() : chosen) {
       project.active = order.indexOf(id);
       await nextTick();
-      await queue();
+      await queue(next);
     }
   } finally {
     project.active = active;

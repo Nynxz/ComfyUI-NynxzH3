@@ -50,7 +50,7 @@ export interface MenuActions {
   editSceneText: (i: number) => void;
   seek: (t: number) => void;
   /** Render these scenes (by id), or all of them (lib/h3render.ts). */
-  render: (ids: string[] | null) => void;
+  render: (ids: string[] | null, next?: boolean) => void;
   /** Ids of the scenes whose latest render is out of date. */
   staleIds: () => string[];
   /** Scenes picked on the timeline (Ctrl/⌘- or Shift-click), in film order. */
@@ -94,6 +94,11 @@ export function studioMenus(project: Project, a: MenuActions) {
           ]
         : []),
       { label: "This scene", icon: "mdi mdi-play-box-outline", run: () => a.render([s.id]) },
+      {
+        label: "This scene, next in the queue",
+        icon: "mdi mdi-skip-next-circle-outline",
+        run: () => a.render([s.id], true),
+      },
       {
         label: "From here to the end",
         icon: "mdi mdi-play-box-multiple-outline",

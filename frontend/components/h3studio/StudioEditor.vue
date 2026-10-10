@@ -544,7 +544,8 @@ onBeforeUnmount(renderStatus.stop);
 const outOfDate = computed(() =>
   project.scenes.filter((s) => renderStatus.status.get(s.id)?.state !== "current").map((s) => s.id),
 );
-const render = (ids: string[] | null) => void renderScenes(project, props.nodeId ?? "", ids);
+const render = (ids: string[] | null, next = false) =>
+  void renderScenes(project, props.nodeId ?? "", ids, next);
 function openRenderMenu(e: MouseEvent) {
   const i = place.value.scene;
   openMenu(
@@ -554,6 +555,11 @@ function openRenderMenu(e: MouseEvent) {
         label: `This scene (scene ${i + 1})`,
         icon: "mdi mdi-play-box-outline",
         run: () => render([project.scenes[i]!.id]),
+      },
+      {
+        label: `Scene ${i + 1}, next in the queue`,
+        icon: "mdi mdi-skip-next-circle-outline",
+        run: () => render([project.scenes[i]!.id], true),
       },
       {
         label: `From scene ${i + 1} to the end`,
