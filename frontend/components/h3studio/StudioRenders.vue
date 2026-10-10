@@ -92,12 +92,58 @@
       </section>
 
       <section>
-        <h4>History</h4>
+        <h4 class="filmhead">
+          History
+          <span class="grow" />
+          <ZenToggleGroup
+            v-model="historyView"
+            size="sm"
+            :options="[
+              { value: 'scene', label: 'By scene', icon: 'mdi mdi-filmstrip' },
+              { value: 'latest', label: 'Latest', icon: 'mdi mdi-sort-clock-descending-outline' },
+            ]"
+          />
+        </h4>
         <p v-if="loading && !groups.length" class="soft small">Looking…</p>
         <p v-else-if="!groups.length" class="soft small">
           No renders yet. Each clip a scene renders is kept here, so you can go back to it.
         </p>
-        <div v-for="g in groups" :key="g.id" class="group">
+        <template v-if="historyView === 'latest'">
+          <div
+            v-for="{ g, t } in latest"
+            :key="t.ref"
+            class="take big"
+            :class="{ current: t.ref === g.current, stale: t.fits === false }"
+            :title="details(t)"
+          >
+            <span class="tthumb"><MediaThumb :media="t.ref" :badge="false" /></span>
+            <span class="what">
+              <span class="scenechip" :title="g.title || undefined"
+                ><b>S{{ g.index + 1 }}</b
+                ><span v-if="g.title" class="ellipsis soft"> · {{ g.title }}</span></span
+              >
+              <span class="when">{{ ago(t.time) }}</span>
+              <span
+                v-if="t.fits === false"
+                class="soft small"
+                title="Made before the scene was last edited"
+                >older version</span
+              >
+            </span>
+            <span v-if="t.ref === g.current" class="badge">Current</span>
+            <ZenButton
+              v-else
+              size="sm"
+              variant="ghost"
+              class="use"
+              title="Make this the scene's clip"
+              :disabled="!!using"
+              @click="use(g, t)"
+              >{{ using === t.ref ? "…" : "Use" }}</ZenButton
+            >
+          </div>
+        </template>
+        <div v-for="g in historyView === 'scene' ? groups : []" :key="g.id" class="group">
           <button type="button" class="ghead" @click="toggle(g.id)">
             <i class="mdi" :class="open.has(g.id) ? 'mdi-chevron-down' : 'mdi-chevron-right'" />
             <b>S{{ g.index + 1 }}</b>
@@ -155,7 +201,7 @@
 import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
 import { api } from "@comfy/api";
 import { app } from "@comfy/app";
-import { ZenButton, ZenIconButton } from "@nynxz/zenkit-ui";
+import { ZenButton, ZenIconButton, ZenToggleGroup } from "@nynxz/zenkit-ui";
 import type { StudioLive } from "@/lib/h3live";
 import type { Project } from "@/lib/h3studio";
 import MediaThumb from "./MediaThumb.vue";
@@ -265,6 +311,26 @@ const groups = computed(() =>
       takes: takes.value[s.id] ?? [],
     }))
     .filter((g) => g.takes.length),
+);
+/** History by scene (folding groups), or every take newest first. Remembered. */
+const historyView = ref<"scene" | "latest">(
+  (() => {
+    try {
+      return localStorage.getItem("nynxz.h3.renders.history") === "latest" ? "latest" : "scene";
+    } catch {
+      return "scene";
+    }
+  })(),
+);
+watch(historyView, (v) => {
+  try {
+    localStorage.setItem("nynxz.h3.renders.history", v);
+  } catch {
+    /* not remembered */
+  }
+});
+const latest = computed(() =>
+  groups.value.flatMap((g) => g.takes.map((t) => ({ g, t }))).sort((a, b) => b.t.time - a.t.time),
 );
 const open = reactive(new Set<string>());
 const toggle = (id: string) => (open.has(id) ? open.delete(id) : open.add(id));
@@ -630,6 +696,22 @@ h4 {
   font-variant-numeric: tabular-nums;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.take.big .tthumb {
+  width: 128px;
+  height: 72px;
+}
+.take.big .what {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.scenechip {
+  display: flex;
+  min-width: 0;
+  font-size: 11.5px;
 }
 .take.stale .tthumb {
   opacity: 0.7;
