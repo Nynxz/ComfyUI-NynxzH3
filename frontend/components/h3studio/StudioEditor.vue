@@ -1079,8 +1079,13 @@ function removeKeyframe(id: string) {
   explicit.value = null;
 }
 function addRefs(media: string[]) {
-  const added = edit.addRefs(project, media);
-  const last = added[added.length - 1];
+  // A reference card dragged back in (its drag carries its own file) is already here.
+  const known = project.refs.find((r) => media.includes(r.media));
+  const added = edit.addRefs(
+    project,
+    media.filter((m) => !project.refs.some((r) => r.media === m)),
+  );
+  const last = added[added.length - 1] ?? known;
   if (last) select("ref", last.id);
 }
 function removeRef(id: string) {
