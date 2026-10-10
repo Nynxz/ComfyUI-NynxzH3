@@ -1,7 +1,7 @@
 """A scene made of shots from several of its takes, so a good shot from one render and a good shot
 from another make one clip without stitching in post.
 
-Takes of the scene as it stands share their timing (only the seed differs), so a shot is the same
+Takes of the scene's length share their timing, so a shot is the same
 frames in each and the takes cut together at shot boundaries. The mix is saved as a take of its
 own and made the scene's clip: the monitor, H3 Studio Film and the next scene take it like any
 other clip. Its base is the take its last part comes from — the seed it brings back, the
@@ -16,7 +16,7 @@ import os
 
 from . import _carry, _reuse
 from ._media import has_audio, load_audio, path_of
-from ._project import FPS, normalize
+from ._project import FPS, frames_for, normalize
 
 LOG = logging.getLogger(__name__)
 
@@ -48,8 +48,6 @@ def make(project: dict, scene_id: str, parts: list[dict], metadata: dict | None 
         take = fit.get(p["ref"])
         if take is None:
             raise MixError(f"{p['ref']} isn't one of this scene's takes.")
-        if take.get("fits") is False:
-            raise MixError("Only takes of the scene as it stands now can be mixed.")
     # Neighbouring parts from the same take are one part.
     merged = [parts[0]]
     for p in parts[1:]:
@@ -59,10 +57,16 @@ def make(project: dict, scene_id: str, parts: list[dict], metadata: dict | None 
     if len(parts) == 1:
         raise MixError("Every shot comes from the same take: use that take instead.")
 
-    counts = {p["ref"]: _frame_count(path_of(p["ref"])) for p in parts}
-    total = min(counts.values())
-    if len(set(counts.values())) > 1:
-        LOG.warning("H3 Studio mix: takes differ in length %s; cut to %d frames", counts, total)
+    # Takes of any version cut together, as long as they run the scene's length: the shots are cut
+    # where the scene has them now. A mix with an earlier version in it is out of date, as that take
+    # would be on its own.
+    total = frames_for(proj["scenes"][index]["seconds"])
+    for p in parts:
+        if (n := _frame_count(path_of(p["ref"]))) != total:
+            raise MixError(
+                f"{os.path.basename(p['ref'])} is {n / FPS:.2f} s and the scene is now "
+                f"{total / FPS:.2f} s: only takes of the scene's length can be mixed."
+            )
     for i, p in enumerate(parts):
         p["end"] = parts[i + 1]["start"] if i + 1 < len(parts) else total
         if not 0 <= p["start"] < p["end"] <= total:

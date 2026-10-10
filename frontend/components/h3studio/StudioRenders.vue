@@ -212,6 +212,15 @@
                 >
               </template>
             </div>
+            <p
+              v-if="
+                !mixOf(g) && !draftChanged(g) && g.takes.filter((t) => mixable(g, t)).length > 1
+              "
+              class="soft small mixhint"
+            >
+              The numbers are the scene's shots: pick which take each shot comes from, then
+              <b>Make clip</b>.
+            </p>
             <template v-for="part in parts(g.takes)" :key="part.label">
               <h5
                 v-if="part.label"
@@ -246,7 +255,7 @@
                       title="Mixed from several takes"
                   /></span>
                   <span
-                    v-if="!part.stale && !t.mix && unitsOf(g).length > 1"
+                    v-if="mixable(g, t)"
                     class="shots"
                     title="Pick the shots this take gives the scene's clip"
                   >
@@ -293,7 +302,7 @@ import { api } from "@comfy/api";
 import { app } from "@comfy/app";
 import { ZenButton, ZenIconButton, ZenToggleGroup } from "@nynxz/zenkit-ui";
 import type { StudioLive } from "@/lib/h3live";
-import type { Project } from "@/lib/h3studio";
+import { framesFor, type Project } from "@/lib/h3studio";
 import MediaThumb from "./MediaThumb.vue";
 
 interface Take {
@@ -612,6 +621,13 @@ function unitsOf(g: Group): { label: string; start: number }[] {
   });
 }
 const takeOf = (g: Group, ref: string) => g.takes.find((t) => t.ref === ref);
+/** Whether a take can give shots to a mix: any version, as long as it runs the scene's length
+ *  (its shots are cut where the scene has them now). A mix isn't a source itself. */
+function mixable(g: Group, t: Take): boolean {
+  const scene = doc.value.scenes[g.index];
+  if (!scene || t.mix || unitsOf(g).length < 2) return false;
+  return t.seconds === undefined || Math.abs(t.seconds - framesFor(scene.seconds) / 24) < 0.03;
+}
 /** The parts of the scene's clip when it's a mix. */
 const mixOf = (g: Group) => takeOf(g, g.current)?.mix ?? null;
 /** Which take each piece of the scene's clip comes from, as it is now. */
