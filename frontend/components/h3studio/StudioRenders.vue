@@ -69,7 +69,12 @@
             >{{ exporting ? "Saving…" : "Export film" }}</ZenButton
           >
         </h4>
-        <div v-if="film" class="take film" :title="filmDetails(film)">
+        <div
+          v-if="film"
+          class="take film"
+          :title="filmDetails(film)"
+          @contextmenu.prevent.stop="fileMenu($event, film.ref)"
+        >
           <span class="tthumb"><MediaThumb :media="film.ref" :badge="false" /></span>
           <span class="when">{{ ago(film.time) }}</span>
           <span
@@ -95,7 +100,13 @@
           <span class="count">{{ films.length - 1 }}</span>
         </button>
         <template v-if="olderOpen">
-          <div v-for="f in films.slice(1)" :key="f.ref" class="take film" :title="filmDetails(f)">
+          <div
+            v-for="f in films.slice(1)"
+            :key="f.ref"
+            class="take film"
+            :title="filmDetails(f)"
+            @contextmenu.prevent.stop="fileMenu($event, f.ref)"
+          >
             <span class="tthumb"><MediaThumb :media="f.ref" :badge="false" /></span>
             <span class="when">{{ ago(f.time) }}</span>
             <span class="soft small">{{ clock(f.seconds) }}</span>
@@ -126,6 +137,7 @@
             :key="t.ref"
             class="take big"
             :class="{ current: t.ref === g.current, stale: t.fits === false }"
+            @contextmenu.prevent.stop="takeMenu($event, g, t)"
             :title="details(t)"
           >
             <span class="tthumb"
@@ -238,6 +250,7 @@
                 :key="t.ref"
                 class="take"
                 :class="{ current: t.ref === g.current, stale: part.stale }"
+                @contextmenu.prevent.stop="takeMenu($event, g, t)"
                 :title="details(t)"
               >
                 <span class="tthumb"
@@ -290,6 +303,7 @@
       <p v-if="note" class="note" :class="{ bad: note.bad }">{{ note.text }}</p>
       <p v-if="groups.length" class="soft small hint">Hold Shift over a take to see it large.</p>
     </div>
+    <ZenContextMenu ref="menu" :items="menuItems" />
   </aside>
 </template>
 
@@ -300,9 +314,15 @@
 import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
 import { api } from "@comfy/api";
 import { app } from "@comfy/app";
-import { ZenButton, ZenIconButton, ZenToggleGroup } from "@nynxz/zenkit-ui";
+import {
+  ZenButton,
+  ZenContextMenu,
+  ZenIconButton,
+  ZenToggleGroup,
+  type ContextMenuItem,
+} from "@nynxz/zenkit-ui";
 import type { StudioLive } from "@/lib/h3live";
-import { framesFor, type Project } from "@/lib/h3studio";
+import { framesFor, stableUrl, type Project } from "@/lib/h3studio";
 import MediaThumb from "./MediaThumb.vue";
 
 interface Take {
@@ -702,6 +722,32 @@ async function unmix(g: Group) {
   const base = mix ? takeOf(g, mix[mix.length - 1]!.ref) : undefined;
   if (base) await use(g, base);
   else note.value = { bad: true, text: "The take this mix ends with is gone." };
+}
+
+// --- right-click: a take's or a film's file ------------------------------------------------------
+const menu = ref<InstanceType<typeof ZenContextMenu> | null>(null);
+const menuItems = ref<ContextMenuItem[]>([]);
+function download(ref: string) {
+  const a = document.createElement("a");
+  a.href = stableUrl(ref);
+  a.download = ref.split("/").pop() ?? "clip.mp4";
+  a.click();
+}
+function fileMenu(e: MouseEvent, ref: string) {
+  menuItems.value = [{ label: "Download", icon: "mdi mdi-download", run: () => download(ref) }];
+  void menu.value?.show(e);
+}
+function takeMenu(e: MouseEvent, g: Group, t: Take) {
+  menuItems.value = [
+    {
+      label: t.ref === g.current ? "The scene's clip" : "Use for the scene",
+      icon: t.ref === g.current ? "mdi mdi-check" : "mdi mdi-play-box-outline",
+      disabled: t.ref === g.current || !!using.value,
+      run: () => void use(g, t),
+    },
+    { label: "Download", icon: "mdi mdi-download", run: () => download(t.ref) },
+  ];
+  void menu.value?.show(e);
 }
 
 function parts(takes: Take[]) {
