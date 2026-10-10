@@ -30,6 +30,11 @@
           >{{ scene.seconds.toFixed(1) }}s</span
         >
         <span class="grow" />
+        <ZenIconButton
+          icon="mdi mdi-text-box-edit-outline"
+          title="This scene as text: copy it out, edit it, or paste a new version over it"
+          @click="emit('editText', sel.sceneIndex)"
+        />
         <ZenPopover v-if="sceneRefs.length" placement="bottom-end">
           <template #trigger="{ toggle }">
             <button
@@ -772,6 +777,7 @@ const emit = defineEmits<{
   removeKeyframe: [id: string];
   replaceKeyframe: [id: string, event: DragEvent];
   dropEdgeKeyframe: [scene: number, edge: "first" | "last", event: DragEvent];
+  editText: [scene: number];
   setKeyframe: [scene: number, edge: "first" | "last"];
   removeShot: [id: string];
   addShot: [scene: number];

@@ -247,6 +247,7 @@
                         @remove-keyframe="removeKeyframe"
                         @replace-keyframe="dropKeyframeMedia"
                         @drop-edge-keyframe="dropEdgeKeyframe"
+                        @edit-text="(i: number) => (sceneTextOf = i)"
                         @set-keyframe="pickEdgeKeyframe"
                         @remove-shot="removeShot"
                         @add-shot="addShotTo"
