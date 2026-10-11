@@ -14,8 +14,8 @@ import os
 import threading
 import time
 
-from . import _carry, _reuse
-from ._media import path_of
+from . import _carry, _marks, _reuse
+from ._media import frame_count, path_of
 from ._project import FPS, frames_for
 
 LOG = logging.getLogger(__name__)
@@ -166,11 +166,19 @@ def _stream(proj: dict, path: str, metadata: dict | None) -> tuple[float, list[i
     like = next((s["audio"] for s in scenes if s["audio"] is not None), None)
     rate = int(like["sample_rate"]) if like else 48000
     channels = like["waveform"].shape[1] if like else 2
+    # Where each scene falls, for the tag: tags are written with the header, before any picture,
+    # so each clip's length is read from its file first.
+    marks, start = [], 0
+    for scene, s in zip(proj["scenes"], scenes, strict=True):
+        n = frame_count(s["path"]) if s["path"] else s["frames"]
+        marks.append(_marks.scene(scene, start, n))
+        start += n
 
     # As ComfyUI's own save: MP4 keeps custom tags (the workflow) only when asked to.
     with av.open(path, "w", options={"movflags": "use_metadata_tags+faststart"}) as output:
         for key, value in (metadata or {}).items():
             output.metadata[key] = json.dumps(value)
+        output.metadata[_marks.TAG] = json.dumps(_marks.tag("film", marks))
         video = output.add_stream("libx264", rate=Fraction(FPS))
         video.width, video.height, video.pix_fmt = width, height, "yuv420p"
         video.options = {"crf": "18"}
@@ -225,6 +233,7 @@ def _stream(proj: dict, path: str, metadata: dict | None) -> tuple[float, list[i
             frame.sample_rate, frame.pts = rate, 0
             output.mux(audio.encode(frame))
             output.mux(audio.encode(None))
+        output.set_chapters(_marks.scene_chapters(proj["scenes"], counts))
     return sum(counts) / FPS, missing
 
 

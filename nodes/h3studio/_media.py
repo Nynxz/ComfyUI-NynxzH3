@@ -74,3 +74,14 @@ def has_audio(ref: str) -> bool:
             return bool(container.streams.audio)
     except Exception:  # noqa: BLE001 - an unreadable file simply has no usable soundtrack
         return False
+
+
+def frame_count(path: str) -> int:
+    """How many pictures a video file holds (counted by decoding when its header doesn't say)."""
+    import av
+
+    with av.open(path) as c:
+        n = c.streams.video[0].frames
+        if n:
+            return int(n)
+        return sum(1 for _ in c.decode(video=0))

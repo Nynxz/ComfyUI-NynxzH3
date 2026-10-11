@@ -14,8 +14,8 @@ from __future__ import annotations
 import logging
 import os
 
-from . import _carry, _reuse
-from ._media import has_audio, load_audio, path_of
+from . import _carry, _marks, _reuse
+from ._media import frame_count, has_audio, load_audio, path_of
 from ._project import FPS, frames_for, normalize
 
 LOG = logging.getLogger(__name__)
@@ -62,7 +62,7 @@ def make(project: dict, scene_id: str, parts: list[dict], metadata: dict | None 
     # would be on its own.
     total = frames_for(proj["scenes"][index]["seconds"])
     for p in parts:
-        if (n := _frame_count(path_of(p["ref"]))) != total:
+        if (n := frame_count(path_of(p["ref"]))) != total:
             raise MixError(
                 f"{os.path.basename(p['ref'])} is {n / FPS:.2f} s and the scene is now "
                 f"{total / FPS:.2f} s: only takes of the scene's length can be mixed."
@@ -80,7 +80,9 @@ def make(project: dict, scene_id: str, parts: list[dict], metadata: dict | None 
     file = f"{name}_{counter:05}_.mp4"
     path = os.path.join(folder, file)
     ref = "/".join(x for x in ("output", subfolder, file) if x)
-    _write(path, parts, metadata)
+    scene = proj["scenes"][index]
+    metadata = {**(metadata or {}), _marks.TAG: _marks.tag("mix", [_marks.scene(scene, 0, total)])}
+    _write(path, parts, metadata, _marks.shot_chapters(scene, total))
     _carry_sidecar(path, first=path_of(parts[0]["ref"]), last=path_of(parts[-1]["ref"]))
 
     base = fit[parts[-1]["ref"]]
@@ -103,18 +105,9 @@ def make(project: dict, scene_id: str, parts: list[dict], metadata: dict | None 
     return {"ref": ref, **info}
 
 
-def _frame_count(path: str) -> int:
-    import av
-
-    with av.open(path) as c:
-        n = c.streams.video[0].frames
-        if n:
-            return int(n)
-        return sum(1 for _ in c.decode(video=0))
-
-
-def _write(path: str, parts: list[dict], metadata: dict | None) -> None:
-    """Stream each part's frames from its take into one clip, and join their sound."""
+def _write(path: str, parts: list[dict], metadata: dict, chapters: list[dict]) -> None:
+    """Stream each part's frames from its take into one clip, join their sound, and mark its
+    shots as chapters."""
     import json
     from fractions import Fraction
 
@@ -130,7 +123,7 @@ def _write(path: str, parts: list[dict], metadata: dict | None) -> None:
     channels = like["waveform"].shape[1] if like else 2
 
     with av.open(path, "w", options={"movflags": "use_metadata_tags+faststart"}) as output:
-        for key, value in (metadata or {}).items():
+        for key, value in metadata.items():
             output.metadata[key] = json.dumps(value)
         video = output.add_stream("libx264", rate=Fraction(FPS))
         video.width, video.height, video.pix_fmt = width, height, "yuv420p"
@@ -184,6 +177,7 @@ def _write(path: str, parts: list[dict], metadata: dict | None) -> None:
             frame.sample_rate, frame.pts = rate, 0
             output.mux(audio.encode(frame))
             output.mux(audio.encode(None))
+        output.set_chapters(chapters)
 
 
 def _carry_sidecar(path: str, first: str, last: str) -> None:

@@ -26,7 +26,7 @@ import node_helpers
 from comfy_api.latest import io
 
 from .._base import NynxzNode
-from . import _carry, _control, _reuse
+from . import _carry, _control, _marks, _reuse
 from ._loras import apply as apply_loras
 from ._media import has_audio, load_audio, load_image, load_video, path_of
 from ._project import FPS, PREVIOUS_FRAME, PREVIOUS_SOUND, compile_scene, normalize
@@ -650,6 +650,8 @@ def render_scene(setup: dict, project, scene: int | None) -> dict:
             f"{carried}|{previous_clip[2]}" if previous_clip is not None else carried,
         ),
         "film": _film_after(proj, index),
+        #: The scene's title and shots, marked in the saved clip's `h3studio` tag.
+        "marks": proj["scenes"][index],
     }
 
 
@@ -1504,7 +1506,7 @@ class NynxzH3StudioClip(NynxzNode):
         video.h3_head = head
         if keep and render.get("studio_node") is not None:
             _mem("clip: before save")
-            ref = _save_clip(video, render, cls._metadata())
+            ref = _save_clip(video, render, cls._metadata(), frames.shape[0])
             _mem("clip: saved")
             _carry.save_sidecar(path_of(ref), video.h3_latent, head, tail_sound)
             if key:
@@ -1589,12 +1591,16 @@ def _blank_video(render: dict):
     return video
 
 
-def _save_clip(video, render: dict, metadata: dict | None = None) -> str:
-    """Save a scene's clip under output/h3studio; its media ref (`output/h3studio/…`)."""
+def _save_clip(video, render: dict, metadata: dict | None, frames: int) -> str:
+    """Save a scene's clip (`frames` long) under output/h3studio, its shots in the `h3studio` tag;
+    its media ref (`output/h3studio/…`). Core's saver writes tags only, so no chapters."""
     import os
 
     import folder_paths
 
+    if scene := render.get("marks"):
+        mark = _marks.tag("take", [_marks.scene(scene, 0, frames)])
+        metadata = {**(metadata or {}), _marks.TAG: mark}
     scene = int(render.get("scene") or 0) + 1
     folder, name, counter, subfolder, _ = folder_paths.get_save_image_path(
         f"h3studio/scene{scene:02}", folder_paths.get_output_directory()
