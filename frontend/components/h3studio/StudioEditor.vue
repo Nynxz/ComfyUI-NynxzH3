@@ -16,13 +16,15 @@
     <ZenPeek />
     <!-- toolbar -->
     <div class="bar">
-      <span
-        v-if="!inPanel"
+      <button
+        type="button"
         class="brand"
-        :title="`${project.scenes.length} scene${project.scenes.length === 1 ? '' : 's'} · ${formatTime(length)}`"
+        :title="`${project.scenes.length} scene${project.scenes.length === 1 ? '' : 's'} · ${formatTime(length)} — the script, sheets and settings`"
+        @click="openStudioMenu"
       >
-        <i class="mdi mdi-movie-open-star-outline" /> H3 Studio
-      </span>
+        <i class="mdi mdi-movie-open-star-outline" /><span v-if="!inPanel">H3 Studio</span
+        ><i class="mdi mdi-chevron-down caret" />
+      </button>
       <ZenToggleGroup
         v-model="monitorMode"
         class="modes"
@@ -89,22 +91,6 @@
       </ZenPopover>
       <StudioCodex :project="project" />
       <span class="sep" />
-      <!-- working on it: the script, sheets to look over, settings, history -->
-      <ZenIconButton
-        icon="mdi mdi-script-text-outline"
-        title="Script — paste scenes as text, copy them out, or write them with an LLM"
-        @click="scriptOpen = true"
-      />
-      <ZenIconButton
-        icon="mdi mdi-view-dashboard-outline"
-        title="Sheets — the references on one board, or a scene's clip as a contact sheet"
-        @click="openSheetsMenu"
-      />
-      <ZenIconButton
-        icon="mdi mdi-cog-outline"
-        title="Studio settings"
-        @click="settingsOpen = true"
-      />
       <ZenIconButton
         icon="mdi mdi-undo"
         title="Undo (Ctrl+Z)"
@@ -157,12 +143,6 @@
           Render<span v-if="outOfDate.length" class="due">{{ outOfDate.length }}</span>
         </ZenButton>
       </span>
-      <ZenIconButton
-        v-if="canPopOut && !inPanel"
-        icon="mdi mdi-open-in-new"
-        title="Pop out into a panel"
-        @click="emit('popOut')"
-      />
     </div>
 
     <!-- monitor + inspector, over the transport; then the timeline. Both splits are ZenSplit: drag
@@ -496,6 +476,7 @@ import {
   stepShapesWork,
 } from "@/lib/h3studio";
 import * as edit from "@/lib/h3edits";
+import { lineTimes } from "@/lib/h3dialogue";
 import { buildTracks, FILTERS, filterCount as filterCount_ } from "@/lib/h3tracks";
 import { useProjectHistory } from "@/lib/h3history";
 import { useStudioLive } from "@/lib/h3live";
@@ -581,12 +562,19 @@ const outOfDate = computed(() =>
 );
 const render = (ids: string[] | null, next = false) =>
   void renderScenes(project, props.nodeId ?? "", ids, next);
-function openSheetsMenu(e: MouseEvent) {
+/** The studio's own menu, on its name: the script, sheets, settings and popping out. */
+function openStudioMenu(e: MouseEvent) {
   const i = place.value.scene;
   const rendered = !!project.scenes[i]?.render;
+  const at = (e.currentTarget as HTMLElement).getBoundingClientRect();
   openMenu(
     [
-      { heading: "Sheets" },
+      {
+        label: "Script…",
+        icon: "mdi mdi-script-text-outline",
+        run: () => (scriptOpen.value = true),
+      },
+      "-",
       {
         label: "Reference sheet",
         icon: "mdi mdi-view-dashboard-outline",
@@ -601,8 +589,23 @@ function openSheetsMenu(e: MouseEvent) {
         disabled: !rendered,
         run: () => contactSheetOf(i),
       },
+      "-",
+      {
+        label: "Studio settings…",
+        icon: "mdi mdi-cog-outline",
+        run: () => (settingsOpen.value = true),
+      },
+      ...(canPopOut && !props.inPanel
+        ? [
+            {
+              label: "Pop out into a panel",
+              icon: "mdi mdi-open-in-new",
+              run: () => emit("popOut"),
+            },
+          ]
+        : []),
     ],
-    e,
+    new MouseEvent("contextmenu", { clientX: at.left, clientY: at.bottom + 4 }),
   );
 }
 function openRenderMenu(e: MouseEvent) {
@@ -1030,7 +1033,9 @@ function onTimelineMove(itemId: string, trackId: string, change: { start?: numbe
   if (trackId === "scenes" && change.end !== undefined) {
     const i = project.scenes.findIndex((s) => s.id === itemId);
     if (i >= 0) setSeconds(i, change.end - starts.value[i]!);
-  } else if (change.start === undefined) return;
+  } else if (trackId.startsWith("voice:") && change.start === undefined && change.end !== undefined)
+    setLineEnd(itemId.split("@")[0]!, change.end);
+  else if (change.start === undefined) return;
   // A whole shot dragged and dropped reorders; its start edge alone moves the cut.
   else if (trackId === "shots" && change.end !== undefined)
     edit.dropShot(project, itemId, change.start);
@@ -1038,6 +1043,15 @@ function onTimelineMove(itemId: string, trackId: string, change: { start?: numbe
   else if (trackId.startsWith("voice:"))
     edit.dropLine(project, itemId.split("@")[0]!, change.start);
   else if (trackId === "keyframes") edit.moveKeyframe(project, itemId, change.start);
+}
+/** A line's end dragged on the timeline: it lasts that long (unset, it's estimated from its words). */
+function setLineEnd(id: string, end: number) {
+  const found = edit.findLine(project, id);
+  if (!found) return;
+  const i = project.scenes.indexOf(found.scene);
+  const at = lineTimes(found.scene).find((x) => x.line.id === id);
+  if (!at) return;
+  found.line.seconds = Math.max(0.3, Math.round((end - starts.value[i]! - at.start) * 100) / 100);
 }
 /** A control video's bar on its track: moved, or an end dragged — the stretch of the scene it
  *  steers. Returns whether the item was one. */
@@ -1550,10 +1564,28 @@ onBeforeUnmount(() => ro?.disconnect());
 .brand {
   white-space: nowrap;
   display: inline-flex;
+  flex: none;
   align-items: center;
   gap: 6px;
+  height: var(--zen-control-h, 28px);
+  padding: 0 6px 0 8px;
+  border: 1px solid transparent;
+  border-radius: var(--h3-radius);
+  background: transparent;
+  color: var(--h3-text);
+  font: inherit;
   font-size: 12.5px;
   font-weight: 700;
+  cursor: pointer;
+}
+.brand:hover {
+  border-color: var(--h3-line);
+  background: var(--h3-field);
+}
+.brand .caret {
+  margin-left: -2px;
+  color: var(--h3-muted);
+  font-size: 14px;
 }
 .brand .mdi {
   color: var(--h3-accent);

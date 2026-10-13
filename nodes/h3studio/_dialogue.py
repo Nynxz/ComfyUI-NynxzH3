@@ -30,15 +30,45 @@ PAUSE = 0.8
 _CJK = re.compile(r"[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]")
 
 
+#: Syllables a second: brisk screen dialogue (H3's own examples run about this fast), and sung.
+SYLLABLES_SAID = 5.0
+SYLLABLES_SUNG = 3.0
+_VOWELS = re.compile(r"[aeiouy]+")
+_SILENT_END = re.compile(r"(?<=[^aeiouylt])e$|(?<=[^aeiouytd])e[sd]$")
+
+
+def syllables(word: str) -> int:
+    """About how many syllables an English word has (vowel groups, less a silent final e); a
+    number counts one per digit."""
+    digits = sum(c.isdigit() for c in word)
+    word = re.sub(r"[^a-z]", "", word.lower())
+    if not word:
+        return digits
+    n = len(_VOWELS.findall(word))
+    if n > 1 and _SILENT_END.search(word):
+        n -= 1
+    return max(1, n) + digits
+
+
 def speech_seconds(text: str, mode: str = "say") -> float:
-    """Roughly how long a line takes to say (the editor's `speechSeconds`): ~2.6 words a second,
-    ~4.5 characters a second in Chinese, Japanese or Korean, slower when sung."""
+    """Roughly how long a line takes (the editor's `speechSeconds`): its syllables at a brisk
+    screen pace (slower sung), ~4.5 characters a second in Chinese, Japanese or Korean, and a
+    breath at each comma and between sentences."""
     if not text.strip():
         return 0.0
+    sung = mode == "sing"
     cjk = len(_CJK.findall(text))
-    words = len(_CJK.sub(" ", text).split())
-    seconds = words / 2.6 + cjk / 4.5
-    return max(0.6, seconds * (1.6 if mode == "sing" else 1))
+    rest = _CJK.sub(" ", text)
+    count = sum(syllables(w) for w in rest.split())
+    seconds = count / (SYLLABLES_SUNG if sung else SYLLABLES_SAID) + cjk / (2.7 if sung else 4.5)
+    seconds += 0.15 * len(re.findall(r"[,;:\u2013\u2014]", text))
+    seconds += 0.3 * len(re.findall(r"[.!?\u3002\uff01\uff1f]+(?=\s*\S)", text))
+    return round(max(0.5, seconds), 3)
+
+
+def line_seconds(line: dict[str, Any]) -> float:
+    """How long a line lasts: as long as it was dragged to on the timeline, else the estimate."""
+    return line["seconds"] if line.get("seconds") else speech_seconds(line["words"], line["mode"])
 
 
 def _str(value: Any) -> str:
@@ -82,6 +112,10 @@ def normalize_lines(raw: Any) -> list[dict[str, Any]]:
                 "language": _str(line.get("language")),
                 "at": float(line["at"])
                 if isinstance(line.get("at"), (int, float)) and line["at"] >= 0
+                else None,
+                #: Its length, when set on the timeline (sung to a track, say); else estimated.
+                "seconds": float(line["seconds"])
+                if isinstance(line.get("seconds"), (int, float)) and line["seconds"] > 0
                 else None,
             }
         )
@@ -215,7 +249,7 @@ class Dialogue:
             begin = max(cursor, line["at"] if line["at"] is not None else cursor)
             lead = "After a pause, " if begin - cursor > PAUSE else ""
             parts.append(self.line(line, cut_after=cut_after, final=final, lead=lead))
-            cursor = begin + speech_seconds(line["words"], line["mode"])
+            cursor = begin + line_seconds(line)
         return " ".join(p for p in parts if p)
 
     def speaking_refs(self, lines: list[dict[str, Any]]) -> set[str]:

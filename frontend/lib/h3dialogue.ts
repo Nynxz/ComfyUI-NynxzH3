@@ -22,14 +22,41 @@ export function newLine(speakers: string[] = []): Line {
 }
 
 const CJK = /[぀-ヿ㐀-鿿가-힯]/g;
-/** Roughly how long a line takes: ~2.6 words a second spoken (slower sung), ~4.5 characters a
- *  second in Chinese, Japanese or Korean. */
-export function speechSeconds(text: string, mode: LineMode = "say"): number {
-  const cjk = text.match(CJK)?.length ?? 0;
-  const words = text.replace(CJK, " ").split(/\s+/).filter(Boolean).length;
-  const seconds = words / 2.6 + cjk / 4.5;
-  return text.trim() ? Math.max(0.6, seconds * (mode === "sing" ? 1.6 : 1)) : 0;
+/** Syllables a second: brisk screen dialogue (H3's own examples run about this fast), and sung. */
+const SYLLABLES_SAID = 5;
+const SYLLABLES_SUNG = 3;
+
+/** About how many syllables an English word has (vowel groups, less a silent final e); a number
+ *  counts one per digit. */
+export function syllables(word: string): number {
+  const digits = word.replace(/\D/g, "").length;
+  const w = word.toLowerCase().replace(/[^a-z]/g, "");
+  if (!w) return digits;
+  let n = w.match(/[aeiouy]+/g)?.length ?? 0;
+  if (n > 1 && /(?<=[^aeiouylt])e$|(?<=[^aeiouytd])e[sd]$/.test(w)) n--;
+  return Math.max(1, n) + digits;
 }
+
+/** Roughly how long a line takes (nodes/h3studio/_dialogue.py `speech_seconds`): its syllables at
+ *  a brisk screen pace (slower sung), ~4.5 characters a second in Chinese, Japanese or Korean, and
+ *  a breath at each comma and between sentences. */
+export function speechSeconds(text: string, mode: LineMode = "say"): number {
+  if (!text.trim()) return 0;
+  const sung = mode === "sing";
+  const cjk = text.match(CJK)?.length ?? 0;
+  const count = text
+    .replace(CJK, " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .reduce((n, w) => n + syllables(w), 0);
+  let seconds = count / (sung ? SYLLABLES_SUNG : SYLLABLES_SAID) + cjk / (sung ? 2.7 : 4.5);
+  seconds += 0.15 * (text.match(/[,;:\u2013\u2014]/g)?.length ?? 0);
+  seconds += 0.3 * (text.match(/[.!?\u3002\uff01\uff1f]+(?=\s*\S)/g)?.length ?? 0);
+  return Math.round(Math.max(0.5, seconds) * 1000) / 1000;
+}
+
+/** How long a line lasts: as long as it was dragged to on the timeline, else the estimate. */
+export const lineSeconds = (line: Line) => line.seconds || speechSeconds(line.words, line.mode);
 
 /** Who a line's speakers are, by name. */
 export function speakerNames(project: Project, line: Line): string {
@@ -127,7 +154,7 @@ export function lineTimes(scene: Scene): LineTime[] {
     for (const line of sh.lines ?? []) {
       if (!line.words.trim()) continue;
       const start = Math.max(cursor, line.at ?? cursor);
-      const finish = start + speechSeconds(line.words, line.mode);
+      const finish = start + lineSeconds(line);
       out.push({ line, shot: i, start, end: finish, gap: start - cursor, over: finish > end + 0.05 });
       cursor = finish;
     }

@@ -378,13 +378,24 @@ export function studioMenus(project: Project, a: MenuActions) {
         icon: line.mode === m.value ? "mdi mdi-check" : m.icon,
         run: () => (line.mode = m.value),
       })),
+      ...(line.at !== undefined || line.seconds
+        ? ["-" as const]
+        : []),
       ...(line.at !== undefined
         ? [
-            "-" as const,
             {
               label: "Follow straight on",
               icon: "mdi mdi-arrow-collapse-left",
               run: () => (line.at = undefined),
+            },
+          ]
+        : []),
+      ...(line.seconds
+        ? [
+            {
+              label: "Back to its estimated length",
+              icon: "mdi mdi-timer-refresh-outline",
+              run: () => (line.seconds = undefined),
             },
           ]
         : []),

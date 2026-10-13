@@ -142,6 +142,9 @@ export interface Line {
   /** When it starts, seconds into the scene (set by dragging it on the timeline). Unset, or
    *  earlier than the line before it ends, it follows straight on. */
   at?: number;
+  /** How long it lasts, when its end was dragged on the timeline (a sung line held to the music);
+   *  unset, it's estimated from its words. */
+  seconds?: number;
 }
 export interface Keyframe {
   id: string;

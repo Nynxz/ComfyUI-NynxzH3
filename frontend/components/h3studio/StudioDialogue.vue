@@ -98,7 +98,9 @@
               : 'Placed on the timeline'
           "
         >
-          <i class="mdi mdi-clock-outline" />{{ times.get(line.id)!.start.toFixed(1) }}s
+          <i class="mdi mdi-clock-outline" />{{ times.get(line.id)!.start.toFixed(1) }}–{{
+            times.get(line.id)!.end.toFixed(1)
+          }}s
           <template v-if="times.get(line.id)!.gap > PAUSE">· pause</template>
           <button
             v-if="line.at !== undefined"
@@ -119,12 +121,17 @@
         <button
           type="button"
           class="flag"
-          :class="{ on: crosses.has(line.id) || !!line.next }"
+          :class="{
+            on: crosses.has(line.id) || !!line.next,
+            hint: times.get(line.id)?.over && !last && !crosses.has(line.id) && !line.next,
+          }"
           :disabled="last"
           :title="
             last
               ? 'The last shot has no cut to cross'
-              : 'The line carries on over the cut into the next shot'
+              : times.get(line.id)?.over && !crosses.has(line.id) && !line.next
+                ? 'This line runs on past the cut: carry the rest over into the next shot, or shorten it (drag its end on the timeline)'
+                : 'The line carries on over the cut into the next shot'
           "
           @click="toggleCross(line)"
         >
@@ -330,8 +337,11 @@ const nextMode = (line: Line) => MODES[(MODES.indexOf(modeOf(line)) + 1) % MODES
   font-size: 10.5px;
   font-variant-numeric: tabular-nums;
 }
-.soft.over,
-.line.over .words {
+.soft.over {
+  color: #f1a76b;
+}
+.flag.hint {
+  border-color: #f1a76b;
   color: #f1a76b;
 }
 .line {
@@ -342,9 +352,6 @@ const nextMode = (line: Line) => MODES[(MODES.indexOf(modeOf(line)) + 1) % MODES
   border-left: 2px solid var(--vc, var(--h3-accent));
   border-radius: 0 var(--h3-radius) var(--h3-radius) 0;
   background: color-mix(in srgb, var(--h3-text) 3%, transparent);
-}
-.line.over {
-  border-left-color: #f1a76b;
 }
 .who .face,
 .who .dot {

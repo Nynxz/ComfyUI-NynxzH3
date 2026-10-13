@@ -244,18 +244,17 @@ export function buildTracks(project: Project, ctx: TrackContext): TimelineTrack[
       start: starts[x.si]! + x.start,
       end: starts[x.si]! + x.end,
       label: l.words,
-      title: `${speakerNames(project, l)}${how}${l.delivery ? `, ${l.delivery}` : ""}: “${l.words}”${x.over ? " — probably runs past its shot" : ""} — drag to move it`,
-      icon: x.over
-        ? "mdi-alert-outline"
-        : l.mode === "voiceover"
+      title: `${speakerNames(project, l)}${how}${l.delivery ? `, ${l.delivery}` : ""}: “${l.words}” · ${(x.end - x.start).toFixed(1)}s${l.seconds ? "" : " (estimated)"}${x.over ? " — runs on past its shot's cut" : ""} — drag to move it, drag its end to set how long it lasts`,
+      icon:
+        l.mode === "voiceover"
           ? "mdi-microphone-outline"
           : l.mode === "sing"
             ? "mdi-music-note"
             : l.speakers.length > 1
               ? "mdi-account-multiple"
               : undefined,
-      color: x.over ? "#b5684a" : voiceColor(project, lane),
-      resize: false as const,
+      color: voiceColor(project, lane),
+      resize: "end" as const,
       movable: true,
       commit: "drop" as const,
     };
