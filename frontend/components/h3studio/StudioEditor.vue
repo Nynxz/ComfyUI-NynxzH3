@@ -87,9 +87,7 @@
       <ZenPopover placement="bottom-end">
         <template #trigger="{ toggle }">
           <button type="button" class="barchip" title="Canvas size" @click="toggle">
-            <i class="mdi mdi-aspect-ratio" />{{ project.canvas.width }}×{{
-              project.canvas.height
-            }}
+            <i class="mdi mdi-aspect-ratio" />{{ project.canvas.width }}×{{ project.canvas.height }}
           </button>
         </template>
         <ZenResolution
@@ -1334,9 +1332,9 @@ const monitorMenu = (e: MouseEvent) => openMenu(menus.monitorMenu(), e);
 // focus usually stays with the graph, and Space there would pan it instead of playing.
 const hovered = ref(false);
 const keySink = ref<HTMLTextAreaElement | null>(null);
-// Over the studio, the wheel is the studio's (volume, timeline) — ComfyUI hands wheel events to the
-// canvas unless focus is inside an element that captures them. So hovering takes focus, unless you
-// are typing somewhere else, and leaving gives it back.
+// ComfyUI hands wheel events to the canvas unless focus is inside an element that captures them.
+// Hovering takes focus (for the keys), unless you are typing somewhere else, and leaving gives it
+// back; whether the studio captures a wheel is decided per event, by `claimWheel`.
 /** Right-click in a text field keeps the browser's own menu (spelling suggestions, paste);
  *  anywhere else it opens nothing, and never ComfyUI's canvas menu. */
 function onContextMenu(e: MouseEvent) {
@@ -1345,6 +1343,39 @@ function onContextMenu(e: MouseEvent) {
   );
   if (!field) e.preventDefault();
 }
+/** Whether a wheel over `target` is the studio's: something there scrolls that way (a list, text,
+ *  the timeline's tracks or a zoomed-in timeline), or uses the wheel itself (the volume, Alt + wheel
+ *  zooming the timeline). Anywhere else it goes on to the canvas, to zoom or pan the graph. */
+function wheelIsOurs(e: WheelEvent): boolean {
+  const root = rootEl.value;
+  const target = e.target as Element | null;
+  if (!root || !target) return false;
+  if (target.closest(".zvol")) return true;
+  const timeline = target.closest(".ztl");
+  if (timeline && e.altKey) return true;
+  const sideways = e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY);
+  for (let el: Element | null = target; el && el !== root; el = el.parentElement) {
+    const style = getComputedStyle(el);
+    const scrolls = (overflow: string) => overflow === "auto" || overflow === "scroll";
+    if (
+      sideways
+        ? scrolls(style.overflowX) && el.scrollWidth > el.clientWidth + 1
+        : scrolls(style.overflowY) && el.scrollHeight > el.clientHeight + 1
+    )
+      return true;
+  }
+  const scroller = timeline?.querySelector(".ztl-scroll");
+  return !!scroller && scroller.scrollWidth > scroller.clientWidth + 1;
+}
+/** Decided before anything else sees the wheel: ComfyUI's own listener, which reads the attribute,
+ *  catches it on the way down, before it reaches the studio. */
+function claimWheel(e: WheelEvent) {
+  const root = rootEl.value;
+  if (root && e.target instanceof Node && root.contains(e.target))
+    root.dataset.captureWheel = String(wheelIsOurs(e));
+}
+onMounted(() => window.addEventListener("wheel", claimWheel, { capture: true, passive: true }));
+onBeforeUnmount(() => window.removeEventListener("wheel", claimWheel, { capture: true }));
 function onEnter() {
   hovered.value = true;
   const active = document.activeElement as HTMLElement | null;
