@@ -177,7 +177,7 @@
           v-model="current.name"
           class="field"
           spellcheck="false"
-          @input="current.name = current.name.replace(/[^\w-]/g, '')"
+          @input="current.name = current.name.replace(/[^\p{L}\p{N}_-]/gu, '')"
         />
       </div>
       <div class="erow">

@@ -464,6 +464,7 @@ import {
   uploadOrReuse,
 } from "@/framework";
 import {
+  FPS,
   compileScene,
   nativeCanvas,
   filmLength,
@@ -685,7 +686,7 @@ watch(
     if (scene === null || monitorMode.value !== "follow") return;
     const looping = loopMode.value === "scene" || loopMode.value === "shot";
     if (playing.value && !looping) return;
-    if (place.value.scene !== scene) playhead.value = starts.value[scene]! + 0.01;
+    if (place.value.scene !== scene) toScene(scene);
   },
 );
 const renderingStep = computed(() => {
@@ -699,10 +700,15 @@ const renderProgress = computed(() => {
   const lastStep = run[run.length - 1];
   return lastStep?.total ? lastStep.step / lastStep.total : 0;
 });
+/** The playhead to the start of scene `i` — which the server names by index, so it may be gone. */
+function toScene(i: number) {
+  const at = starts.value[i];
+  if (at !== undefined) playhead.value = at + 0.01;
+}
 function watchRender() {
   if (live.rendering === null) return;
   monitorMode.value = "preview";
-  if (place.value.scene !== live.rendering) playhead.value = starts.value[live.rendering]! + 0.01;
+  if (place.value.scene !== live.rendering) toScene(live.rendering);
 }
 // H3 Studio Clip reports each saved clip; keep it on its scene, so it is there after a reload.
 watch(
@@ -754,6 +760,11 @@ const playing = ref(false);
 const editPlace = shallowRef(place.value);
 watch(place, (p) => {
   if (!playing.value) editPlace.value = p;
+});
+/** `editPlace`, or the playhead's place once the scene or shot it held has been deleted. */
+const heldPlace = computed(() => {
+  const p = editPlace.value;
+  return project.scenes[p.scene]?.shots[p.shot] ? p : place.value;
 });
 // The scene you are on (in the project) and the exact playhead (in the view) are remembered — but
 // not while playback runs through the film, which would rewrite the workflow at every cut.
@@ -829,7 +840,7 @@ function togglePlay() {
 }
 const stepFrame = (by: number) => {
   stop();
-  seek(Math.round(playhead.value * 24 + by) / 24);
+  seek(Math.round(playhead.value * FPS + by) / FPS);
 };
 onBeforeUnmount(() => cancelAnimationFrame(raf));
 
@@ -851,11 +862,11 @@ const explicit = ref<{ kind: Selection["kind"]; id: string } | null>(null);
 function locate(kind: Selection["kind"], id: string): Selection | null {
   if (kind === "lora")
     return project.loras?.some((l) => l.id === id)
-      ? { kind, id, sceneIndex: editPlace.value.scene, shotIndex: 0 }
+      ? { kind, id, sceneIndex: heldPlace.value.scene, shotIndex: 0 }
       : null;
   if (kind === "ref")
     return project.refs.some((r) => r.id === id)
-      ? { kind, id, sceneIndex: editPlace.value.scene, shotIndex: 0 }
+      ? { kind, id, sceneIndex: heldPlace.value.scene, shotIndex: 0 }
       : null;
   for (let si = 0; si < project.scenes.length; si++) {
     const s = project.scenes[si]!;
@@ -873,7 +884,7 @@ function locate(kind: Selection["kind"], id: string): Selection | null {
 const selection = computed<Selection>(() => {
   const found = explicit.value && locate(explicit.value.kind, explicit.value.id);
   if (found) return found;
-  const p = editPlace.value;
+  const p = heldPlace.value;
   const shot = project.scenes[p.scene]!.shots[p.shot]!;
   return { kind: "shot", id: shot.id, sceneIndex: p.scene, shotIndex: p.shot };
 });
@@ -907,7 +918,7 @@ function select(kind: Selection["kind"], id: string) {
 /** The inspector edits shots, scenes and keyframes; with a reference selected it follows the playhead. */
 const editSelection = computed<Selection>(() => {
   if (selection.value.kind !== "ref") return selection.value;
-  const p = editPlace.value;
+  const p = heldPlace.value;
   const shot = project.scenes[p.scene]!.shots[p.shot]!;
   return { kind: "shot", id: shot.id, sceneIndex: p.scene, shotIndex: p.shot };
 });
@@ -1246,7 +1257,7 @@ async function pickKeyframe(t: number) {
 }
 // --- the music track ------------------------------------------------------------------------------
 function setSong(media: string | undefined) {
-  if (media) project.track = { ...project.track, media };
+  if (media) edit.setTrack(project, { media });
 }
 async function pickSong() {
   const [media] = await pickMedia({
@@ -1460,14 +1471,17 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey, true));
 // --- compiled scene ------------------------------------------------------------------------------
 const compiled = ref<Compiled | null>(null);
 let timer = 0;
+/** The latest compile asked for: an older one that answers late is dropped. */
+let asked = 0;
 watch(
   [project, () => place.value.scene],
   () => {
     window.clearTimeout(timer);
-    timer = window.setTimeout(
-      async () => (compiled.value = await compileScene(project, place.value.scene)),
-      250,
-    );
+    timer = window.setTimeout(async () => {
+      const ask = ++asked;
+      const result = await compileScene(project, place.value.scene);
+      if (ask === asked) compiled.value = result;
+    }, 250);
   },
   { deep: true, immediate: true },
 );
@@ -1491,12 +1505,9 @@ const taskTitle = computed(() => {
   return `${head}\n\n${shown}${warned}\n\nClick to copy the prompt H3 gets (also on the monitor's right-click menu).`;
 });
 /** The exact prompt for this scene, on the clipboard — to see what H3 is told. */
-const copied = ref(false);
 async function copyPrompt() {
   if (!compiled.value) return;
   await navigator.clipboard.writeText(compiled.value.prompt);
-  copied.value = true;
-  window.setTimeout(() => (copied.value = false), 1500);
 }
 
 // --- the inspector beside the monitor ------------------------------------------------------------
@@ -1574,8 +1585,7 @@ onBeforeUnmount(() => ro?.disconnect());
   color: var(--h3-muted);
 }
 .bar,
-.transport,
-.status {
+.transport {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -1627,9 +1637,7 @@ onBeforeUnmount(() => ro?.disconnect());
   min-height: 120px;
 }
 .bar,
-.transport,
-.status,
-.studio > :deep(.ztl) {
+.transport {
   flex: none;
 }
 /* The splits fill what they're given; each pane's content fills its pane. */
@@ -1802,10 +1810,6 @@ onBeforeUnmount(() => ro?.disconnect());
   font-variant-numeric: tabular-nums;
 }
 
-.status {
-  color: var(--h3-muted);
-  font-size: 10.5px;
-}
 .lanespop {
   display: flex;
   flex-direction: column;

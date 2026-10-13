@@ -111,7 +111,7 @@
 // The studio's link to the Codex: save what's in the studio into a show as a film, filed under
 // an episode; save over the film it came from; or open another film into the studio. The button
 // says which film the studio holds, with a dot when it has changed since it was saved.
-import { computed, reactive, ref, watch } from "vue";
+import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
 import { ZenButton, ZenInput, ZenPopover, ZenSelect } from "@nynxz/zenkit-ui";
 import { episodeName, filmSummary } from "@/lib/codex";
 import { listShows, liveShows, loadShow, type ShowSummary } from "@/lib/codexStore";
@@ -142,6 +142,7 @@ watch(
   },
   { deep: true },
 );
+onBeforeUnmount(() => window.clearTimeout(timer));
 const dirty = computed(() => !!link.value && link.value.saved !== current.value);
 
 const shows = ref<ShowSummary[]>([]);

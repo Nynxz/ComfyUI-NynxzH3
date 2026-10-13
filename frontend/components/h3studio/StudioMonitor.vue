@@ -203,6 +203,7 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { mediaKind } from "@/framework";
 import {
+  FPS,
   onTrack,
   pictureAt,
   refInScene,
@@ -309,7 +310,7 @@ const caption = computed(
 );
 const names = computed(() => new Set(props.project.refs.map((r) => r.name.toLowerCase())));
 const captionParts = computed(() =>
-  caption.value.split(/(@[\w-]+)/).map((text) => ({
+  caption.value.split(/(@[\p{L}\p{N}_-]+)/u).map((text) => ({
     text,
     ref: text.startsWith("@"),
     known: names.value.has(text.slice(1).toLowerCase()),
@@ -319,7 +320,7 @@ const timecode = computed(() => {
   const t = props.time;
   const m = Math.floor(t / 60);
   const s = t - m * 60;
-  const f = Math.floor((t % 1) * 24);
+  const f = Math.floor((t % 1) * FPS);
   return `${String(m).padStart(2, "0")}:${String(Math.floor(s)).padStart(2, "0")}:${String(f).padStart(2, "0")}`;
 });
 
@@ -766,20 +767,6 @@ watch(
   align-items: center;
   gap: 4px;
   border: 0;
-  cursor: pointer;
-}
-.mute {
-  position: absolute;
-  right: 8px;
-  bottom: 8px;
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  border: 0;
-  border-radius: 50%;
-  background: rgb(0 0 0 / 55%);
-  color: #fff;
   cursor: pointer;
 }
 </style>

@@ -84,17 +84,21 @@ function put(frame: LiveFrame) {
 /** An animated WebP's frames (Chromium's ImageDecoder), or null for a still or elsewhere. */
 async function decodeFrames(blob: Blob): Promise<VideoFrame[] | null> {
   if (typeof ImageDecoder === "undefined") return null;
+  let decoder: ImageDecoder | null = null;
+  const frames: VideoFrame[] = [];
   try {
-    const decoder = new ImageDecoder({ data: blob.stream(), type: blob.type });
+    decoder = new ImageDecoder({ data: blob.stream(), type: blob.type });
     await decoder.completed;
     const track = decoder.tracks.selectedTrack;
     if (!track || track.frameCount <= 1) return null;
-    const frames: VideoFrame[] = [];
     for (let i = 0; i < track.frameCount; i++) frames.push((await decoder.decode({ frameIndex: i })).image);
-    decoder.close();
     return frames;
   } catch {
+    // A decode that fails part-way: the frames it did make are let go.
+    for (const f of frames) f.close();
     return null;
+  } finally {
+    decoder?.close();
   }
 }
 

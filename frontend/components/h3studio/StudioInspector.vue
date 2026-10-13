@@ -855,7 +855,7 @@ import {
 } from "@/lib/h3studio";
 import { isShaped } from "@/lib/h3tracks";
 import { hasMediaDrop } from "@/framework";
-import { reorderShot } from "@/lib/h3edits";
+import * as edit from "@/lib/h3edits";
 
 export interface Selection {
   kind: "shot" | "scene" | "keyframe" | "ref" | "lora";
@@ -935,15 +935,9 @@ const setFilm = (change: Partial<FilmSettings>) =>
 // --- the music track -----------------------------------------------------------------------------
 const songName = computed(() => props.project.track?.media.split("/").pop() ?? "");
 const songSpan = computed(() => trackSpan(props.project, props.sel.sceneIndex));
-const setSong = (change: Partial<MusicTrack>) =>
-  props.project.track && (props.project.track = { ...props.project.track, ...change });
-function removeSong() {
-  delete props.project.track;
-}
-function setOnTrack(on: boolean) {
-  if (on) delete scene.value!.track;
-  else scene.value!.track = false;
-}
+const setSong = (change: Partial<MusicTrack>) => edit.setTrack(props.project, change);
+const removeSong = () => edit.removeTrack(props.project);
+const setOnTrack = (on: boolean) => edit.setSceneOnTrack(props.project, props.sel.sceneIndex, on);
 const songDropping = ref(false);
 function onSongDragOver(e: DragEvent) {
   if (!hasMediaDrop(e)) return;
@@ -993,7 +987,7 @@ function setShotStart(i: number, v: number) {
 const refNames = computed(() => new Set(sceneRefs.value.map((r) => r.name.toLowerCase())));
 function mentionParts(text: string) {
   const line = text.replace(/\s+/g, " ").trim();
-  return line.split(/(@[\w-]+)/).map((t) => ({
+  return line.split(/(@[\p{L}\p{N}_-]+)/u).map((t) => ({
     text: t,
     ref: t.startsWith("@"),
     known: refNames.value.has(t.slice(1).toLowerCase()),
@@ -1039,7 +1033,7 @@ function startShotDrag(e: PointerEvent, id: string) {
         : below !== null && m.clientY > below
           ? at + 1
           : at;
-    if (to !== at) reorderShot(props.project, props.sel.sceneIndex, at, to);
+    if (to !== at) edit.reorderShot(props.project, props.sel.sceneIndex, at, to);
   };
   const up = () => {
     draggingShot.value = null;
@@ -1090,8 +1084,13 @@ function clearShapes() {
   lane.value.sampling = [];
   lane.value.steps = {};
 }
-const stepsOpen = ref(
-  lane.value ? isShaped(lane.value.sampling) || shapedScenes.value.length > 0 : false,
+const shapedLane = () =>
+  lane.value ? isShaped(lane.value.sampling) || shapedScenes.value.length > 0 : false;
+/** Open where the lane is shaped over the steps; set again for each lane selected. */
+const stepsOpen = ref(shapedLane());
+watch(
+  () => lane.value?.id,
+  () => (stepsOpen.value = shapedLane()),
 );
 /** The lane's curve over the steps, as the editor's x/y points. */
 const samplingCurve = computed({
@@ -1414,30 +1413,6 @@ function mention(name: string) {
 .fitframe img.stretch {
   object-fit: fill;
 }
-.big {
-  width: 100%;
-  max-height: 200px;
-  border-radius: var(--h3-radius);
-  object-fit: contain;
-  background: #000;
-}
-.refbox {
-  display: flex;
-  gap: 10px;
-}
-.refthumb {
-  flex: none;
-  width: 72px;
-  height: 72px;
-  overflow: hidden;
-  border-radius: var(--h3-radius);
-}
-.mthumb {
-  width: 18px;
-  height: 18px;
-  overflow: hidden;
-  border-radius: 50%;
-}
 .check {
   gap: 8px;
   color: var(--h3-text);
@@ -1449,11 +1424,6 @@ function mention(name: string) {
   color: var(--h3-muted);
   font-size: 11px;
   line-height: 1.45;
-}
-.group {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
 }
 .lscenes {
   display: flex;
@@ -1911,15 +1881,6 @@ function mention(name: string) {
 .kfs .hintline {
   flex: 1 1 140px;
 }
-.refgroups {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: auto;
-}
-.slots-head .mdi {
-  font-size: 13px;
-}
 .slot .st {
   position: absolute;
   right: 3px;
@@ -1939,33 +1900,6 @@ function mention(name: string) {
 }
 .wide :deep(.zen-tg-b) {
   flex: 1;
-}
-.scenechip {
-  width: 24px;
-  height: 22px;
-  border: 1px solid var(--h3-line);
-  border-radius: calc(var(--h3-radius) * 0.75);
-  background: none;
-  color: var(--h3-muted);
-  font: inherit;
-  font-size: 11px;
-  font-weight: 700;
-  cursor: pointer;
-}
-.scenechip.on {
-  border-color: var(--h3-accent);
-  background: color-mix(in srgb, var(--h3-accent) 25%, transparent);
-  color: var(--h3-text);
-}
-.slots-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding-top: 8px;
-  border-top: 1px solid var(--h3-line);
-  color: var(--h3-muted);
-  font-size: 10.5px;
-  font-weight: 600;
 }
 .slots {
   display: grid;
@@ -1988,26 +1922,9 @@ function mention(name: string) {
   height: 100%;
   object-fit: contain;
 }
-.slot.semantic img {
-  filter: saturate(0.3) brightness(0.85);
-}
 .slot.on {
   border-color: var(--h3-accent);
   box-shadow: 0 0 0 1px var(--h3-accent);
-}
-.slot .pn {
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  min-width: 14px;
-  padding: 0 3px;
-  border-radius: 3px;
-  background: rgb(0 0 0 / 65%);
-  color: #fff;
-  font-size: 9.5px;
-  font-weight: 700;
-  line-height: 14px;
-  text-align: center;
 }
 .slot.empty {
   border-style: dashed;

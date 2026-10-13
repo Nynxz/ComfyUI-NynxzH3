@@ -450,12 +450,12 @@ export function studioMenus(project: Project, a: MenuActions) {
               ? {
                   label: "Put it on the music track",
                   icon: "mdi mdi-music",
-                  run: () => delete scene.track,
+                  run: () => edit.setSceneOnTrack(project, i, true),
                 }
               : {
                   label: "Take it off the music track",
                   icon: "mdi mdi-music-off",
-                  run: () => (scene.track = false),
+                  run: () => edit.setSceneOnTrack(project, i, false),
                 },
             "-" as const,
           ]
@@ -464,7 +464,7 @@ export function studioMenus(project: Project, a: MenuActions) {
       {
         label: "Remove the music track",
         icon: "mdi mdi-delete-outline",
-        run: () => delete project.track,
+        run: () => edit.removeTrack(project),
       },
     ];
   }

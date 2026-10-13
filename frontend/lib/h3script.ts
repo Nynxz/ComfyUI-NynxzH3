@@ -345,7 +345,7 @@ export function parseProjectScript(project: Project, text: string): ScriptResult
         else if (k === "with")
           result.with.push({
             scene: scene.id,
-            names: (value!.match(/@[\w-]+/g) ?? []).map((n) => n.slice(1).toLowerCase()),
+            names: (value!.match(/@[\p{L}\p{N}_-]+/gu) ?? []).map((n) => n.slice(1).toLowerCase()),
           });
       } else if (k === "style") result.style = value;
       else if (k === "direction") result.direction = value;
@@ -363,7 +363,7 @@ export function parseProjectScript(project: Project, text: string): ScriptResult
     }
     if (section === "refs") {
       const r =
-        /^[-*]?\s*@([\w-]+)\s*(?::\s*(.*?))?\s*(?:\(((?:\s*(?:picture|image|video|audio|blocking|control|placeholder|every scene|all scenes)\s*,?)+)\))?\s*$/i.exec(
+        /^[-*]?\s*@([\p{L}\p{N}_-]+)\s*(?::\s*(.*?))?\s*(?:\(((?:\s*(?:picture|image|video|audio|blocking|control|placeholder|every scene|all scenes)\s*,?)+)\))?\s*$/iu.exec(
           row,
         );
       if (r) {
@@ -395,7 +395,7 @@ export function parseProjectScript(project: Project, text: string): ScriptResult
     }
     if (section === "cast") {
       const c =
-        /^[-*]?\s*([^(:[\]]+?)\s*(?:\((@[\w-]+)\))?\s*(?::\s*([^[]*?))?\s*(?:\[([^\]]+)\])?\s*$/.exec(
+        /^[-*]?\s*([^(:[\]]+?)\s*(?:\((@[\p{L}\p{N}_-]+)\))?\s*(?::\s*([^[]*?))?\s*(?:\[([^\]]+)\])?\s*$/u.exec(
           row,
         );
       if (c) {
@@ -454,7 +454,9 @@ export function parseProjectScript(project: Project, text: string): ScriptResult
     }
   }
   const mentioned = new Set(
-    result.scenes.flatMap((sc) => sc.shots.flatMap((sh) => sh.text.match(/@[\w-]+/g) ?? [])),
+    result.scenes.flatMap((sc) =>
+      sc.shots.flatMap((sh) => sh.text.match(/@[\p{L}\p{N}_-]+/gu) ?? []),
+    ),
   );
   // @setting is the previous scene's last frame in a "same place" scene, made at render time —
   // not a placeholder, unless the script declares a reference of that name itself.
@@ -476,7 +478,7 @@ function scriptUses(project: Project, script: ScriptResult) {
     ...script.links.map((l) => l.ref),
     ...script.scenes.flatMap((sc) =>
       sc.shots.flatMap((sh) =>
-        (sh.text.match(/@[\w-]+/g) ?? []).map((m) => m.slice(1).toLowerCase()),
+        (sh.text.match(/@[\p{L}\p{N}_-]+/gu) ?? []).map((m) => m.slice(1).toLowerCase()),
       ),
     ),
   ]);

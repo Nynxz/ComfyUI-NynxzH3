@@ -556,7 +556,10 @@ export function refUsedIn(project: Project, ref: Ref, scene: Scene): boolean {
   const seen = (r: Ref) => r.kind === "image" || r.kind === "video";
   const name = ref.name.toLowerCase();
   const visible = project.refs.some((r) => seen(r) && r.name.toLowerCase() === name);
-  const mention = new RegExp(`@${escapeRegExp(ref.name)}(?::(look|voice))?(?![\\w-])`, "gi");
+  const mention = new RegExp(
+    `@${escapeRegExp(ref.name)}(?::(look|voice))?(?![\\p{L}\\p{N}_-])`,
+    "giu",
+  );
   for (const s of scene.shots) {
     for (const m of s.text.matchAll(mention)) {
       const want = (m[1] ?? "").toLowerCase();
@@ -582,7 +585,9 @@ export function refInScene(project: Project, ref: Ref, scene: Scene): boolean {
 /** The references a shot @mentions, in the order it mentions them. */
 export function shotRefs(project: Project, place: Place): Ref[] {
   const text = project.scenes[place.scene]?.shots[place.shot]?.text ?? "";
-  const names = [...new Set((text.match(/@[\w-]+/g) ?? []).map((m) => m.slice(1).toLowerCase()))];
+  const names = [
+    ...new Set((text.match(/@[\p{L}\p{N}_-]+/gu) ?? []).map((m) => m.slice(1).toLowerCase())),
+  ];
   return names.flatMap((n) => project.refs.filter((r) => r.name.toLowerCase() === n));
 }
 

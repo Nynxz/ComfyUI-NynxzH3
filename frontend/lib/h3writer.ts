@@ -286,10 +286,10 @@ export function cleanDraft(reply: string): string {
 
 /** @names in the original the draft lost. */
 export function droppedMentions(before: string, after: string): string[] {
-  const have = new Set((after.match(/@[\w-]+/g) ?? []).map((m) => m.toLowerCase()));
-  return [...new Set((before.match(/@[\w-]+/g) ?? []).map((m) => m.toLowerCase()))].filter(
-    (m) => !have.has(m),
-  );
+  const have = new Set((after.match(/@[\p{L}\p{N}_-]+/gu) ?? []).map((m) => m.toLowerCase()));
+  return [
+    ...new Set((before.match(/@[\p{L}\p{N}_-]+/gu) ?? []).map((m) => m.toLowerCase())),
+  ].filter((m) => !have.has(m));
 }
 
 /** Queue the writer job and wait for its text. Rejects with ComfyUI's message if it fails. */

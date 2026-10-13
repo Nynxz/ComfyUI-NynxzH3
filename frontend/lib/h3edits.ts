@@ -10,6 +10,7 @@ import {
   snapSeconds,
   uid,
   type Keyframe,
+  type MusicTrack,
   type Project,
   type Ref,
   type Scene,
@@ -43,9 +44,28 @@ export function clearProject(project: Project) {
   project.cast = [];
   project.loras = [];
   project.style = "";
+  project.direction = "";
   project.soundscape = "";
   project.music = "";
+  delete project.track;
   project.active = 0;
+}
+
+// --- the music track ------------------------------------------------------------------------------
+/** The film's song: `media` sets or swaps it; other fields change its settings. */
+export function setTrack(project: Project, change: Partial<MusicTrack>) {
+  const media = change.media ?? project.track?.media;
+  if (media) project.track = { ...project.track, ...change, media };
+}
+export function removeTrack(project: Project) {
+  delete project.track;
+}
+/** Put scene `i` on the music track, or take it off (it then makes its own sound). */
+export function setSceneOnTrack(project: Project, i: number, on: boolean) {
+  const scene = project.scenes[i];
+  if (!scene) return;
+  if (on) delete scene.track;
+  else scene.track = false;
 }
 
 // --- scenes ---------------------------------------------------------------------------------------
@@ -315,6 +335,10 @@ export function setRefMedia(project: Project, id: string, media: string) {
 }
 export function removeRef(project: Project, id: string) {
   project.refs = project.refs.filter((r) => r.id !== id);
+  for (const voice of project.cast ?? []) {
+    if (voice.ref === id) voice.ref = "";
+    if (voice.timbre === id) voice.timbre = "";
+  }
 }
 export function toggleRefScene(project: Project, refId: string, sceneId: string) {
   const r = project.refs.find((x) => x.id === refId);
