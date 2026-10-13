@@ -143,6 +143,12 @@
           Render<span v-if="outOfDate.length" class="due">{{ outOfDate.length }}</span>
         </ZenButton>
       </span>
+      <ZenIconButton
+        v-if="canPopOut && !inPanel"
+        icon="mdi mdi-open-in-new"
+        title="Pop out into a panel"
+        @click="emit('popOut')"
+      />
     </div>
 
     <!-- monitor + inspector, over the transport; then the timeline. Both splits are ZenSplit: drag
@@ -595,15 +601,6 @@ function openStudioMenu(e: MouseEvent) {
         icon: "mdi mdi-cog-outline",
         run: () => (settingsOpen.value = true),
       },
-      ...(canPopOut && !props.inPanel
-        ? [
-            {
-              label: "Pop out into a panel",
-              icon: "mdi mdi-open-in-new",
-              run: () => emit("popOut"),
-            },
-          ]
-        : []),
     ],
     new MouseEvent("contextmenu", { clientX: at.left, clientY: at.bottom + 4 }),
   );
