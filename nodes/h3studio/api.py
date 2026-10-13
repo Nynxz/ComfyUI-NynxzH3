@@ -157,6 +157,38 @@ if _routes is not None:
             return web.json_response({"error": str(e)}, status=500)
         return web.json_response(made)
 
+    @_routes.post("/nynxz/h3studio/rewriter-prompt")
+    async def h3studio_rewriter_prompt(request: web.Request) -> web.Response:
+        """The chat prompt the MiniMax-H3 rewriter LoRA was trained on, for the studio's scene
+        rewrite (the same text H3 Rewrite Prompt builds)."""
+        if (denied := request_allowed(request)) is not None:
+            return denied
+        from ..rewrite._prompt import MAX_DURATION, MIN_DURATION, build_chat_prompt
+
+        body = await request.json()
+        try:
+            duration = min(MAX_DURATION, max(MIN_DURATION, round(float(body.get("duration", 10)))))
+            text = build_chat_prompt(
+                str(body.get("prompt", "")),
+                task=str(body.get("task", "t2va")),
+                resolution=str(body.get("resolution", "16:9")),
+                duration=duration,
+            )
+        except (TypeError, ValueError) as e:
+            return web.json_response({"error": str(e)}, status=400)
+        return web.json_response({"text": text, "duration": duration})
+
+    @_routes.post("/nynxz/h3studio/rewriter-clean")
+    async def h3studio_rewriter_clean(request: web.Request) -> web.Response:
+        """A rewriter answer split into its three fields (as H3 Rewrite Clean)."""
+        if (denied := request_allowed(request)) is not None:
+            return denied
+        from ..rewrite._rewrite import clean_response
+
+        body = await request.json()
+        prompt, fields = clean_response(str(body.get("text", "")))
+        return web.json_response({"prompt": prompt, "fields": fields})
+
     @_routes.get("/nynxz/h3studio/writer-guide")
     async def h3studio_writer_guide(_request: web.Request) -> web.Response:
         return web.Response(text=WRITER_GUIDE.read_text(encoding="utf-8"))

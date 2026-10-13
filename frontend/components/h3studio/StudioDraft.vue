@@ -26,7 +26,7 @@
           :key="m.value"
           type="button"
           class="item"
-          :disabled="!writerSettings.model"
+          :disabled="!wired && !writerSettings.model"
           @click="run(m.value, close)"
         >
           <i :class="m.icon" />
@@ -36,7 +36,10 @@
           </span>
         </button>
         <div class="sep" />
-        <label class="col">
+        <p v-if="wired" class="hint">
+          Writing with the model wired into H3 Studio Setup's <code>rewrite_clip</code>.
+        </p>
+        <label v-else class="col">
           <span class="lbl">writer model</span>
           <ZenSelect
             v-model="writerSettings.model"
@@ -103,10 +106,12 @@ import {
   WRITER_MODES,
   cleanDraft,
   droppedMentions,
+  rewriteClipWired,
   runWriter,
   shotDrafts as drafts,
   writerAsk,
   writerModels,
+  writerPictures,
   writerSettings,
   type ShotDraft,
   type WriterMode,
@@ -128,7 +133,9 @@ function put(id: string, change: Partial<ShotDraft>) {
 }
 
 const models = ref<string[]>([]);
+const wired = ref(false);
 function open(toggle: () => void) {
+  wired.value = rewriteClipWired();
   if (!models.value.length)
     void writerModels().then(
       (r) => (models.value = r.models),
@@ -148,9 +155,11 @@ async function run(mode: WriterMode, close?: () => void) {
   if (!id) return;
   put(id, { state: "writing", mode, error: "" });
   try {
+    const pictures = writerPictures(props.project, props.sceneIndex, props.shotIndex);
     const reply = await runWriter(
-      writerAsk(props.project, props.sceneIndex, props.shotIndex, mode),
+      writerAsk(props.project, props.sceneIndex, props.shotIndex, mode, pictures),
       Math.floor(Math.random() * 2 ** 31),
+      pictures,
     );
     const text = cleanDraft(reply);
     put(

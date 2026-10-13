@@ -736,9 +736,23 @@ class NynxzH3StudioSetup(NynxzNode):
                     "render the film scene by scene (or its list_item, looping over H3 Studio Scenes' "
                     "`picked`). Unwired, the scene selected in the studio renders.",
                 ),
+                io.Clip.Input(
+                    "rewrite_clip",
+                    optional=True,
+                    lazy=True,
+                    tooltip="The text model the studio's shot writer (Rewrite on a shot) drafts with, "
+                    "e.g. CLIPLoader on Qwen3-VL, through H3 CLIP LoRA. Each draft queues this chain on "
+                    "its own; renders never load it. Unwired, the writer uses the model picked in the "
+                    "studio's settings.",
+                ),
             ],
             outputs=[H3StudioSetupType.Output(display_name="setup")],
         )
+
+    @classmethod
+    def check_lazy_status(cls, **kwargs) -> list[str]:
+        # rewrite_clip is read by the shot writer's own jobs, never by a render.
+        return []
 
     @classmethod
     def execute(
@@ -750,6 +764,7 @@ class NynxzH3StudioSetup(NynxzNode):
         controlnet="none",
         previous=None,
         scene=None,
+        rewrite_clip=None,
     ):
         previous_key = previous_latent = previous_scene = None
         # The previous clip goes on as it came (a saved file, not decoded): this output stays in a

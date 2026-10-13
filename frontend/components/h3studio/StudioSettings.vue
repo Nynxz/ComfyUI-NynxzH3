@@ -75,7 +75,10 @@
       <div class="set">
         <div class="what">
           <b>Writer model</b>
-          <p>A text encoder that can generate, used by Rewrite on each shot.</p>
+          <p>
+            A text encoder that can generate, used by Rewrite on each shot. Wiring H3 Studio
+            Setup's <code>rewrite_clip</code> overrides it.
+          </p>
         </div>
         <ZenSelect
           v-model="writerSettings.model"
@@ -96,6 +99,16 @@
           :step="0.05"
           :precision="2"
         />
+      </div>
+      <div class="set">
+        <div class="what">
+          <b>Show the writer the references</b>
+          <p>
+            The pictures and videos a shot @mentions, then the rest its scene uses, so it can
+            describe them. Needs a model that can see, like Qwen3-VL.
+          </p>
+        </div>
+        <ZenSwitch v-model="writerSettings.pictures" />
       </div>
 
       <h4 class="danger">Start over</h4>

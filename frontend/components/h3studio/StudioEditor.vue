@@ -694,8 +694,9 @@ const place = computed(() =>
 );
 const seek = (t: number) => (playhead.value = Math.min(Math.max(t, 0), length.value));
 function zoomBy(factor: number) {
-  const base = zoom.value || (rootEl.value?.clientWidth ?? 800) / Math.max(length.value, 1);
-  zoom.value = Math.min(2000, base * factor);
+  const fit = (rootEl.value?.clientWidth ?? 800) / Math.max(length.value, 1);
+  const next = Math.max(zoom.value, fit) * factor;
+  zoom.value = next <= fit ? 0 : Math.min(2000, next);
 }
 
 // --- playback: the animatic (or the renders) run in real time over the film ----------------------

@@ -32,6 +32,13 @@
           }}: {{ parsed.placeholders.map((p) => `@${p.name}`).join(", ") }}</span
         >
       </div>
+      <p v-if="rewritten" class="note">
+        <i class="mdi mdi-creation" /> Rewritten by the H3 rewriter — read it over, then Replace.
+        Dialogue stays as the studio's lines.
+      </p>
+      <p v-if="rewriteError" class="warn">
+        <i class="mdi mdi-alert-circle-outline" /> {{ rewriteError }}
+      </p>
       <p v-if="problem" class="warn"><i class="mdi mdi-alert-outline" /> {{ problem }}</p>
       <p v-for="(w, i) in parsed?.warnings ?? []" :key="i" class="warn">
         <i class="mdi mdi-alert-outline" /> {{ w }}
@@ -40,6 +47,16 @@
         <ZenButton sm icon="mdi mdi-content-copy" @click="copy">{{
           copied ? "Copied" : "Copy"
         }}</ZenButton>
+        <ZenButton
+          sm
+          variant="ghost"
+          :icon="rewriting ? 'mdi mdi-loading mdi-spin' : 'mdi mdi-creation'"
+          :disabled="rewriting || scene === null"
+          title="Rewrite this scene with the MiniMax-H3 rewriter LoRA wired into H3 Studio Setup's rewrite_clip"
+          @click="rewrite"
+        >
+          {{ rewriting ? "Rewriting…" : "Rewrite with the H3 rewriter" }}
+        </ZenButton>
         <span class="grow" />
         <ZenButton sm variant="ghost" @click="emit('close')">Cancel</ZenButton>
         <ZenButton
@@ -62,6 +79,7 @@ import { computed, ref, watch } from "vue";
 import { ZenButton, ZenModal } from "@nynxz/zenkit-ui";
 import type { Project } from "@/lib/h3studio";
 import { applySceneScript, parseProjectScript, sceneToScript } from "@/lib/h3script";
+import { rewriteScene } from "@/lib/h3rewriter";
 
 const props = defineProps<{ project: Project; scene: number | null }>();
 const emit = defineEmits<{ close: [] }>();
@@ -73,10 +91,30 @@ watch(
   (i) => {
     original.value = i === null ? "" : sceneToScript(props.project, i);
     text.value = original.value;
+    rewritten.value = false;
+    rewriteError.value = "";
   },
   { immediate: true },
 );
 const changed = computed(() => text.value.trim() !== original.value.trim());
+
+const rewriting = ref(false);
+const rewritten = ref(false);
+const rewriteError = ref("");
+async function rewrite() {
+  const i = props.scene;
+  if (i === null) return;
+  rewriting.value = true;
+  rewriteError.value = "";
+  try {
+    text.value = await rewriteScene(props.project, i, Math.floor(Math.random() * 2 ** 31));
+    rewritten.value = true;
+  } catch (e) {
+    rewriteError.value = e instanceof Error ? e.message : String(e);
+  } finally {
+    rewriting.value = false;
+  }
+}
 
 const parsed = computed(() =>
   text.value.trim() ? parseProjectScript(props.project, text.value) : null,
@@ -159,6 +197,11 @@ async function copy() {
 }
 .summary b {
   color: var(--zen-text, #e5e5ea);
+}
+.note {
+  margin: 0;
+  color: var(--h3-accent);
+  font-size: 11px;
 }
 .warn {
   margin: 0;

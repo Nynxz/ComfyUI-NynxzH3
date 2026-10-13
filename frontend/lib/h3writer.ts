@@ -3,12 +3,16 @@
 //
 //   CLIPLoader (the writer model) → Generate Text (TextGenerate) → Preview as Text (PreviewAny)
 //
+// When H3 Studio Setup's `rewrite_clip` is wired, the writer model is that chain instead (a
+// CLIPLoader through H3 CLIP LoRA, say), copied out of the workflow as it would queue.
+//
 // with the guide (nodes/h3studio/writer_guide.md) as the system prompt. Preview as Text sends the
 // result back on ComfyUI's `executed` event, so models load, cache and unload like any other job,
 // and the user's workflow is never touched.
 import { reactive, watch } from "vue";
 import { api } from "@comfy/api";
-import { formatTime, sceneStarts, type Project } from "./h3studio";
+import { app } from "@comfy/app";
+import { formatTime, refInScene, sceneStarts, shotRefs, type Project, type Ref } from "./h3studio";
 import { speakerNames } from "./h3dialogue";
 
 interface ComfyApi extends EventTarget {
@@ -64,9 +68,11 @@ export interface WriterSettings {
   /** CLIPLoader's type; most generating models are recognised whatever it says. */
   type: string;
   temperature: number;
+  /** Let the writer look at the shot's references (needs a model with vision, e.g. Qwen3-VL). */
+  pictures: boolean;
 }
 function loadSettings(): WriterSettings {
-  const base = { model: "", type: "stable_diffusion", temperature: 0.7 };
+  const base = { model: "", type: "stable_diffusion", temperature: 0.7, pictures: true };
   try {
     return {
       ...base,
@@ -101,8 +107,119 @@ export async function writerModels(): Promise<{ models: string[]; types: string[
   };
 }
 
+// --- the writer model wired into H3 Studio Setup's rewrite_clip -------------------------------------
+const SETUP = "nynxz.H3.StudioSetup";
+export type ApiNode = { class_type: string; inputs: Record<string, unknown> };
+export type ApiLink = [string, number];
+const isLink = (v: unknown): v is ApiLink =>
+  Array.isArray(v) && v.length === 2 && typeof v[1] === "number";
+
+interface LiveNode {
+  type: string;
+  mode?: number;
+  inputs?: { name: string; link: number | null }[];
+}
+/** Whether a Setup in the workflow (inside subgraphs too) has `rewrite_clip` wired. */
+export function rewriteClipWired(): boolean {
+  const root = (
+    app as unknown as {
+      graph?: { nodes?: LiveNode[]; subgraphs?: Map<string, { nodes?: LiveNode[] }> };
+    }
+  ).graph;
+  const nodes = [
+    ...(root?.nodes ?? []),
+    ...[...(root?.subgraphs?.values() ?? [])].flatMap((g) => g.nodes ?? []),
+  ];
+  return nodes.some(
+    (n) => n.type === SETUP && n.inputs?.some((i) => i.name === "rewrite_clip" && i.link != null),
+  );
+}
+
+/** The nodes behind Setup's `rewrite_clip`, as the workflow would queue them, and the link to
+ *  their CLIP — or null when it isn't wired. */
+export async function rewriteClipChain(): Promise<{
+  nodes: Record<string, ApiNode>;
+  clip: ApiLink;
+} | null> {
+  const { output } = await (
+    app as unknown as { graphToPrompt(): Promise<{ output: Record<string, ApiNode> }> }
+  ).graphToPrompt();
+  const setup = Object.values(output).find(
+    (n) => n.class_type === SETUP && isLink(n.inputs.rewrite_clip),
+  );
+  if (!setup) return null;
+  const clip = setup.inputs.rewrite_clip as ApiLink;
+  const nodes: Record<string, ApiNode> = {};
+  const stack = [String(clip[0])];
+  while (stack.length) {
+    const id = stack.pop()!;
+    if (id in nodes || !output[id]) continue;
+    nodes[id] = output[id];
+    for (const v of Object.values(output[id].inputs)) if (isLink(v)) stack.push(String(v[0]));
+  }
+  return { nodes, clip: [String(clip[0]), clip[1]] };
+}
+
 /** Read each time: the guide is a file in the pack, meant to be tuned between drafts. */
 const writerGuide = () => comfy.fetchApi("/nynxz/h3studio/writer-guide").then((r) => r.text());
+
+const MAX_PICTURES = 6;
+const PICTURE_SIDE = 448;
+/** The references the writer looks at for a shot: the ones it @mentions, then the others its scene
+ *  shows H3 — pictures and videos with a file, not control videos. */
+export function writerPictures(project: Project, sceneIndex: number, shotIndex: number): Ref[] {
+  const scene = project.scenes[sceneIndex];
+  if (!writerSettings.pictures || !scene) return [];
+  const seen = (r: Ref) =>
+    (r.kind === "image" || r.kind === "video") && !!r.media && r.role !== "control";
+  const ordered = [
+    ...shotRefs(project, { scene: sceneIndex, shot: shotIndex, local: 0, sceneStart: 0 }),
+    ...project.refs.filter((r) => refInScene(project, r, scene)),
+  ];
+  return [...new Set(ordered)].filter(seen).slice(0, MAX_PICTURES);
+}
+
+/** The job's nodes that read each file (a video by its first frame), letterbox them to one size and
+ *  batch them in order, ending at node `pictures`. */
+export function pictureNodes(
+  pictures: Pick<Ref, "media" | "kind">[],
+  width = PICTURE_SIDE,
+  height = PICTURE_SIDE,
+): Record<string, ApiNode> {
+  const nodes: Record<string, ApiNode> = {};
+  const batch: Record<string, ApiLink> = {};
+  pictures.forEach((ref, i) => {
+    const [folder, ...rest] = ref.media.split("/");
+    const file = `${rest.join("/")} [${folder}]`;
+    const image: ApiLink = [`picture${i}`, 0];
+    if (ref.kind === "video") {
+      nodes[`video${i}`] = { class_type: "LoadVideo", inputs: { file } };
+      nodes[`frames${i}`] = {
+        class_type: "GetVideoComponents",
+        inputs: { video: [`video${i}`, 0] },
+      };
+      nodes[`picture${i}`] = {
+        class_type: "ImageFromBatch",
+        inputs: { image: [`frames${i}`, 0], batch_index: 0, length: 1 },
+      };
+    } else {
+      nodes[`picture${i}`] = { class_type: "LoadImage", inputs: { image: file } };
+    }
+    nodes[`fit${i}`] = {
+      class_type: "ResizeAndPadImage",
+      inputs: {
+        image,
+        target_width: width,
+        target_height: height,
+        padding_color: "black",
+        interpolation: "area",
+      },
+    };
+    batch[`images.image${i}`] = [`fit${i}`, 0];
+  });
+  nodes.pictures = { class_type: "BatchImagesNode", inputs: batch };
+  return nodes;
+}
 
 /** What the model is asked: the shot and what's around it, and how to redraft it. */
 export function writerAsk(
@@ -110,14 +227,18 @@ export function writerAsk(
   sceneIndex: number,
   shotIndex: number,
   mode: WriterMode,
+  pictures: Ref[] = [],
 ): string {
   const scene = project.scenes[sceneIndex]!;
   const shot = scene.shots[shotIndex]!;
   const end = scene.shots[shotIndex + 1]?.at ?? scene.seconds;
   const { width, height } = project.canvas;
   const shape = width > height ? "landscape" : width < height ? "portrait" : "square";
-  const refs = project.refs
-    .map((r) => `- @${r.name} (${r.kind ?? "image"})${r.note.trim() ? `: ${r.note.trim()}` : ""}`);
+  const refs = project.refs.map((r) => {
+    const picture = pictures.indexOf(r);
+    const shown = picture >= 0 ? `, picture ${picture + 1}` : "";
+    return `- @${r.name} (${r.kind ?? "image"}${shown})${r.note.trim() ? `: ${r.note.trim()}` : ""}`;
+  });
   const prev =
     scene.shots[shotIndex - 1]?.text.trim() ??
     project.scenes[sceneIndex - 1]?.shots.at(-1)?.text.trim();
@@ -134,6 +255,9 @@ export function writerAsk(
     refs.length
       ? `References you may use, keep each @name exactly:\n${refs.join("\n")}`
       : "There are no references.",
+    pictures.length
+      ? `The ${pictures.length === 1 ? "picture" : `${pictures.length} pictures`} attached ${pictures.length === 1 ? "is" : "are"} ${pictures.map((r, i) => `picture ${i + 1} = @${r.name}`).join(", ")}${pictures.some((r) => r.kind === "video") ? " (a video by its first frame)" : ""}. Describe what you see in them where the shot shows them, and still call each by its @name.`
+      : "",
     project.style.trim()
       ? `The film's style (the studio adds it; don't repeat it): ${project.style.trim()}`
       : "",
@@ -169,34 +293,60 @@ export function droppedMentions(before: string, after: string): string[] {
 }
 
 /** Queue the writer job and wait for its text. Rejects with ComfyUI's message if it fails. */
-export async function runWriter(ask: string, seed: number): Promise<string> {
-  if (!writerSettings.model) throw new Error("Pick a writer model first.");
-  const prompt = {
+export async function runWriter(ask: string, seed: number, pictures: Ref[] = []): Promise<string> {
+  const chain = await rewriteClipChain();
+  if (!chain && !writerSettings.model)
+    throw new Error("Pick a writer model first, or wire H3 Studio Setup's rewrite_clip.");
+  const prompt: Record<string, ApiNode> = {
+    ...chain?.nodes,
+    ...(pictures.length ? pictureNodes(pictures) : {}),
     guide: { class_type: "PrimitiveStringMultiline", inputs: { value: await writerGuide() } },
-    load: {
-      class_type: "CLIPLoader",
-      inputs: { clip_name: writerSettings.model, type: writerSettings.type, device: "default" },
-    },
+    ...(chain
+      ? {}
+      : {
+          load: {
+            class_type: "CLIPLoader",
+            inputs: {
+              clip_name: writerSettings.model,
+              type: writerSettings.type,
+              device: "default",
+            },
+          },
+        }),
     write: {
       class_type: "TextGenerate",
       inputs: {
-        clip: ["load", 0],
+        clip: chain?.clip ?? ["load", 0],
+        ...(pictures.length ? { image: ["pictures", 0] } : {}),
         prompt: ask,
         max_length: 400,
-        sampling_mode: "on",
-        "sampling_mode.temperature": writerSettings.temperature,
-        "sampling_mode.top_k": 64,
-        "sampling_mode.top_p": 0.95,
-        "sampling_mode.min_p": 0.05,
-        "sampling_mode.repetition_penalty": 1.05,
-        "sampling_mode.seed": seed,
-        thinking: false,
+        ...sampling(seed),
         use_default_template: true,
         system_prompt: ["guide", 0],
       },
     },
     show: { class_type: "PreviewAny", inputs: { source: ["write", 0] } },
   };
+  return queueText(prompt);
+}
+
+/** Generate Text's sampling inputs, at the writer's temperature. */
+export function sampling(seed: number): Record<string, unknown> {
+  return {
+    sampling_mode: "on",
+    "sampling_mode.temperature": writerSettings.temperature,
+    "sampling_mode.top_k": 64,
+    "sampling_mode.top_p": 0.95,
+    "sampling_mode.min_p": 0.05,
+    "sampling_mode.repetition_penalty": 1.05,
+    "sampling_mode.seed": seed,
+    thinking: false,
+  };
+}
+
+/** Queue a text job whose answer is node `show` (Preview as Text), and wait for that text. Rejects
+ *  with ComfyUI's message if it fails. */
+export async function queueText(prompt: Record<string, ApiNode>): Promise<string> {
   const res = await comfy.fetchApi("/prompt", {
     method: "POST",
     body: JSON.stringify({ prompt, client_id: comfy.clientId }),
