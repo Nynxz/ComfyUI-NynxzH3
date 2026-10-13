@@ -286,7 +286,7 @@ export function buildTracks(project: Project, ctx: TrackContext): TimelineTrack[
   return [
     { id: "scenes", label: "Scenes", icon: "mdi mdi-filmstrip", height: 30, items: scenes },
     { id: "shots", label: "Shots", icon: "mdi mdi-camera-outline", height: 34, items: shots },
-    ...(project.track?.media ? [musicTrack(project, starts)] : []),
+    ...(project.track?.media && !hide.has("music") ? [musicTrack(project, starts)] : []),
     ...(hide.has("keyframes")
       ? []
       : [
@@ -309,12 +309,14 @@ export function buildTracks(project: Project, ctx: TrackContext): TimelineTrack[
 
 // --- filters: show or hide whole groups of tracks, with how many each holds -----------------------
 export const FILTERS = [
+  { id: "music", label: "Music", icon: "mdi mdi-music" },
   { id: "keyframes", label: "Keyframes", icon: "mdi mdi-rhombus-outline" },
   { id: "dialogue", label: "Dialogue", icon: "mdi mdi-comment-quote-outline" },
   { id: "loras", label: "LoRAs", icon: "mdi mdi-tune-variant" },
   { id: "refs", label: "References", icon: "mdi mdi-image-multiple-outline" },
 ] as const;
 export function filterCount(project: Project, id: string): number {
+  if (id === "music") return project.track?.media ? 1 : 0;
   if (id === "keyframes") return project.scenes.reduce((n, s) => n + s.keyframes.length, 0);
   if (id === "dialogue")
     return project.scenes.reduce(

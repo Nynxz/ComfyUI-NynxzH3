@@ -16,21 +16,6 @@
     <ZenPeek />
     <!-- toolbar -->
     <div class="bar">
-      <button
-        type="button"
-        class="rendersbtn"
-        :class="{ on: rendersOpen }"
-        :title="
-          live.rendering !== null
-            ? `Renders — S${live.rendering + 1} is rendering`
-            : 'Renders — now, up next and every take'
-        "
-        :aria-pressed="rendersOpen"
-        @click="rendersOpen = !rendersOpen"
-      >
-        <i class="mdi mdi-history" />
-        <span v-if="live.rendering !== null" class="recdot" />
-      </button>
       <span
         v-if="!inPanel"
         class="brand"
@@ -81,32 +66,14 @@
         <template v-if="renderingStep">· {{ renderingStep }}</template>
       </button>
       <span class="grow" />
-      <StudioCodex :project="project" />
-      <ZenButton
-        sm
-        icon="mdi mdi-play-box-multiple-outline"
-        :title="
-          outOfDate.length
-            ? `Render scenes — ${outOfDate.length} out of date or not rendered yet`
-            : 'Render scenes — every scene is up to date'
-        "
-        @click="openRenderMenu"
-      >
-        Render<span v-if="outOfDate.length" class="due">{{ outOfDate.length }}</span>
-      </ZenButton>
-      <span
-        v-if="compiled?.warnings.length"
-        class="task warned"
-        :title="taskTitle"
-        @click="copyPrompt"
-      >
-        <i class="mdi mdi-alert-outline" />{{ compiled.warnings.length }}
-      </span>
+      <!-- the film: its size and where it's kept -->
       <ZenPopover placement="bottom-end">
         <template #trigger="{ toggle }">
-          <ZenButton sm icon="mdi mdi-aspect-ratio" title="Canvas size" @click="toggle">
-            {{ project.canvas.width }}×{{ project.canvas.height }}
-          </ZenButton>
+          <button type="button" class="barchip" title="Canvas size" @click="toggle">
+            <i class="mdi mdi-aspect-ratio" />{{ project.canvas.width }}×{{
+              project.canvas.height
+            }}
+          </button>
         </template>
         <ZenResolution
           :width="project.canvas.width"
@@ -120,6 +87,9 @@
           @update:height="(h: number) => (project.canvas = { ...project.canvas, height: h })"
         />
       </ZenPopover>
+      <StudioCodex :project="project" />
+      <span class="sep" />
+      <!-- working on it: the script, sheets to look over, settings, history -->
       <ZenIconButton
         icon="mdi mdi-script-text-outline"
         title="Script — paste scenes as text, copy them out, or write them with an LLM"
@@ -127,9 +97,8 @@
       />
       <ZenIconButton
         icon="mdi mdi-view-dashboard-outline"
-        title="Reference sheet — the references packed onto one board, to look over or share"
-        :disabled="!project.refs.length"
-        @click="sheetOpen = true"
+        title="Sheets — the references on one board, or a scene's clip as a contact sheet"
+        @click="openSheetsMenu"
       />
       <ZenIconButton
         icon="mdi mdi-cog-outline"
@@ -148,6 +117,46 @@
         :disabled="!history.canRedo"
         @click="history.redo()"
       />
+      <span class="sep" />
+      <!-- rendering: what this scene's prompt warns of, the renders so far, and render -->
+      <span
+        v-if="compiled?.warnings.length"
+        class="task warned"
+        :title="taskTitle"
+        @click="copyPrompt"
+      >
+        <i class="mdi mdi-alert-outline" />{{ compiled.warnings.length }}
+      </span>
+      <span class="rendergroup">
+        <button
+          type="button"
+          class="rendersbtn"
+          :class="{ on: rendersOpen }"
+          :title="
+            live.rendering !== null
+              ? `Renders — S${live.rendering + 1} is rendering`
+              : 'Renders — now, up next and every take'
+          "
+          :aria-pressed="rendersOpen"
+          @click="rendersOpen = !rendersOpen"
+        >
+          <i class="mdi mdi-history" />
+          <span v-if="live.rendering !== null" class="recdot" />
+        </button>
+        <ZenButton
+          sm
+          variant="primary"
+          icon="mdi mdi-play-box-multiple-outline"
+          :title="
+            outOfDate.length
+              ? `Render scenes — ${outOfDate.length} out of date or not rendered yet`
+              : 'Render scenes — every scene is up to date'
+          "
+          @click="openRenderMenu"
+        >
+          Render<span v-if="outOfDate.length" class="due">{{ outOfDate.length }}</span>
+        </ZenButton>
+      </span>
       <ZenIconButton
         v-if="canPopOut && !inPanel"
         icon="mdi mdi-open-in-new"
@@ -324,19 +333,31 @@
                 <span class="soft">/ {{ formatTime(length) }}</span></span
               >
               <span class="grow" />
-              <span class="filters" title="Show or hide groups of tracks">
-                <button
-                  v-for="f in FILTERS"
-                  :key="f.id"
-                  type="button"
-                  class="filter"
-                  :class="{ off: view.hide?.includes(f.id) }"
-                  :title="`${view.hide?.includes(f.id) ? 'Show' : 'Hide'} ${f.label.toLowerCase()} on the timeline`"
-                  @click="toggleFilter(f.id)"
-                >
-                  <i class="mdi" :class="f.icon" /> {{ filterCount(f.id) }}
-                </button>
-              </span>
+              <ZenPopover placement="top-end">
+                <template #trigger="{ toggle }">
+                  <ZenButton
+                    sm
+                    icon="mdi mdi-layers-outline"
+                    title="Which lanes the timeline shows"
+                    @click="toggle"
+                  >
+                    Lanes<span v-if="view.hide?.length" class="soft"
+                      >&nbsp;· {{ FILTERS.length - view.hide.length }}/{{ FILTERS.length }}</span
+                    >
+                  </ZenButton>
+                </template>
+                <div class="lanespop">
+                  <label v-for="f in FILTERS" :key="f.id" class="lanerow">
+                    <i class="mdi" :class="f.icon" />
+                    <span class="grow">{{ f.label }}</span>
+                    <span class="soft">{{ filterCount(f.id) }}</span>
+                    <ZenSwitch
+                      :model-value="!view.hide?.includes(f.id)"
+                      @update:model-value="toggleFilter(f.id)"
+                    />
+                  </label>
+                </div>
+              </ZenPopover>
               <ZenButton
                 sm
                 icon="mdi mdi-plus"
@@ -441,6 +462,7 @@ import {
   ZenPopover,
   ZenResolution,
   ZenSplit,
+  ZenSwitch,
   ZenTimeline,
   ZenToggleGroup,
   ZenVolume,
@@ -559,6 +581,30 @@ const outOfDate = computed(() =>
 );
 const render = (ids: string[] | null, next = false) =>
   void renderScenes(project, props.nodeId ?? "", ids, next);
+function openSheetsMenu(e: MouseEvent) {
+  const i = place.value.scene;
+  const rendered = !!project.scenes[i]?.render;
+  openMenu(
+    [
+      { heading: "Sheets" },
+      {
+        label: "Reference sheet",
+        icon: "mdi mdi-view-dashboard-outline",
+        disabled: !project.refs.length,
+        run: () => (sheetOpen.value = true),
+      },
+      {
+        label: rendered
+          ? `Contact sheet of scene ${i + 1}`
+          : `Contact sheet — scene ${i + 1} has no render yet`,
+        icon: "mdi mdi-view-grid-outline",
+        disabled: !rendered,
+        run: () => contactSheetOf(i),
+      },
+    ],
+    e,
+  );
+}
 function openRenderMenu(e: MouseEvent) {
   const i = place.value.scene;
   openMenu(
@@ -1538,6 +1584,43 @@ onBeforeUnmount(() => ro?.disconnect());
   min-width: 0;
   min-height: 0;
 }
+.sep {
+  flex: none;
+  width: 1px;
+  height: 18px;
+  margin: 0 2px;
+  background: var(--h3-line);
+}
+.barchip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  height: var(--zen-control-h, 28px);
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: var(--h3-radius);
+  background: transparent;
+  color: var(--h3-muted);
+  font: inherit;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.barchip:hover {
+  border-color: var(--h3-line);
+  background: var(--h3-field);
+  color: var(--h3-text);
+}
+.barchip .mdi {
+  font-size: 14px;
+}
+.rendergroup {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+}
 .rendersbtn {
   position: relative;
   display: flex;
@@ -1663,37 +1746,28 @@ onBeforeUnmount(() => ro?.disconnect());
   color: var(--h3-muted);
   font-size: 10.5px;
 }
-.filters {
-  display: inline-flex;
+.lanespop {
+  display: flex;
+  flex-direction: column;
   gap: 2px;
-  margin-right: 4px;
+  min-width: 200px;
+  padding: 4px;
 }
-.filter {
-  display: inline-flex;
+.lanerow {
+  display: flex;
   align-items: center;
-  gap: 3px;
-  height: 24px;
-  padding: 0 7px;
-  border: 1px solid var(--h3-line);
+  gap: 8px;
+  padding: 4px 6px;
   border-radius: var(--h3-radius);
-  background: none;
-  color: var(--h3-text);
-  font: inherit;
-  font-size: 10.5px;
-  font-variant-numeric: tabular-nums;
+  font-size: 12px;
   cursor: pointer;
 }
-.filter .mdi {
-  color: var(--h3-accent);
-  font-size: 13px;
+.lanerow:hover {
+  background: var(--h3-field);
 }
-.filter.off {
-  border-style: dashed;
+.lanerow .mdi {
   color: var(--h3-muted);
-  opacity: 0.6;
-}
-.filter.off .mdi {
-  color: inherit;
+  font-size: 15px;
 }
 .loopbtn {
   display: inline-flex;

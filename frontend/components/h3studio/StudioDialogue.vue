@@ -69,15 +69,13 @@
           </button>
         </span>
         <button
-          v-for="m in MODES"
-          :key="m.value"
           type="button"
           class="mode"
-          :class="{ on: line.mode === m.value }"
-          :title="m.title"
-          @click="line.mode = m.value"
+          :class="{ on: line.mode !== 'say' }"
+          :title="`${modeOf(line).title} — click for ${nextMode(line).label.toLowerCase()}`"
+          @click="line.mode = nextMode(line).value"
         >
-          <i :class="m.icon" />
+          <i :class="modeOf(line).icon" />{{ modeOf(line).label }}
         </button>
         <ZenIconButton icon="mdi mdi-close" title="Remove this line" @click="remove(i)" />
       </div>
@@ -293,6 +291,8 @@ function onPaste(e: ClipboardEvent) {
   applyScript();
 }
 defineExpose({ add });
+const modeOf = (line: Line) => MODES.find((m) => m.value === line.mode) ?? MODES[0]!;
+const nextMode = (line: Line) => MODES[(MODES.indexOf(modeOf(line)) + 1) % MODES.length]!;
 </script>
 
 <style scoped>
@@ -402,8 +402,11 @@ defineExpose({ add });
   cursor: pointer;
 }
 .mode {
-  padding: 1px 5px;
+  flex: none;
+  gap: 4px;
+  padding: 1px 7px;
   border-radius: 5px;
+  white-space: nowrap;
 }
 .who:hover,
 .mode:hover,

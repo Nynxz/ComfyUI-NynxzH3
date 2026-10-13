@@ -38,42 +38,6 @@
           title="This scene as text: copy it out, edit it, or paste a new version over it"
           @click="emit('editText', sel.sceneIndex)"
         />
-        <ZenPopover v-if="sceneRefs.length" placement="bottom-end">
-          <template #trigger="{ toggle }">
-            <button
-              type="button"
-              class="refsbtn"
-              :title="
-                openShot
-                  ? 'Insert a reference into the open shot'
-                  : 'Open a shot to insert references'
-              "
-              :disabled="!openShot"
-              @click="toggle"
-            >
-              <i class="mdi mdi-at" />{{ sceneRefs.length }}
-            </button>
-          </template>
-          <template #default="{ close }">
-            <div class="refgrid">
-              <button
-                v-for="r in sceneRefs"
-                :key="r.id"
-                type="button"
-                class="refcard"
-                :title="`Insert @${r.name}${r.note ? ` — ${r.note}` : ''}`"
-                @click="
-                  mention(r.name);
-                  close();
-                "
-              >
-                <span class="refthumb"><MediaThumb :media="r.media" :badge="false" /></span>
-                <b>@{{ r.name }}</b>
-                <small>{{ tagOf(r.id) || (r.kind === "image" ? "picture" : r.kind) }}</small>
-              </button>
-            </div>
-          </template>
-        </ZenPopover>
       </header>
 
       <div class="scenebody">
@@ -129,6 +93,37 @@
                 >
                   <i class="mdi mdi-comment-quote-outline" />{{ sh.lines.length }}
                 </span>
+                <ZenPopover v-if="sceneRefs.length && openShot?.id === sh.id" placement="bottom-end">
+                  <template #trigger="{ toggle }">
+                    <button
+                      type="button"
+                      class="refsbtn"
+                      title="Insert a reference into this shot"
+                      @click.stop="toggle"
+                    >
+                      <i class="mdi mdi-at" />{{ sceneRefs.length }}
+                    </button>
+                  </template>
+                  <template #default="{ close }">
+                    <div class="refgrid">
+                      <button
+                        v-for="r in sceneRefs"
+                        :key="r.id"
+                        type="button"
+                        class="refcard"
+                        :title="`Insert @${r.name}${r.note ? ` — ${r.note}` : ''}`"
+                        @click="
+                          mention(r.name);
+                          close();
+                        "
+                      >
+                        <span class="refthumb"><MediaThumb :media="r.media" :badge="false" /></span>
+                        <b>@{{ r.name }}</b>
+                        <small>{{ tagOf(r.id) || (r.kind === "image" ? "picture" : r.kind) }}</small>
+                      </button>
+                    </div>
+                  </template>
+                </ZenPopover>
                 <StudioDraft
                   v-if="openShot?.id === sh.id"
                   :project="project"
@@ -137,7 +132,7 @@
                   part="button"
                 />
                 <ZenIconButton
-                  v-if="scene.shots.length > 1"
+                  v-if="scene.shots.length > 1 && openShot?.id === sh.id"
                   icon="mdi mdi-trash-can-outline"
                   title="Remove this shot"
                   @click.stop="emit('removeShot', sh.id)"
@@ -170,17 +165,7 @@
                   :shot-index="i"
                   part="box"
                 />
-                <label v-if="i > 0" class="row" :title="transitionOf(sh).title">
-                  <span class="lbl">transition</span>
-                  <ZenSelect
-                    class="transition"
-                    :model-value="sh.transition ?? 'cut'"
-                    :options="TRANSITIONS.map((t) => ({ value: t.value, label: t.label }))"
-                    @update:model-value="(v: string) => setTransition(sh, v)"
-                  />
-                </label>
-
-                <label v-if="i > 0" class="row">
+                <div v-if="i > 0" class="row timing">
                   <span class="lbl">starts at</span>
                   <ZenNumber
                     :model-value="sh.at"
@@ -188,10 +173,19 @@
                     :max="scene.seconds"
                     :step="0.1"
                     :precision="2"
+                    title="Seconds into the scene"
                     @update:model-value="(v: number) => setShotStart(i, v)"
                   />
-                  <span class="soft">s into the scene</span>
-                </label>
+                  <span class="soft">s</span>
+                  <span class="grow" />
+                  <ZenSelect
+                    class="transition"
+                    :title="transitionOf(sh).title"
+                    :model-value="sh.transition ?? 'cut'"
+                    :options="TRANSITIONS.map((t) => ({ value: t.value, label: t.label }))"
+                    @update:model-value="(v: string) => setTransition(sh, v)"
+                  />
+                </div>
                 <StudioDialogue
                   :project="project"
                   :scene="scene"
@@ -1229,8 +1223,8 @@ function mention(name: string) {
   flex: 1;
 }
 .prompt {
-  flex: 1 1 120px;
-  min-height: 110px;
+  flex: none;
+  min-height: 72px;
 }
 .prompt :deep(.zmi-area) {
   overflow-y: auto;
@@ -1269,7 +1263,7 @@ function mention(name: string) {
   border: 1px solid var(--h3-line);
   border-radius: var(--h3-radius);
   background: none;
-  color: #9db7ff;
+  color: var(--h3-accent);
   font: inherit;
   font-size: 11px;
   font-weight: 600;
@@ -1838,8 +1832,15 @@ function mention(name: string) {
   font-size: 12px;
 }
 .row .transition {
-  flex: 1 1 140px;
+  flex: 0 1 112px;
+  min-width: 84px;
+}
+.timing {
+  flex-wrap: nowrap;
+}
+.timing > .lbl {
   min-width: 0;
+  white-space: nowrap;
 }
 .shotlines {
   display: inline-flex;
