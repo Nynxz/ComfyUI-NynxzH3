@@ -15,7 +15,7 @@
           :options="
             project.scenes.map((s, i) => ({
               value: s.id,
-              label: `Scene ${i + 1}${s.title ? ` · ${s.title}` : ''}`,
+              label: `Scene ${i + 1}`,
             }))
           "
           @update:model-value="(id: string) => emit('select', { kind: 'scene', id })"
@@ -26,10 +26,13 @@
           :disabled="sel.sceneIndex === project.scenes.length - 1"
           @click="goScene(1)"
         />
-        <span class="meta len" :title="`${framesFor(scene.seconds)} frames at 24 fps`"
-          >{{ scene.seconds.toFixed(1) }}s</span
-        >
-        <span class="grow" />
+        <input
+          v-model="scene.title"
+          class="scenetitle"
+          spellcheck="true"
+          placeholder="Untitled scene"
+          :aria-label="`Scene ${sel.sceneIndex + 1} title`"
+        />
         <ZenIconButton
           icon="mdi mdi-text-box-edit-outline"
           title="This scene as text: copy it out, edit it, or paste a new version over it"
@@ -74,328 +77,8 @@
       </header>
 
       <div class="scenebody">
-        <input
-          v-model="scene.title"
-          class="scenetitle"
-          spellcheck="true"
-          placeholder="Name this scene…"
-          :aria-label="`Scene ${sel.sceneIndex + 1} title`"
-        />
-        <!-- Shots or Settings, one click apart; Settings is this scene's or the whole film's -->
-        <ZenToggleGroup
-          v-model="view"
-          class="viewpick"
-          :options="[
-            { value: 'shots', label: `Shots · ${scene.shots.length}`, icon: 'mdi mdi-filmstrip' },
-            { value: 'settings', label: 'Settings', icon: 'mdi mdi-tune-variant' },
-          ]"
-        />
-        <ZenToggleGroup
-          v-model="level"
-          class="levelpick"
-          :class="{ away: view !== 'settings' }"
-          :options="[
-            {
-              value: 'scene',
-              label: 'This scene',
-              title: 'This scene\'s own settings; what it leaves empty comes from the film',
-            },
-            {
-              value: 'film',
-              label: 'Whole film',
-              title: 'What every scene says unless it says its own',
-            },
-          ]"
-        />
-
-        <!-- film settings: what every scene says unless it says its own -->
-        <section
-          v-if="level === 'film'"
-          class="settings pane setpane"
-          :class="{ away: view !== 'settings' }"
-        >
-          <div class="accbody">
-            <label class="col">
-              <span class="lbl">style</span>
-              <textarea
-                class="fits"
-                v-model="film.style"
-                rows="2"
-                placeholder="the look, e.g. 2D cel animation, painted backgrounds, warm amber light"
-              />
-            </label>
-            <label class="col">
-              <span class="lbl">direction</span>
-              <textarea
-                class="fits"
-                v-model="film.direction"
-                rows="2"
-                placeholder="how it's made, e.g. animated on twos, held poses, smear frames on fast moves"
-              />
-            </label>
-            <label class="col">
-              <span class="lbl">ambience</span>
-              <textarea
-                class="fits"
-                v-model="film.soundscape"
-                rows="2"
-                placeholder="e.g. rain on glass, distant traffic"
-              />
-            </label>
-            <label class="col">
-              <span class="lbl">music</span>
-              <textarea
-                class="fits"
-                v-model="film.music"
-                rows="2"
-                placeholder="leave empty for none"
-              />
-            </label>
-            <label
-              class="row"
-              title="Frames a continued scene fades in over, where it joins the one before"
-            >
-              <span class="lbl">crossfade</span>
-              <ZenNumber
-                :model-value="project.film?.crossfade ?? 8"
-                :min="0"
-                :max="39"
-                :step="1"
-                :precision="0"
-                @update:model-value="(v: number) => setFilm({ crossfade: v })"
-              />
-              <span class="soft">frames</span>
-            </label>
-            <label
-              class="row"
-              title="When a render of every scene finishes, join them into the film and save it (Renders shows it). Export film saves it any time."
-            >
-              <span class="lbl">save the film after a full render</span>
-              <ZenSwitch
-                :model-value="project.film?.auto ?? true"
-                @update:model-value="(v: boolean) => setFilm({ auto: v })"
-              />
-            </label>
-          </div>
-        </section>
-
-        <!-- scene settings -->
-        <section v-else class="settings pane setpane" :class="{ away: view !== 'settings' }">
-          <div class="accbody">
-            <label
-              class="row"
-              title="H3 renders in steps of 17 frames, so the length rounds up a little"
-            >
-              <span class="lbl">length</span>
-              <ZenNumber
-                :model-value="scene.seconds"
-                :min="1"
-                :max="30"
-                :step="0.5"
-                :precision="2"
-                @update:model-value="(v: number) => emit('seconds', sel.sceneIndex, v)"
-              />
-              <span class="soft">s</span>
-            </label>
-            <div class="row">
-              <span
-                class="lbl"
-                title="This scene's noise seed. H3 Studio Outputs' noise is drawn from it."
-                >seed</span
-              >
-              <ZenNumber
-                class="seed"
-                :model-value="scene.seed"
-                :min="0"
-                :max="4294967295"
-                :step="1"
-                :precision="0"
-                @update:model-value="(v: number) => (scene!.seed = Math.round(v))"
-              />
-              <ZenIconButton
-                icon="mdi mdi-dice-5-outline"
-                title="Re-roll: a new seed for this scene — only it (and scenes continuing from it) render again"
-                @click="scene!.seed = randomSeed()"
-              />
-            </div>
-            <div v-if="sel.sceneIndex > 0" class="row">
-              <span class="lbl">from previous</span>
-              <ZenSelect
-                class="carry"
-                :model-value="scene.continuation.mode"
-                :options="CONTINUATIONS.map((c) => ({ value: c.value, label: c.label }))"
-                @update:model-value="(v: string) => setContinuation(v)"
-              />
-              <ZenSelect
-                v-if="scene.continuation.mode === 'guide' || scene.continuation.mode === 'sound'"
-                :model-value="String(scene.continuation.frames)"
-                :options="CONTEXT_FRAMES.map((f) => ({ value: String(f), label: `${f} frames` }))"
-                class="ctx"
-                @update:model-value="(v: string) => (scene.continuation.frames = Number(v))"
-              />
-              <span class="soft carryhint">
-                <i class="mdi" :class="continuationOf(scene.continuation.mode).icon" />
-                {{ continuationOf(scene.continuation.mode).title }}.
-              </span>
-            </div>
-            <div
-              v-if="sel.sceneIndex > 0"
-              class="row"
-              title="Experimental. Snippets of the previous scene, spread across it, shown to H3 for the whole scene so its ambience, engines and music carry on past the first second. Audio shows them as sound alone (sharing H3's 3 audio slots with voices); black video can cost picture detail; with picture, its look can pull this scene towards the previous one."
-            >
-              <span class="lbl">carry sound</span>
-              <ZenToggleGroup
-                :model-value="String(scene.continuation.soundRefs ?? 0)"
-                :options="[
-                  { value: '0', label: 'Off' },
-                  { value: '1', label: '1' },
-                  { value: '2', label: '2' },
-                  { value: '3', label: '3' },
-                ]"
-                @update:model-value="(v: string) => (scene!.continuation.soundRefs = Number(v))"
-              />
-              <ZenToggleGroup
-                v-if="(scene.continuation.soundRefs ?? 0) > 0"
-                :model-value="scene.continuation.soundPicture ?? 'guides'"
-                :options="[
-                  {
-                    value: 'guides',
-                    label: 'Guides',
-                    title:
-                      'Pinned through the scene as audio guides: H3 reproduces each where it sits, so the sound can\'t drop away; the picture is untouched',
-                  },
-                  {
-                    value: 'audio',
-                    label: 'Audio',
-                    title:
-                      'As audio references: nothing to see, but they share H3\'s 3 audio slots with voices',
-                  },
-                  {
-                    value: 'black',
-                    label: 'Black video',
-                    title: 'As black video with their sound: can cost the picture detail',
-                  },
-                  {
-                    value: 'real',
-                    label: 'With picture',
-                    title:
-                      'As the clip itself: its look can pull this scene towards the previous one',
-                  },
-                ]"
-                @update:model-value="
-                  (v: string) =>
-                    (scene!.continuation.soundPicture = v as 'guides' | 'audio' | 'black' | 'real')
-                "
-              />
-              <span class="soft">experimental</span>
-            </div>
-            <div class="kfs">
-              <span class="lbl">keyframes</span>
-              <button
-                v-for="edge in ['first', 'last'] as const"
-                :key="edge"
-                type="button"
-                class="kf"
-                :class="{ set: !!edgeKeyframe(edge), dropping: edgeDropping === edge }"
-                :title="
-                  edgeKeyframe(edge)
-                    ? `The ${edge} frame — click to select, or drop a picture to replace it`
-                    : `Set the ${edge} frame — click, or drop a picture here`
-                "
-                @dragover="onEdgeDragOver($event, edge)"
-                @dragleave="edgeDropping = null"
-                @drop="onEdgeDrop($event, edge)"
-                @click="
-                  edgeKeyframe(edge)
-                    ? emit('select', { kind: 'keyframe', id: edgeKeyframe(edge)!.id })
-                    : emit('setKeyframe', sel.sceneIndex, edge)
-                "
-              >
-                <MediaThumb
-                  v-if="edgeKeyframe(edge)"
-                  :media="edgeKeyframe(edge)!.media"
-                  :badge="false"
-                />
-                <i
-                  v-else
-                  class="mdi"
-                  :class="edge === 'first' ? 'mdi-page-first' : 'mdi-page-last'"
-                />
-                <span class="kfl">{{ edge }}</span>
-              </button>
-              <span v-if="keyframeHint" class="hintline">{{ keyframeHint }}</span>
-            </div>
-            <label class="col">
-              <span class="lbl own"
-                >direction
-                <span v-if="scene.direction" class="ownmark">this scene's</span>
-                <span v-else class="soft">the film's</span>
-                <button
-                  v-if="scene.direction"
-                  type="button"
-                  class="reset"
-                  title="Use the film's again"
-                  @click.prevent="scene.direction = ''"
-                >
-                  <i class="mdi mdi-close" />
-                </button>
-              </span>
-              <textarea
-                class="fits"
-                v-model="scene.direction"
-                rows="2"
-                :placeholder="project.direction || 'the film\'s direction (Film, above)'"
-              />
-            </label>
-            <label class="col">
-              <span class="lbl own"
-                >ambience
-                <span v-if="scene.soundscape" class="ownmark">this scene's</span>
-                <span v-else class="soft">the film's</span>
-                <button
-                  v-if="scene.soundscape"
-                  type="button"
-                  class="reset"
-                  title="Use the film's again"
-                  @click.prevent="scene.soundscape = ''"
-                >
-                  <i class="mdi mdi-close" />
-                </button>
-              </span>
-              <textarea
-                class="fits"
-                v-model="scene.soundscape"
-                rows="2"
-                :placeholder="project.soundscape || 'e.g. rain on glass, distant traffic'"
-              />
-            </label>
-            <label class="col">
-              <span class="lbl own"
-                >music
-                <span v-if="scene.music" class="ownmark">this scene's</span>
-                <span v-else class="soft">the film's</span>
-                <button
-                  v-if="scene.music"
-                  type="button"
-                  class="reset"
-                  title="Use the film's again"
-                  @click.prevent="scene.music = ''"
-                >
-                  <i class="mdi mdi-close" />
-                </button>
-              </span>
-              <textarea
-                class="fits"
-                v-model="scene.music"
-                rows="2"
-                :placeholder="project.music || 'leave empty for none'"
-              />
-            </label>
-          </div>
-        </section>
-
         <!-- shots -->
-        <section class="shots pane" :class="{ away: view !== 'shots' }">
+        <section class="shots pane">
           <div ref="shotsEl" class="accbody shotlist">
             <div
               v-for="(sh, i) in scene.shots"
@@ -529,6 +212,355 @@
               >Shot</ZenButton
             >
           </div>
+        </section>
+        <!-- the scene's settings, folded up under its shots: the bar always shows what's set -->
+        <section class="drawer" :class="{ open: drawerOpen }" aria-label="Scene settings">
+          <div class="drawerbar">
+            <button
+              type="button"
+              class="drawertoggle"
+              :aria-expanded="drawerOpen"
+              :title="drawerOpen ? 'Fold the settings away' : 'This scene\'s settings, and the whole film\'s'"
+              @click="drawerOpen = !drawerOpen"
+            >
+              <i class="mdi" :class="drawerOpen ? 'mdi-chevron-down' : 'mdi-chevron-up'" />
+              <b>Scene</b>
+              <span class="meta" :title="`${framesFor(scene.seconds)} frames at 24 fps`"
+                >{{ scene.seconds.toFixed(1) }}s</span
+              >
+              <span class="meta seedmeta">seed {{ scene.seed }}</span>
+              <span
+                v-if="sel.sceneIndex > 0"
+                class="meta carrymeta"
+                :title="continuationOf(scene.continuation.mode).title"
+              >
+                <i class="mdi" :class="continuationOf(scene.continuation.mode).icon" />
+                {{ continuationOf(scene.continuation.mode).label }}
+              </span>
+              <span class="grow" />
+              <span
+                v-for="edge in ['first', 'last'] as const"
+                :key="edge"
+                class="kfmini"
+                :class="{ set: !!edgeKeyframe(edge) }"
+                :title="edgeKeyframe(edge) ? `The ${edge} frame` : `No ${edge} frame`"
+              >
+                <MediaThumb
+                  v-if="edgeKeyframe(edge)"
+                  :media="edgeKeyframe(edge)!.media"
+                  :badge="false"
+                />
+              </span>
+            </button>
+            <ZenIconButton
+              icon="mdi mdi-dice-5-outline"
+              title="Re-roll: a new seed for this scene — only it (and scenes continuing from it) render again"
+              @click="scene!.seed = randomSeed()"
+            />
+          </div>
+          <template v-if="drawerOpen">
+            <ZenToggleGroup
+              v-model="level"
+              class="levelpick"
+              :options="[
+                {
+                  value: 'scene',
+                  label: 'This scene',
+                  title: 'This scene\'s own settings; what it leaves empty comes from the film',
+                },
+                {
+                  value: 'film',
+                  label: 'Whole film',
+                  title: 'What every scene says unless it says its own',
+                },
+              ]"
+            />
+
+            <!-- film settings: what every scene says unless it says its own -->
+            <section
+              v-if="level === 'film'"
+              class="settings pane setpane"
+            >
+              <div class="accbody">
+                <label class="col">
+                  <span class="lbl">style</span>
+                  <textarea
+                    class="fits"
+                    v-model="film.style"
+                    rows="2"
+                    placeholder="the look, e.g. 2D cel animation, painted backgrounds, warm amber light"
+                  />
+                </label>
+                <label class="col">
+                  <span class="lbl">direction</span>
+                  <textarea
+                    class="fits"
+                    v-model="film.direction"
+                    rows="2"
+                    placeholder="how it's made, e.g. animated on twos, held poses, smear frames on fast moves"
+                  />
+                </label>
+                <label class="col">
+                  <span class="lbl">ambience</span>
+                  <textarea
+                    class="fits"
+                    v-model="film.soundscape"
+                    rows="2"
+                    placeholder="e.g. rain on glass, distant traffic"
+                  />
+                </label>
+                <label class="col">
+                  <span class="lbl">music</span>
+                  <textarea
+                    class="fits"
+                    v-model="film.music"
+                    rows="2"
+                    placeholder="leave empty for none"
+                  />
+                </label>
+                <label
+                  class="row"
+                  title="Frames a continued scene fades in over, where it joins the one before"
+                >
+                  <span class="lbl">crossfade</span>
+                  <ZenNumber
+                    :model-value="project.film?.crossfade ?? 8"
+                    :min="0"
+                    :max="39"
+                    :step="1"
+                    :precision="0"
+                    @update:model-value="(v: number) => setFilm({ crossfade: v })"
+                  />
+                  <span class="soft">frames</span>
+                </label>
+                <label
+                  class="row"
+                  title="When a render of every scene finishes, join them into the film and save it (Renders shows it). Export film saves it any time."
+                >
+                  <span class="lbl">save the film after a full render</span>
+                  <ZenSwitch
+                    :model-value="project.film?.auto ?? true"
+                    @update:model-value="(v: boolean) => setFilm({ auto: v })"
+                  />
+                </label>
+              </div>
+            </section>
+
+            <!-- scene settings -->
+            <section v-else class="settings pane setpane">
+              <div class="accbody">
+                <label
+                  class="row"
+                  title="H3 renders in steps of 17 frames, so the length rounds up a little"
+                >
+                  <span class="lbl">length</span>
+                  <ZenNumber
+                    :model-value="scene.seconds"
+                    :min="1"
+                    :max="30"
+                    :step="0.5"
+                    :precision="2"
+                    @update:model-value="(v: number) => emit('seconds', sel.sceneIndex, v)"
+                  />
+                  <span class="soft">s</span>
+                </label>
+                <div class="row">
+                  <span
+                    class="lbl"
+                    title="This scene's noise seed. H3 Studio Outputs' noise is drawn from it."
+                    >seed</span
+                  >
+                  <ZenNumber
+                    class="seed"
+                    :model-value="scene.seed"
+                    :min="0"
+                    :max="4294967295"
+                    :step="1"
+                    :precision="0"
+                    @update:model-value="(v: number) => (scene!.seed = Math.round(v))"
+                  />
+                  <ZenIconButton
+                    icon="mdi mdi-dice-5-outline"
+                    title="Re-roll: a new seed for this scene — only it (and scenes continuing from it) render again"
+                    @click="scene!.seed = randomSeed()"
+                  />
+                </div>
+                <div v-if="sel.sceneIndex > 0" class="row">
+                  <span class="lbl">from previous</span>
+                  <ZenSelect
+                    class="carry"
+                    :model-value="scene.continuation.mode"
+                    :options="CONTINUATIONS.map((c) => ({ value: c.value, label: c.label }))"
+                    @update:model-value="(v: string) => setContinuation(v)"
+                  />
+                  <ZenSelect
+                    v-if="scene.continuation.mode === 'guide' || scene.continuation.mode === 'sound'"
+                    :model-value="String(scene.continuation.frames)"
+                    :options="CONTEXT_FRAMES.map((f) => ({ value: String(f), label: `${f} frames` }))"
+                    class="ctx"
+                    @update:model-value="(v: string) => (scene.continuation.frames = Number(v))"
+                  />
+                  <span class="soft carryhint">
+                    <i class="mdi" :class="continuationOf(scene.continuation.mode).icon" />
+                    {{ continuationOf(scene.continuation.mode).title }}.
+                  </span>
+                </div>
+                <div
+                  v-if="sel.sceneIndex > 0"
+                  class="row"
+                  title="Experimental. Snippets of the previous scene, spread across it, shown to H3 for the whole scene so its ambience, engines and music carry on past the first second. Audio shows them as sound alone (sharing H3's 3 audio slots with voices); black video can cost picture detail; with picture, its look can pull this scene towards the previous one."
+                >
+                  <span class="lbl">carry sound</span>
+                  <ZenToggleGroup
+                    :model-value="String(scene.continuation.soundRefs ?? 0)"
+                    :options="[
+                      { value: '0', label: 'Off' },
+                      { value: '1', label: '1' },
+                      { value: '2', label: '2' },
+                      { value: '3', label: '3' },
+                    ]"
+                    @update:model-value="(v: string) => (scene!.continuation.soundRefs = Number(v))"
+                  />
+                  <ZenToggleGroup
+                    v-if="(scene.continuation.soundRefs ?? 0) > 0"
+                    :model-value="scene.continuation.soundPicture ?? 'guides'"
+                    :options="[
+                      {
+                        value: 'guides',
+                        label: 'Guides',
+                        title:
+                          'Pinned through the scene as audio guides: H3 reproduces each where it sits, so the sound can\'t drop away; the picture is untouched',
+                      },
+                      {
+                        value: 'audio',
+                        label: 'Audio',
+                        title:
+                          'As audio references: nothing to see, but they share H3\'s 3 audio slots with voices',
+                      },
+                      {
+                        value: 'black',
+                        label: 'Black video',
+                        title: 'As black video with their sound: can cost the picture detail',
+                      },
+                      {
+                        value: 'real',
+                        label: 'With picture',
+                        title:
+                          'As the clip itself: its look can pull this scene towards the previous one',
+                      },
+                    ]"
+                    @update:model-value="
+                      (v: string) =>
+                        (scene!.continuation.soundPicture = v as 'guides' | 'audio' | 'black' | 'real')
+                    "
+                  />
+                  <span class="soft">experimental</span>
+                </div>
+                <div class="kfs">
+                  <span class="lbl">keyframes</span>
+                  <button
+                    v-for="edge in ['first', 'last'] as const"
+                    :key="edge"
+                    type="button"
+                    class="kf"
+                    :class="{ set: !!edgeKeyframe(edge), dropping: edgeDropping === edge }"
+                    :title="
+                      edgeKeyframe(edge)
+                        ? `The ${edge} frame — click to select, or drop a picture to replace it`
+                        : `Set the ${edge} frame — click, or drop a picture here`
+                    "
+                    @dragover="onEdgeDragOver($event, edge)"
+                    @dragleave="edgeDropping = null"
+                    @drop="onEdgeDrop($event, edge)"
+                    @click="
+                      edgeKeyframe(edge)
+                        ? emit('select', { kind: 'keyframe', id: edgeKeyframe(edge)!.id })
+                        : emit('setKeyframe', sel.sceneIndex, edge)
+                    "
+                  >
+                    <MediaThumb
+                      v-if="edgeKeyframe(edge)"
+                      :media="edgeKeyframe(edge)!.media"
+                      :badge="false"
+                    />
+                    <i
+                      v-else
+                      class="mdi"
+                      :class="edge === 'first' ? 'mdi-page-first' : 'mdi-page-last'"
+                    />
+                    <span class="kfl">{{ edge }}</span>
+                  </button>
+                  <span v-if="keyframeHint" class="hintline">{{ keyframeHint }}</span>
+                </div>
+                <label class="col">
+                  <span class="lbl own"
+                    >direction
+                    <span v-if="scene.direction" class="ownmark">this scene's</span>
+                    <span v-else class="soft">the film's</span>
+                    <button
+                      v-if="scene.direction"
+                      type="button"
+                      class="reset"
+                      title="Use the film's again"
+                      @click.prevent="scene.direction = ''"
+                    >
+                      <i class="mdi mdi-close" />
+                    </button>
+                  </span>
+                  <textarea
+                    class="fits"
+                    v-model="scene.direction"
+                    rows="2"
+                    :placeholder="project.direction || 'the film\'s direction (Film, above)'"
+                  />
+                </label>
+                <label class="col">
+                  <span class="lbl own"
+                    >ambience
+                    <span v-if="scene.soundscape" class="ownmark">this scene's</span>
+                    <span v-else class="soft">the film's</span>
+                    <button
+                      v-if="scene.soundscape"
+                      type="button"
+                      class="reset"
+                      title="Use the film's again"
+                      @click.prevent="scene.soundscape = ''"
+                    >
+                      <i class="mdi mdi-close" />
+                    </button>
+                  </span>
+                  <textarea
+                    class="fits"
+                    v-model="scene.soundscape"
+                    rows="2"
+                    :placeholder="project.soundscape || 'e.g. rain on glass, distant traffic'"
+                  />
+                </label>
+                <label class="col">
+                  <span class="lbl own"
+                    >music
+                    <span v-if="scene.music" class="ownmark">this scene's</span>
+                    <span v-else class="soft">the film's</span>
+                    <button
+                      v-if="scene.music"
+                      type="button"
+                      class="reset"
+                      title="Use the film's again"
+                      @click.prevent="scene.music = ''"
+                    >
+                      <i class="mdi mdi-close" />
+                    </button>
+                  </span>
+                  <textarea
+                    class="fits"
+                    v-model="scene.music"
+                    rows="2"
+                    :placeholder="project.music || 'leave empty for none'"
+                  />
+                </label>
+              </div>
+            </section>
+          </template>
         </section>
       </div>
     </template>
@@ -821,11 +853,11 @@ function onKeyframeDrop(e: DragEvent) {
   emit("replaceKeyframe", keyframe.value.id, e);
 }
 // --- scene panel ---------------------------------------------------------------------------------
-// Selecting a shot opens its card; selecting the scene opens its settings (and keeps whichever
-// card you last had open). Cards are opened by selecting the shot, so the timeline follows.
-/** What the scene panel shows: its shots, or its settings (this scene's, or the whole film's).
- *  Picking a shot shows the shots; picking the scene, its settings. */
-const view = ref<"shots" | "settings">(props.sel.kind === "scene" ? "settings" : "shots");
+// Selecting a shot opens its card; selecting the scene opens its settings drawer under the shots
+// (and keeps whichever card you last had open). Cards are opened by selecting the shot, so the
+// timeline follows.
+/** Whether the settings drawer under the shots is open (this scene's settings, or the film's). */
+const drawerOpen = ref(props.sel.kind === "scene");
 const level = ref<"scene" | "film">("scene");
 /** The film-wide settings: the project itself, edited in place like a scene. */
 const film = computed(() => props.project);
@@ -836,10 +868,9 @@ watch(
   () => [props.sel.kind, props.sel.id] as const,
   ([kind, id]) => {
     if (kind === "scene") {
-      view.value = "settings";
+      drawerOpen.value = true;
       level.value = "scene";
     } else if (kind === "shot") {
-      view.value = "shots";
       lastOpenShot.value = id;
     }
   },
@@ -1379,10 +1410,11 @@ function mention(name: string) {
   line-height: 1.4;
 }
 .scenetitle {
-  width: 100%;
+  flex: 1 1 auto;
+  min-width: 60px;
   box-sizing: border-box;
-  margin: 0 0 6px;
-  padding: 4px 6px;
+  margin: 0 2px 0 4px;
+  padding: 3px 6px;
   border: 1px solid transparent;
   border-radius: var(--zen-radius, 7px);
   outline: none;
@@ -1408,11 +1440,11 @@ function mention(name: string) {
   gap: 4px;
 }
 .scenepick {
-  flex: 0 1 150px;
-  min-width: 90px;
+  flex: 0 0 auto;
+  width: 92px;
 }
-/* The scene panel fills the sidebar: Film, Scene settings and Shots are an accordion with one
-   section open, which takes the room left and scrolls on its own; the others are one-line headers. */
+/* The scene panel fills the sidebar: the shots take the room left and scroll on their own, and the
+   settings drawer sits under them — one line folded, up to most of the panel open. */
 .inspector.scene,
 .inspector.shot {
   height: 100%;
@@ -1431,12 +1463,89 @@ function mention(name: string) {
   flex-direction: column;
   min-height: 0;
 }
-.viewpick,
 .levelpick {
   flex: none;
+  align-self: flex-start;
 }
-.scenebody .away {
-  display: none;
+.drawer {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  border: 1px solid var(--h3-line);
+  border-radius: var(--h3-radius);
+  background: var(--h3-panel);
+}
+/* Open, it takes a fixed share of the panel, whichever settings it shows: sized to its content, it
+   jumped every time This scene / Whole film was switched. */
+.drawer.open {
+  flex: 0 0 58%;
+  padding-bottom: 8px;
+}
+.drawer.open > .levelpick {
+  margin: 0 8px;
+}
+.drawer > .settings {
+  padding: 0 4px 0 8px;
+  border: 0;
+}
+.drawerbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding-right: 4px;
+}
+.drawertoggle {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 7px 8px;
+  border: 0;
+  background: none;
+  color: var(--h3-text);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.drawertoggle > .mdi {
+  color: var(--h3-muted);
+}
+.drawertoggle .meta {
+  white-space: nowrap;
+}
+.seedmeta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--zen-mono, ui-monospace, monospace);
+}
+.carrymeta {
+  display: inline-flex;
+  gap: 3px;
+  align-items: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.kfmini {
+  display: grid;
+  flex: none;
+  width: 26px;
+  height: 17px;
+  overflow: hidden;
+  border: 1px dashed var(--h3-line);
+  border-radius: 4px;
+}
+.kfmini.set {
+  border-style: solid;
+}
+.kfmini :deep(img),
+.kfmini :deep(video) {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 .lbl.own {
   display: flex;

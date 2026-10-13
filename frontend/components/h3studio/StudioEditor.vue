@@ -377,6 +377,7 @@
             v-model:playhead="playhead"
             v-model:zoom="zoom"
             :duration="length"
+            :tail="Math.max(3, length * 0.12)"
             :tracks="tracks"
             :selected="selectedItemIds"
             :guides="starts.slice(1)"
