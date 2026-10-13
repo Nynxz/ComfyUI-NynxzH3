@@ -66,7 +66,11 @@ def scene_key(plan: dict, index: int, carried: str | None) -> str:
         k: v for k, v in plan.get("settings", {}).items() if k not in ("verbose", "log_prompt")
     }
     media = sorted(
-        {m["media"] for m in [*plan.get("refs", []), *plan.get("keyframes", [])] if m.get("media")}
+        {
+            m["media"]
+            for m in [*plan.get("refs", []), *plan.get("keyframes", []), plan.get("track") or {}]
+            if m.get("media")
+        }
     )
     return digest(
         {

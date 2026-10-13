@@ -39,6 +39,8 @@ export interface MenuActions {
   pickImage: (title: string, selected?: string) => Promise<string | undefined>;
   pickKeyframe: (t: number) => void;
   pickRefs: () => void;
+  /** Pick the film's music track. */
+  pickSong: () => void;
   openLoraBrowser: () => void;
   playFrom: (t: number) => void;
   togglePlay: () => void;
@@ -426,6 +428,35 @@ export function studioMenus(project: Project, a: MenuActions) {
       },
     ];
   }
+  function musicMenu(sceneId: string | undefined): ContextMenuItem[] {
+    const i = project.scenes.findIndex((s) => s.id === sceneId);
+    const scene = project.scenes[i];
+    return [
+      ...(scene
+        ? [
+            { heading: `Scene ${i + 1} · music` },
+            scene.track === false
+              ? {
+                  label: "Put it on the music track",
+                  icon: "mdi mdi-music",
+                  run: () => delete scene.track,
+                }
+              : {
+                  label: "Take it off the music track",
+                  icon: "mdi mdi-music-off",
+                  run: () => (scene.track = false),
+                },
+            "-" as const,
+          ]
+        : []),
+      { label: "Swap the song…", icon: "mdi mdi-swap-horizontal", run: () => a.pickSong() },
+      {
+        label: "Remove the music track",
+        icon: "mdi mdi-delete-outline",
+        run: () => delete project.track,
+      },
+    ];
+  }
   /** The menu for a right-click on the timeline, or null when the click means something else. */
   function timelineMenu(target: TimelineTarget, t: number): ContextMenuItem[] | null {
     const { trackId, itemId } = target;
@@ -438,6 +469,7 @@ export function studioMenus(project: Project, a: MenuActions) {
       return sceneMenu(project.scenes.findIndex((s) => s.id === itemId));
     if (itemId && trackId === "shots") return shotMenu(itemId, t);
     if (itemId && trackId === "keyframes") return keyframeMenu(itemId);
+    if (trackId === "music") return musicMenu(itemId?.split("|")[1]);
     if (itemId) return refMenu(itemId.split("|")[0]!, t);
     const p = placeAt(project, t);
     return [

@@ -1,5 +1,15 @@
 <template>
   <div class="monitor" @contextmenu.prevent.stop="emit('context', $event)">
+    <!-- The film's music track, following the playhead through the scenes on it. -->
+    <audio
+      v-if="project.track?.media"
+      ref="songEl"
+      :src="stableUrl(project.track.media)"
+      :muted="props.muted || props.volume === 0"
+      :volume="Math.min(1, props.volume * (project.track.volume ?? 1))"
+      preload="auto"
+      @loadedmetadata="syncSong(true)"
+    />
     <div class="screen" :style="{ '--ar': project.canvas.width / project.canvas.height }">
       <!-- Render: the scene's finished clip, driven by the studio's transport -->
       <template v-if="view === 'render'">
@@ -11,7 +21,7 @@
           class="render"
           :class="{ waiting: c !== clip }"
           :src="stableUrl(c)"
-          :muted="c !== clip || props.muted || props.volume === 0"
+          :muted="c !== clip || props.muted || props.volume === 0 || songReplaces"
           :volume="props.volume"
           playsinline
           preload="auto"
@@ -36,7 +46,7 @@
             :key="shown.url"
             class="render"
             :src="shown.url"
-            :muted="!shown.audio || props.muted || props.volume === 0"
+            :muted="!shown.audio || props.muted || props.volume === 0 || songReplaces"
             :volume="props.volume"
             playsinline
             preload="auto"
@@ -193,6 +203,7 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { mediaKind } from "@/framework";
 import {
+  onTrack,
   pictureAt,
   refInScene,
   shotRefs,
@@ -375,16 +386,39 @@ onBeforeUnmount(() => cancelAnimationFrame(framesRaf));
 
 // --- render --------------------------------------------------------------------------------------
 const clipEl = ref<HTMLVideoElement | null>(null);
+// --- the music track: heard where the scene is on it, unless the film plays only the scenes' sound
+// (then only before the scene is rendered, to time it); in place of the clip's own when the film
+// plays the song itself ---------------------------------------------------------------------------
+const songEl = ref<HTMLAudioElement | null>(null);
+const songSound = computed(() => props.project.track?.sound ?? "track");
+const songHeard = computed(
+  () =>
+    onTrack(props.project, props.place.scene) &&
+    (songSound.value !== "scenes" || view.value !== "render" || !props.clip),
+);
+const songReplaces = computed(() => songHeard.value && songSound.value === "track");
+function syncSong(force = false) {
+  const el = songEl.value;
+  if (!el) return;
+  if (!songHeard.value) return void (el.paused || el.pause());
+  syncVideo(el, () => (props.project.track?.offset ?? 0) + props.time, force);
+}
+watch(
+  () => [props.time, props.playing, songHeard.value, props.project.track?.offset] as const,
+  () => syncSong(),
+);
 /** Whether what's showing has sound — the transport's volume control dims when it hasn't. */
 const hasSound = computed(
   () =>
-    (view.value === "render" && !!props.clip) || (view.value === "preview" && !!shown.value?.audio),
+    songHeard.value ||
+    (view.value === "render" && !!props.clip) ||
+    (view.value === "preview" && !!shown.value?.audio),
 );
 /** Keep a video on the playhead (`want` maps its duration to the time it should be at): seek while
  *  paused or scrubbing; while the transport plays, let it play — with sound — and correct only a
  *  drift that is actually visible, never while it is still seeking or loading (each seek restarts
  *  the load, and correcting a loading video stalls it for good). */
-function syncVideo(v: HTMLVideoElement | null, want: (duration: number) => number, force = false) {
+function syncVideo(v: HTMLMediaElement | null, want: (duration: number) => number, force = false) {
   if (!v || !Number.isFinite(v.duration)) return;
   const end = Math.max(0, v.duration - 0.01);
   const at = Math.min(Math.max(want(v.duration), 0), end);

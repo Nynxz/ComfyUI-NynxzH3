@@ -26,7 +26,7 @@ import node_helpers
 from comfy_api.latest import io
 
 from .._base import NynxzNode
-from . import _carry, _control, _marks, _reuse
+from . import _carry, _control, _marks, _reuse, _track
 from ._loras import apply as apply_loras
 from ._media import has_audio, load_audio, load_image, load_video, path_of
 from ._project import FPS, PREVIOUS_FRAME, PREVIOUS_SOUND, compile_scene, normalize
@@ -570,7 +570,12 @@ def render_scene(setup: dict, project, scene: int | None) -> dict:
     if plan.lead:
         trim = plan.lead
     cont = plan.continuation
-    if cont.get("sound_refs") and cont.get("sound_picture") == "guides" and audio_vae is not None:
+    if (
+        cont.get("sound_refs")
+        and cont.get("sound_picture") == "guides"
+        and audio_vae is not None
+        and not plan.track
+    ):
         if previous_clip is None:
             previous_clip = _previous_clip(setup, proj, index)
         guides = _sound_guides(
@@ -585,6 +590,14 @@ def render_scene(setup: dict, project, scene: int | None) -> dict:
             ", ".join(f"{(g['resolved_frame_index'] - trim) / FPS:.1f}s" for g in guides)
             or "none (too short)",
         )
+
+    if plan.track:
+        if audio_vae is None:
+            plan.warnings.append(
+                "The music track needs Setup's audio_vae; this scene renders without it."
+            )
+        elif music := _track.guide(plan.track, latent, audio_vae, h3, plan.warnings):
+            keyframes.append(music)
 
     conditioning_keyframes = []
     for k in keyframes:

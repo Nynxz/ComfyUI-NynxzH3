@@ -14,7 +14,7 @@ import os
 import threading
 import time
 
-from . import _carry, _marks, _reuse
+from . import _carry, _marks, _reuse, _track
 from ._media import frame_count, path_of
 from ._project import FPS, frames_for
 
@@ -59,8 +59,33 @@ def assemble(proj: dict, music: dict | None = None, volume: float = 0.8, fade: f
             "s" if len(missing) > 1 else "",
             ", ".join(map(str, missing)),
         )
-    joined = _carry.join(videos, film["crossfade"], music, volume, fade)
+    joined = _carry.join(videos, film["crossfade"], None if proj["track"] else music, volume, fade)
+    if proj["track"]:
+        joined = _with_track(proj, joined, music, volume, fade)
     return joined, missing
+
+
+def _with_track(proj: dict, joined, music: dict | None, volume: float, fade: float):
+    """The joined film with the project's music track in its sound (see `_track.film_sound`), and
+    then any score given to the Film node under it all."""
+    from fractions import Fraction
+
+    from comfy_api.latest import InputImpl, Types
+
+    c = joined.get_components()
+    audio = c.audio
+    rate = int(audio["sample_rate"]) if audio else int(_track.song(proj["track"]["media"])["sample_rate"])
+    channels = audio["waveform"].shape[1] if audio else 2
+    counts = [frames_for(s["seconds"]) for s in proj["scenes"]]
+    sound = _track.film_sound(
+        proj, audio["waveform"][0].float() if audio else None, counts, rate, channels
+    )
+    out = {"waveform": sound[None], "sample_rate": rate} if sound is not None else None
+    if music is not None:
+        out = _carry._under(out, music, c.images.shape[0] / FPS, volume, fade)
+    return InputImpl.VideoFromComponents(
+        Types.VideoComponents(images=c.images, frame_rate=Fraction(FPS), audio=out)
+    )
 
 
 def save(proj: dict, metadata: dict | None = None) -> dict:
@@ -164,6 +189,8 @@ def _stream(proj: dict, path: str, metadata: dict | None) -> tuple[float, list[i
                 width, height = c.streams.video[0].width, c.streams.video[0].height
             break
     like = next((s["audio"] for s in scenes if s["audio"] is not None), None)
+    if like is None and proj["track"] and proj["track"]["sound"] != "scenes":
+        like = _track.song(proj["track"]["media"])
     rate = int(like["sample_rate"]) if like else 48000
     channels = like["waveform"].shape[1] if like else 2
     # Where each scene falls, for the tag: tags are written with the header, before any picture,
@@ -226,6 +253,7 @@ def _stream(proj: dict, path: str, metadata: dict | None) -> tuple[float, list[i
         output.mux(video.encode(None))
 
         sound = _sound(scenes, counts, fades, rate, channels, comfy.audio, torch)
+        sound = _track.film_sound(proj, sound, counts, rate, channels)
         if audio is not None and sound is not None:
             frame = av.AudioFrame.from_ndarray(
                 sound.contiguous().numpy(), format="fltp", layout=layout

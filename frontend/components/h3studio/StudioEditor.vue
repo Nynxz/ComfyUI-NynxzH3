@@ -252,6 +252,8 @@
                         @remove-shot="removeShot"
                         @add-shot="addShotTo"
                         @voice="showVoice"
+                        @pick-song="pickSong"
+                        @drop-song="dropSong"
                       />
                       <StudioCast v-show="tab === 'cast'" :project="project" :focus="castFocus" />
                       <StudioRefs
@@ -450,6 +452,7 @@ import {
 import {
   hasMediaDrop,
   hasZenPanels,
+  mediaKind,
   mediaLibrary,
   readMediaDrop,
   uploadOrReuse,
@@ -968,6 +971,7 @@ function onTimelineSelect(itemId: string | null, trackId: string, e?: PointerEve
   if (trackId === "scenes" && pickScene(itemId, e)) return;
   if (itemId.startsWith("curve:lora:")) return select("lora", trackId.replace(/^lora:/, ""));
   if (trackId === "scenes") select("scene", itemId);
+  else if (trackId === "music") select("scene", itemId.split("|")[1]!);
   else if (trackId === "shots") select("shot", itemId);
   else if (trackId === "keyframes") select("keyframe", itemId);
   else if (trackId.startsWith("voice:")) {
@@ -1016,6 +1020,7 @@ async function onTimelineDrop(trackId: string, t: number, e: DragEvent, itemId: 
   e.preventDefault();
   e.stopPropagation();
   const media = await readDrop(e);
+  if (trackId === "music") return setSong(media.find((m) => mediaKind(m) === "audio"));
   const onto = project.scenes.some((s) => s.keyframes.some((k) => k.id === itemId));
   if (trackId === "keyframes" && media[0] && onto) replaceKeyframe(itemId!, media[0]);
   else if (trackId === "keyframes" && media[0]) addKeyframe(t, media[0]);
@@ -1184,6 +1189,22 @@ async function pickKeyframe(t: number) {
   const m = await pickImage("Keyframe picture");
   if (m) addKeyframe(t, m);
 }
+// --- the music track ------------------------------------------------------------------------------
+function setSong(media: string | undefined) {
+  if (media) project.track = { ...project.track, media };
+}
+async function pickSong() {
+  const [media] = await pickMedia({
+    kinds: ["audio"],
+    title: "The film's music track",
+    confirmLabel: project.track?.media ? "Swap" : "Use",
+    selected: project.track?.media ? [project.track.media] : [],
+  });
+  setSong(media);
+}
+async function dropSong(e: DragEvent) {
+  setSong((await readDrop(e)).find((m) => mediaKind(m) === "audio"));
+}
 /** What a drop carries; dropped files already in the input folder are reused, not re-uploaded. */
 const readDrop = (e: DragEvent) => readMediaDrop(e, UPLOADS, uploadOrReuse);
 /** New media dropped onto a reference: fills a placeholder, or swaps the picture keeping the name. */
@@ -1230,6 +1251,7 @@ const menus = studioMenus(project, {
   pickImage,
   pickKeyframe: (t) => void pickKeyframe(t),
   pickRefs: () => void pickRefs(),
+  pickSong: () => void pickSong(),
   openLoraBrowser: () => (loraBrowserOpen.value = true),
   playFrom,
   togglePlay,

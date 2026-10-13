@@ -10,6 +10,7 @@ timeline and the prompt are two views of the same data, never two copies to keep
       direction   how it's made, after the style in every scene ("animated on twos, held poses");
                   a scene can override it
       soundscape  / music: defaults a scene can override
+      track       a song under the whole film: each scene on it is cut its stretch (see `_track`)
       refs        pictures with a name (`@hero`), a role, a retention marker, and the scenes they serve
       scenes      seconds, shots[{at, text, lines}], keyframes[{at, media}], continuation, overrides
       cast        the voices that speak the shots' lines (see `_dialogue`)
@@ -66,6 +67,8 @@ PREVIOUS_SOUND = "previous:sound:"
 #: reproduces a guide where it's placed), or as references — audio alone, or video, black (only
 #: their sound counts) or with the clip's own picture.
 SOUND_PICTURES = ("guides", "audio", "black", "real")
+#: How the finished film sounds where the music track plays (see `_track.film_sound`).
+TRACK_SOUND = ("track", "mix", "scenes")
 RETENTION = ("fully_preserved", "partially_preserved", "attribute_transfer", "weak_reference")
 AUDIO_RETENTION = ("fully_copy", "partially_copy", "reference", "weak_reference")
 ROLES = ("reference", "semantic", "blocking", "control")
@@ -260,6 +263,8 @@ def normalize(raw: Any) -> dict[str, Any]:
                 "soundscape": _str(scene.get("soundscape")),
                 "music": _str(scene.get("music")),
                 "render": _str(scene.get("render")),
+                #: On the film's music track (when it has one): rendered to its stretch of the song.
+                "track": scene.get("track") is not False,
                 "seed": scene["seed"]
                 if isinstance(scene.get("seed"), int) and 0 <= scene["seed"] <= SEED_MAX
                 else seed_of(_str(scene.get("id")) or f"s{i + 1}"),
@@ -323,6 +328,7 @@ def normalize(raw: Any) -> dict[str, Any]:
         "active": active,
         "settings": normalize_settings(raw.get("settings")),
         "film": normalize_film(raw.get("film")),
+        "track": normalize_track(raw.get("track")),
         # A partial render: the ids of the scenes to render this run; the others play their latest
         # clip (see studio.render_scene). None renders every scene.
         "render_only": _render_only(raw.get("renderOnly"), {sc["id"] for sc in scenes}),
@@ -364,6 +370,21 @@ def normalize_film(raw: Any) -> dict[str, Any]:
         "crossfade": int(_num(raw.get("crossfade"), 8, 0, 39)),
         #: Save the film when a full render finishes.
         "auto": raw.get("auto") is not False,
+    }
+
+
+def normalize_track(raw: Any) -> dict[str, Any] | None:
+    """The film's music track, or None without one."""
+    raw = raw if isinstance(raw, dict) else {}
+    media = _str(raw.get("media"))
+    if not media:
+        return None
+    return {
+        "media": media,
+        #: Where in the song the film starts, in seconds.
+        "offset": _num(raw.get("offset"), 0.0, 0.0, 3600.0),
+        "sound": raw.get("sound") if raw.get("sound") in TRACK_SOUND else "track",
+        "volume": _num(raw.get("volume"), 1.0, 0.0, 2.0),
     }
 
 
@@ -468,6 +489,9 @@ class Compiled:
     keep: int = 0
     #: Frames of handle past the scene's end (see `HANDLE`): their sound is kept beside the clip.
     tail: int = 0
+    #: `{media, start, frame, seconds}`: the stretch of the film's music track (`start` seconds into
+    #: the song, for `seconds`) pinned from rendered frame `frame` on. None off the track.
+    track: dict[str, Any] | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return dict(self.__dict__)
@@ -1028,12 +1052,27 @@ def compile_scene(project: dict[str, Any], index: int, has_audio=None) -> Compil
     if seconds > 15.5:
         warnings.append(f"{seconds:.1f}s is past H3's trained range (about 5-15s per generation).")
 
+    rendered = align_frame_count(scene_frames + head + handle) if head or handle else scene_frames
+    track = None
+    if project["track"] and scene["track"]:
+        start = sum(frames_for(s["seconds"]) for s in scenes[: scenes.index(scene)]) / FPS
+        track = {
+            "media": project["track"]["media"],
+            "start": round(project["track"]["offset"] + start, 4),
+            "frame": head,
+            "seconds": round((rendered - head) / FPS, 4),
+        }
+        if index > 0 and scene["continuation"]["sound_refs"] and shown_as == "guides":
+            warnings.append(
+                "The music track carries this scene's sound, so the previous scene's sound "
+                "isn't pinned through it as well."
+            )
     return Compiled(
         loras=scene_loras(project, scenes.index(scene)),
         settings=project["settings"],
         task=task,
         prompt=prompt,
-        frames=align_frame_count(scene_frames + head + handle) if head or handle else scene_frames,
+        frames=rendered,
         seconds=round(seconds, 3),
         lead=head,
         keep=scene_frames,
@@ -1059,6 +1098,7 @@ def compile_scene(project: dict[str, Any], index: int, has_audio=None) -> Compil
         continuation=dict(scene["continuation"]) if index > 0 else {"mode": "cut", "frames": 0},
         warnings=list(dict.fromkeys(warnings)),
         controls=controls,
+        track=track,
     )
 
 

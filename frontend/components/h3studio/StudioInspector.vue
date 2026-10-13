@@ -318,6 +318,59 @@
                     placeholder="leave empty for none"
                   />
                 </label>
+                <div
+                  class="row songrow"
+                  :class="{ dropping: songDropping }"
+                  title="A song under the whole film: each scene renders to its stretch of it (pinned through the scene as sound), so lips and beats land on the music. Drop a song here, or pick one."
+                  @dragover="onSongDragOver"
+                  @dragleave="songDropping = false"
+                  @drop="onSongDrop"
+                >
+                  <span class="lbl">music track</span>
+                  <button type="button" class="songpick" @click="emit('pickSong')">
+                    <i class="mdi mdi-music" />
+                    <span>{{ songName || "Pick or drop a song…" }}</span>
+                  </button>
+                  <ZenIconButton
+                    v-if="project.track"
+                    icon="mdi mdi-close"
+                    title="Remove the music track"
+                    @click="removeSong"
+                  />
+                </div>
+                <template v-if="project.track?.media">
+                  <label class="row" title="Where in the song the film's first frame falls">
+                    <span class="lbl">film starts at</span>
+                    <ZenNumber
+                      :model-value="project.track.offset ?? 0"
+                      :min="0"
+                      :max="3600"
+                      :step="0.1"
+                      :precision="2"
+                      @update:model-value="(v: number) => setSong({ offset: v })"
+                    />
+                    <span class="soft">s into the song</span>
+                  </label>
+                  <div class="row">
+                    <span class="lbl">film plays</span>
+                    <ZenToggleGroup
+                      :model-value="project.track.sound ?? 'track'"
+                      :options="TRACK_SOUNDS"
+                      @update:model-value="(v: string) => setSong({ sound: v as TrackSound })"
+                    />
+                  </div>
+                  <label v-if="(project.track.sound ?? 'track') !== 'scenes'" class="row">
+                    <span class="lbl">song volume</span>
+                    <ZenNumber
+                      :model-value="project.track.volume ?? 1"
+                      :min="0"
+                      :max="2"
+                      :step="0.05"
+                      :precision="2"
+                      @update:model-value="(v: number) => setSong({ volume: v })"
+                    />
+                  </label>
+                </template>
                 <label
                   class="row"
                   title="Frames a continued scene fades in over, where it joins the one before"
@@ -384,6 +437,22 @@
                     title="Re-roll: a new seed for this scene — only it (and scenes continuing from it) render again"
                     @click="scene!.seed = randomSeed()"
                   />
+                </div>
+                <div
+                  v-if="project.track?.media"
+                  class="row"
+                  title="On the track, the scene renders to its stretch of the song. Off it, H3 makes the scene's sound, and the film keeps it."
+                >
+                  <span class="lbl">music track</span>
+                  <ZenSwitch
+                    :model-value="scene.track !== false"
+                    @update:model-value="setOnTrack"
+                  />
+                  <span class="soft">{{
+                    scene.track !== false
+                      ? `♪ ${formatTime(songSpan.from)}–${formatTime(songSpan.to)} of the song`
+                      : "its own sound"
+                  }}</span>
                 </div>
                 <div v-if="sel.sceneIndex > 0" class="row">
                   <span class="lbl">from previous</span>
@@ -775,15 +844,19 @@ import {
   continuationOf,
   formatTime,
   framesFor,
+  TRACK_SOUNDS,
   TRANSITIONS,
   sceneLoraStrength,
+  trackSpan,
   shapeMean,
   stepShapesWork,
   shotColors,
   stableUrl,
   type Compiled,
   type FilmSettings,
+  type MusicTrack,
   type Project,
+  type TrackSound,
   type Shot,
 } from "@/lib/h3studio";
 import { isShaped } from "@/lib/h3tracks";
@@ -814,6 +887,8 @@ const emit = defineEmits<{
   removeShot: [id: string];
   addShot: [scene: number];
   voice: [id: string];
+  pickSong: [];
+  dropSong: [event: DragEvent];
 }>();
 
 const scene = computed(() => props.project.scenes[props.sel.sceneIndex]);
@@ -863,6 +938,32 @@ const level = ref<"scene" | "film">("scene");
 const film = computed(() => props.project);
 const setFilm = (change: Partial<FilmSettings>) =>
   (film.value.film = { ...film.value.film, ...change });
+// --- the music track -----------------------------------------------------------------------------
+const songName = computed(() => props.project.track?.media.split("/").pop() ?? "");
+const songSpan = computed(() => trackSpan(props.project, props.sel.sceneIndex));
+const setSong = (change: Partial<MusicTrack>) =>
+  props.project.track && (props.project.track = { ...props.project.track, ...change });
+function removeSong() {
+  delete props.project.track;
+}
+function setOnTrack(on: boolean) {
+  if (on) delete scene.value!.track;
+  else scene.value!.track = false;
+}
+const songDropping = ref(false);
+function onSongDragOver(e: DragEvent) {
+  if (!hasMediaDrop(e)) return;
+  e.preventDefault();
+  e.stopPropagation();
+  songDropping.value = true;
+}
+function onSongDrop(e: DragEvent) {
+  songDropping.value = false;
+  if (!hasMediaDrop(e)) return;
+  e.preventDefault();
+  e.stopPropagation();
+  emit("dropSong", e);
+}
 const lastOpenShot = ref<string | null>(props.sel.kind === "shot" ? props.sel.id : null);
 watch(
   () => [props.sel.kind, props.sel.id] as const,
@@ -1252,6 +1353,36 @@ function mention(name: string) {
 }
 .ctx {
   width: 110px;
+}
+.songrow {
+  border-radius: var(--h3-radius);
+  outline: 1px dashed transparent;
+  outline-offset: 2px;
+}
+.songrow.dropping {
+  outline-color: var(--h3-accent);
+}
+.songpick {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid var(--h3-line);
+  border-radius: var(--h3-radius);
+  background: var(--h3-field);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.songpick > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.songpick:hover {
+  border-color: var(--h3-accent);
 }
 .fitframe {
   position: relative;

@@ -6,7 +6,9 @@ import {
   TRANSITIONS,
   continuationOf,
   formatTime,
+  onTrack,
   refInScene,
+  trackSpan,
   sceneLoraStrength,
   shotColors,
   stableUrl,
@@ -16,6 +18,7 @@ import {
 } from "./h3studio";
 import { lineTimes, speakerNames, voiceColor, voiceThumb } from "./h3dialogue";
 import type { SceneState, SceneStatus } from "./h3render";
+import { songOf, wave } from "./h3music";
 
 /** Whether a curve over the sampling steps changes anything (flat at 1 doesn't). */
 export const isShaped = (sampling: { v: number }[]) =>
@@ -283,6 +286,7 @@ export function buildTracks(project: Project, ctx: TrackContext): TimelineTrack[
   return [
     { id: "scenes", label: "Scenes", icon: "mdi mdi-filmstrip", height: 30, items: scenes },
     { id: "shots", label: "Shots", icon: "mdi mdi-camera-outline", height: 34, items: shots },
+    ...(project.track?.media ? [musicTrack(project, starts)] : []),
     ...(hide.has("keyframes")
       ? []
       : [
@@ -348,6 +352,44 @@ function controlItems(project: Project, r: Ref, starts: number[]): TimelineItem[
       },
     ];
   });
+}
+
+export const MUSIC_COLOR = "#c0609a";
+
+/** The film's song, one bar per scene: its stretch of the song (ids `music|<scene id>`); scenes
+ *  off the track show dimmed. */
+function musicTrack(project: Project, starts: number[]): TimelineTrack {
+  const media = project.track!.media;
+  const song = songOf(media);
+  const name = media.split("/").pop() ?? media;
+  return {
+    id: "music",
+    label: "Music",
+    title: `${name} — each scene renders to its stretch of the song, so lips and beats land on it. Right-click a scene's bar to take it off the track; drop another song here to swap it.`,
+    icon: "mdi mdi-music",
+    color: MUSIC_COLOR,
+    height: 34,
+    items: project.scenes.map((s, i) => {
+      const { from, to } = trackSpan(project, i);
+      const on = onTrack(project, i);
+      const past = song && from >= song.duration;
+      const span = `${formatTime(from)}–${formatTime(Math.min(to, song?.duration ?? to))}`;
+      return {
+        id: `music|${s.id}`,
+        start: starts[i]!,
+        end: starts[i]! + s.seconds,
+        label: !on ? "off the track" : past ? "the song has ended" : `♪ ${span}`,
+        title: on
+          ? `Scene ${i + 1} renders to ${name} ${span}${past ? " — but the song ends before it" : ""}`
+          : `Scene ${i + 1} is off the music track: H3 makes its sound, and the film keeps it`,
+        color: MUSIC_COLOR,
+        muted: !on || !!past,
+        wave: song ? wave(song, from, to, Math.max(8, Math.round(s.seconds * 12))) : undefined,
+        resize: false as const,
+        peek: peekOf(media, name),
+      };
+    }),
+  };
 }
 
 /** What Shift over a timeline item shows large (ZenPeek): its picture, video or sound. */

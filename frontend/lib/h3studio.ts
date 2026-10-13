@@ -209,6 +209,8 @@ export interface Scene {
   };
   /** The scene's finished clip (`output/h3studio/…`), saved by H3 Studio Clip on its last run. */
   render?: string;
+  /** false: off the film's music track — it renders its own sound and keeps it in the film. */
+  track?: boolean;
 }
 /** A LoRA lane. A scene renders all its frames with one set of weights, so the lane has one
  *  strength per scene: its own in `scenes` (by scene id), else the lane's `strength`. Within a scene
@@ -254,11 +256,45 @@ export interface Project {
   settings?: StudioSettings;
   /** How the finished film is joined, and whether a full render saves it (`normalize_film`). */
   film?: FilmSettings;
+  /** A song under the whole film, cut to each scene as it renders (nodes/h3studio/_track.py). */
+  track?: MusicTrack;
   active: number;
   /** Set only while a partial render is queued (lib/h3render.ts): the scenes that run renders; the
    *  others play their latest clip. */
   renderOnly?: string[];
 }
+export type TrackSound = "track" | "mix" | "scenes";
+export interface MusicTrack {
+  media: string;
+  /** Where in the song the film starts, in seconds. */
+  offset?: number;
+  /** What the finished film plays where scenes are on the track: the song itself, the song under
+   *  the scenes' own sound, or the scenes' sound alone. */
+  sound?: TrackSound;
+  volume?: number;
+}
+export const TRACK_SOUNDS: { value: TrackSound; label: string; title: string }[] = [
+  {
+    value: "track",
+    label: "The song",
+    title: "The song itself where scenes are on the track, in place of what H3 made of it",
+  },
+  { value: "mix", label: "Mixed", title: "The song under every scene's own sound" },
+  { value: "scenes", label: "Scenes' sound", title: "Only what H3 made: the song isn't added" },
+];
+
+/** Whether scene `i` renders to the film's music track. */
+export const onTrack = (project: Project, i: number) =>
+  !!project.track?.media && project.scenes[i]?.track !== false;
+
+/** The stretch of the song scene `i` plays over, in song seconds. */
+export function trackSpan(project: Project, i: number): { from: number; to: number } {
+  const offset = project.track?.offset ?? 0;
+  const start = project.scenes.slice(0, i).reduce((t, s) => t + framesFor(s.seconds), 0) / FPS;
+  const scene = project.scenes[i]!;
+  return { from: offset + start, to: offset + start + framesFor(scene.seconds) / FPS };
+}
+
 export interface FilmSettings {
   crossfade?: number;
   auto?: boolean;
