@@ -18,6 +18,21 @@
     <div class="bar">
       <button
         type="button"
+        class="rendersbtn"
+        :class="{ on: rendersOpen }"
+        :title="
+          live.rendering !== null
+            ? `Renders — S${live.rendering + 1} is rendering`
+            : 'Renders — now, up next and every take'
+        "
+        :aria-pressed="rendersOpen"
+        @click="rendersOpen = !rendersOpen"
+      >
+        <i class="mdi mdi-history" />
+        <span v-if="live.rendering !== null" class="recdot" />
+      </button>
+      <button
+        type="button"
         class="brand"
         :title="`${project.scenes.length} scene${project.scenes.length === 1 ? '' : 's'} · ${formatTime(length)} — the script, sheets and settings`"
         @click="openStudioMenu"
@@ -114,21 +129,6 @@
         <i class="mdi mdi-alert-outline" />{{ compiled.warnings.length }}
       </span>
       <span class="rendergroup">
-        <button
-          type="button"
-          class="rendersbtn"
-          :class="{ on: rendersOpen }"
-          :title="
-            live.rendering !== null
-              ? `Renders — S${live.rendering + 1} is rendering`
-              : 'Renders — now, up next and every take'
-          "
-          :aria-pressed="rendersOpen"
-          @click="rendersOpen = !rendersOpen"
-        >
-          <i class="mdi mdi-history" />
-          <span v-if="live.rendering !== null" class="recdot" />
-        </button>
         <ZenButton
           sm
           variant="primary"
