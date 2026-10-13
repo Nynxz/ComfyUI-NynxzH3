@@ -332,8 +332,8 @@ def _film_after(proj: dict, index: int) -> dict | None:
 
 
 def render_scene(setup: dict, project, scene: int | None) -> dict:
-    _mem("render_scene start")
     """One scene of the project as H3 conditioning, a sized AV latent and the head trim."""
+    _mem("render_scene start")
     clip, vae = setup["clip"], setup["vae"]
     audio_vae = setup.get("audio_vae")
     previous_frames, previous_audio = setup.get("previous_frames"), setup.get("previous_audio")
@@ -1082,9 +1082,9 @@ def _WatchedControl(
 
 
 def _apply_control(setup: dict, model, vae, control: dict, trim: int, warnings: list[str]):
-    _mem("control start")
     """The scene's model steered by its control video through H3's Fun ControlNet — core's Apply
     MiniMax H3 Fun ControlNet, done here so it follows each scene's own video."""
+    _mem("control start")
     if not setup.get("controlnet"):
         warnings.append(
             f"@{control['name']} is a control video, but no ControlNet is picked on H3 Studio Setup; "

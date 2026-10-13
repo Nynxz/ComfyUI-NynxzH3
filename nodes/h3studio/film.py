@@ -306,11 +306,16 @@ def _sound(scenes, counts, fades, rate, channels, audio_lib, torch):
 def films(scene_ids: list[str]) -> list[dict]:
     """The films made from this project (sharing any of its scenes), newest first, still on disk."""
     ids = set(scene_ids)
-    return [
-        r
-        for r in reversed(_read())
-        if ids & set(r.get("scenes") or []) and os.path.exists(path_of(r["ref"]))
-    ]
+    return [r for r in reversed(_read()) if ids & set(r.get("scenes") or []) and _on_disk(r)]
+
+
+def _on_disk(record: dict) -> bool:
+    """Whether a film's file is still there. `path_of` refuses a missing (or foreign) file with a
+    ValueError, so one deleted film is skipped rather than failing the whole list."""
+    try:
+        return os.path.exists(path_of(record["ref"]))
+    except ValueError:
+        return False
 
 
 def _path() -> str:

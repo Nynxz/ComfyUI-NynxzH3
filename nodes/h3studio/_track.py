@@ -9,14 +9,18 @@ H3 made of it (or lays it under their sound, or leaves the scenes' sound alone).
 from __future__ import annotations
 
 import math
+import threading
 
 import torch
 
 from ._media import load_audio
 from ._project import FPS
 
-#: The song, decoded once per file: every scene of a render cuts from the same one.
-_loaded: dict = {}
+#: The song, decoded once per file: every scene of a render cuts from the same one. One
+#: (key, audio) pair, swapped whole under `_lock` — the editor's routes and the render thread both
+#: ask for it.
+_loaded: tuple | None = None
+_lock = threading.Lock()
 #: Seconds the song and the scenes' own sound fade across where the film leaves or rejoins it.
 JOIN_SECONDS = 0.02
 
@@ -24,11 +28,12 @@ JOIN_SECONDS = 0.02
 def song(media: str) -> dict:
     from . import _reuse
 
+    global _loaded
     key = (media, tuple(_reuse.media_stat(media)))
-    if _loaded.get("key") != key:
-        _loaded.clear()
-        _loaded.update(key=key, audio=load_audio(media))
-    return _loaded["audio"]
+    with _lock:
+        if _loaded is None or _loaded[0] != key:
+            _loaded = (key, load_audio(media))
+        return _loaded[1]
 
 
 def guide(track: dict, latent: dict, audio_vae, h3, warnings: list[str]) -> dict | None:
@@ -74,6 +79,8 @@ def film_sound(proj: dict, sound, counts: list[int], rate: int, channels: int):
         wave = wave.mean(dim=0, keepdim=True).expand(channels, -1)
     start = round(track["offset"] * rate)
     wave = wave[:, start : start + length]
+    # Where the song itself ends (it may be shorter than the film): past it there is only padding.
+    real = wave.shape[-1]
     if wave.shape[-1] < length:
         wave = torch.nn.functional.pad(wave, (0, length - wave.shape[-1]))
     wave = wave * track["volume"]
@@ -89,6 +96,9 @@ def film_sound(proj: dict, sound, counts: list[int], rate: int, channels: int):
         if scene.get("track", True):
             gain[a:b] = 1.0
         at += n
+    # Past the end of the song there's nothing to play in place of the scenes' own sound, so it
+    # shows through again (with the same short smoothed join as anywhere else the track stops).
+    gain[real:] = 0.0
     k = max(1, round(JOIN_SECONDS * rate))
     smooth = torch.nn.functional.avg_pool1d(gain[None, None], k, stride=1, padding=k // 2)[0, 0]
     smooth = smooth[:length]

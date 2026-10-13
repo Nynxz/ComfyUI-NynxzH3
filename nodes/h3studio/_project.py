@@ -674,7 +674,11 @@ def tag_refs(
 def compile_scene(project: dict[str, Any], index: int, has_audio=None) -> Compiled:
     project = normalize(project)
     scenes = project["scenes"]
-    scene = scenes[max(0, min(index, len(scenes) - 1))]
+    # Clamped once, and that position used for everything about the scene (its carry, the scene
+    # after it, its start on the music track, its LoRAs): looking the scene up again by equality
+    # would find the first of two identical scenes.
+    index = max(0, min(index, len(scenes) - 1))
+    scene = scenes[index]
     frames = frames_for(scene["seconds"])
     scene_frames = frames
     seconds = frames / FPS
@@ -1055,7 +1059,7 @@ def compile_scene(project: dict[str, Any], index: int, has_audio=None) -> Compil
     rendered = align_frame_count(scene_frames + head + handle) if head or handle else scene_frames
     track = None
     if project["track"] and scene["track"]:
-        start = sum(frames_for(s["seconds"]) for s in scenes[: scenes.index(scene)]) / FPS
+        start = sum(frames_for(s["seconds"]) for s in scenes[:index]) / FPS
         track = {
             "media": project["track"]["media"],
             "start": round(project["track"]["offset"] + start, 4),
@@ -1068,7 +1072,7 @@ def compile_scene(project: dict[str, Any], index: int, has_audio=None) -> Compil
                 "isn't pinned through it as well."
             )
     return Compiled(
-        loras=scene_loras(project, scenes.index(scene)),
+        loras=scene_loras(project, index),
         settings=project["settings"],
         task=task,
         prompt=prompt,

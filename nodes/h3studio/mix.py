@@ -28,6 +28,20 @@ class MixError(ValueError):
     pass
 
 
+def _parse_parts(parts) -> list[dict]:
+    """`parts` as the editor sent them, each `{ref, start}`; a MixError (the editor's mistake, not
+    the server's) for anything else."""
+    if not isinstance(parts, list):
+        raise MixError("The mix's parts should be a list of {ref, start}.")
+    out = []
+    for p in parts:
+        try:
+            out.append({"ref": str(p["ref"]), "start": int(p["start"])})
+        except (KeyError, TypeError, ValueError):
+            raise MixError(f"A mix part should be {{ref, start}}, not {p!r}.") from None
+    return out
+
+
 def make(project: dict, scene_id: str, parts: list[dict], metadata: dict | None = None) -> dict:
     """Join `parts` (`[{ref, start}]`, `start` the frame each takes over at, the first 0) into a
     clip of scene `scene_id` and make it the scene's clip. Returns the new take."""
@@ -39,9 +53,7 @@ def make(project: dict, scene_id: str, parts: list[dict], metadata: dict | None 
         raise MixError("That scene isn't in the project.")
     rows = _reuse.takes([scene_id]).get(scene_id, [])
     fit = {t["ref"]: t for t in takes_fit(project, {scene_id: rows}).get(scene_id, rows)}
-    parts = sorted(
-        ({"ref": str(p["ref"]), "start": int(p["start"])} for p in parts), key=lambda p: p["start"]
-    )
+    parts = sorted(_parse_parts(parts), key=lambda p: p["start"])
     if not parts or parts[0]["start"] != 0:
         raise MixError("A mix starts with a part at frame 0.")
     for p in parts:

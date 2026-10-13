@@ -68,7 +68,12 @@ def scene_key(plan: dict, index: int, carried: str | None) -> str:
     media = sorted(
         {
             m["media"]
-            for m in [*plan.get("refs", []), *plan.get("keyframes", []), plan.get("track") or {}]
+            for m in [
+                *plan.get("refs", []),
+                *plan.get("keyframes", []),
+                *plan.get("controls", []),
+                plan.get("track") or {},
+            ]
             if m.get("media")
         }
     )

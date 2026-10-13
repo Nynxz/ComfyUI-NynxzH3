@@ -7,6 +7,8 @@ The node and the preview share `compile_scene`, so what the editor shows is exac
 
 from __future__ import annotations
 
+import asyncio
+import json
 from pathlib import Path
 
 from aiohttp import web
@@ -25,19 +27,43 @@ except Exception:  # noqa: BLE001 - no server (import-time checks, tests)
 WRITER_GUIDE = Path(__file__).with_name("writer_guide.md")
 
 
+async def _body(request: web.Request) -> dict:
+    """A POST's JSON body as a dict. Anything else (not JSON, or JSON that isn't an object) is the
+    caller's mistake: a 400 with the reason, never a 500 from deep inside a route."""
+    try:
+        body = await request.json()
+    except ValueError:
+        body = None
+    if not isinstance(body, dict):
+        raise web.HTTPBadRequest(
+            text=json.dumps({"error": "Expected a JSON object."}), content_type="application/json"
+        )
+    return body
+
+
+def _list(value) -> list:
+    """`value` when it's a list, else nothing (a list of ids sent as anything else)."""
+    return value if isinstance(value, list) else []
+
+
 if _routes is not None:
 
     @_routes.post("/nynxz/h3studio/compile")
     async def h3studio_compile(request: web.Request) -> web.Response:
         if (denied := request_allowed(request)) is not None:
             return denied
-        body = await request.json()
-        project = normalize(body.get("project"))
-        try:
-            scene = int(body.get("scene", project["active"]))
-        except (TypeError, ValueError):
-            scene = project["active"]
-        return web.json_response(compile_scene(project, scene, has_audio).as_dict())
+        body = await _body(request)
+
+        def work() -> dict:
+            project = normalize(body.get("project"))
+            try:
+                scene = int(body.get("scene", project["active"]))
+            except (TypeError, ValueError):
+                scene = project["active"]
+            return compile_scene(project, scene, has_audio).as_dict()
+
+        # Normalizing and compiling (and has_audio probing files) is CPU and disk: off the loop.
+        return web.json_response(await asyncio.to_thread(work))
 
     @_routes.post("/nynxz/h3studio/status")
     async def h3studio_status(request: web.Request) -> web.Response:
@@ -46,8 +72,10 @@ if _routes is not None:
             return denied
         from .studio import scene_status
 
-        body = await request.json()
-        return web.json_response({"scenes": scene_status(body.get("project"))})
+        body = await _body(request)
+        return web.json_response(
+            {"scenes": await asyncio.to_thread(scene_status, body.get("project"))}
+        )
 
     @_routes.post("/nynxz/h3studio/takes")
     async def h3studio_takes(request: web.Request) -> web.Response:
@@ -56,14 +84,18 @@ if _routes is not None:
             return denied
         from . import _reuse
 
-        body = await request.json()
-        ids = [str(x) for x in body.get("scenes", []) if isinstance(x, (str, int))][:200]
-        takes = _reuse.takes(ids)
-        if body.get("project") is not None:
-            from .studio import takes_fit
+        body = await _body(request)
+        ids = [str(x) for x in _list(body.get("scenes")) if isinstance(x, (str, int))][:200]
 
-            takes = {**takes, **takes_fit(body["project"], takes)}
-        return web.json_response({"takes": takes})
+        def work() -> dict:
+            takes = _reuse.takes(ids)
+            if body.get("project") is not None:
+                from .studio import takes_fit
+
+                takes = {**takes, **takes_fit(body["project"], takes)}
+            return takes
+
+        return web.json_response({"takes": await asyncio.to_thread(work)})
 
     @_routes.post("/nynxz/h3studio/take/use")
     async def h3studio_use_take(request: web.Request) -> web.Response:
@@ -72,7 +104,7 @@ if _routes is not None:
             return denied
         from . import _reuse
 
-        body = await request.json()
+        body = await _body(request)
         ok = _reuse.use_take(str(body.get("scene", "")), str(body.get("ref", "")))
         return web.json_response({"ok": ok}, status=200 if ok else 404)
 
@@ -83,8 +115,8 @@ if _routes is not None:
             return denied
         from . import film
 
-        body = await request.json()
-        ids = [str(x) for x in body.get("scenes", []) if isinstance(x, (str, int))][:200]
+        body = await _body(request)
+        ids = [str(x) for x in _list(body.get("scenes")) if isinstance(x, (str, int))][:200]
         return web.json_response({"films": film.films(ids)})
 
     @_routes.post("/nynxz/h3studio/film/export")
@@ -93,11 +125,9 @@ if _routes is not None:
         file out), so it runs beside the queue, on a thread of its own."""
         if (denied := request_allowed(request)) is not None:
             return denied
-        import asyncio
-
         from . import film
 
-        body = await request.json()
+        body = await _body(request)
         workflow = body.get("workflow")
         from comfy.cli_args import args
 
@@ -115,11 +145,9 @@ if _routes is not None:
         CPU only (files in, a file out), so it runs beside the queue, on a thread of its own."""
         if (denied := request_allowed(request)) is not None:
             return denied
-        import asyncio
-
         from . import mix
 
-        body = await request.json()
+        body = await _body(request)
         try:
             take = await asyncio.to_thread(
                 mix.make, body.get("project"), str(body.get("scene", "")), body.get("parts") or []
@@ -136,11 +164,9 @@ if _routes is not None:
         on a thread of its own."""
         if (denied := request_allowed(request)) is not None:
             return denied
-        import asyncio
-
         from . import sheet
 
-        body = await request.json()
+        body = await _body(request)
         shots = body.get("shots")
         try:
             made = await asyncio.to_thread(
@@ -165,7 +191,7 @@ if _routes is not None:
             return denied
         from ..rewrite._prompt import MAX_DURATION, MIN_DURATION, build_chat_prompt
 
-        body = await request.json()
+        body = await _body(request)
         try:
             duration = min(MAX_DURATION, max(MIN_DURATION, round(float(body.get("duration", 10)))))
             text = build_chat_prompt(
@@ -185,7 +211,7 @@ if _routes is not None:
             return denied
         from ..rewrite._rewrite import clean_response
 
-        body = await request.json()
+        body = await _body(request)
         prompt, fields = clean_response(str(body.get("text", "")))
         return web.json_response({"prompt": prompt, "fields": fields})
 
