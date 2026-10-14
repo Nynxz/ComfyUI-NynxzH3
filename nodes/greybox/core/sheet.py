@@ -6,11 +6,9 @@ Also: the frames of a shot, ready to save as a video.
 from __future__ import annotations
 
 import math
-import shutil
-import subprocess
+from fractions import Fraction
 from pathlib import Path
 
-import numpy as np
 import torch
 from PIL import Image, ImageDraw, ImageFont
 
@@ -265,41 +263,21 @@ def contact_sheet(scene: Scene, per_shot: int = 4, width: int = 320, device="cpu
 
 
 def save_video(frames: torch.Tensor, path: Path, fps: float) -> Path:
-    """Frames `[N, H, W, 3]` as an H.264 mp4 (ffmpeg)."""
-    ffmpeg = shutil.which("ffmpeg")
-    if ffmpeg is None:
-        raise RuntimeError("Saving a video needs ffmpeg on the PATH.")
+    """Frames `[N, H, W, 3]` as an H.264 mp4, encoded with PyAV (ComfyUI's own video library)."""
+    import av
+
     _, h, w, _ = frames.shape
     path.parent.mkdir(parents=True, exist_ok=True)
-    proc = subprocess.Popen(
-        [
-            ffmpeg,
-            "-loglevel",
-            "error",
-            "-y",
-            "-f",
-            "rawvideo",
-            "-pix_fmt",
-            "rgb24",
-            "-s",
-            f"{w}x{h}",
-            "-r",
-            f"{fps}",
-            "-i",
-            "-",
-            "-c:v",
-            "libx264",
-            "-pix_fmt",
-            "yuv420p",
-            "-crf",
-            "18",
-            str(path),
-        ],
-        stdin=subprocess.PIPE,
-    )
-    assert proc.stdin is not None
-    proc.stdin.write((frames.clamp(0, 1) * 255).round().byte().numpy().astype(np.uint8).tobytes())
-    proc.stdin.close()
-    if proc.wait() != 0:
-        raise RuntimeError(f"ffmpeg couldn't write {path}.")
+    pixels = (frames.clamp(0, 1) * 255).round().byte().numpy()
+    with av.open(str(path), mode="w") as container:
+        stream = container.add_stream("libx264", rate=Fraction(fps).limit_denominator(1001))
+        stream.width = w
+        stream.height = h
+        stream.pix_fmt = "yuv420p"
+        stream.options = {"crf": "18"}
+        for frame in pixels:
+            for packet in stream.encode(av.VideoFrame.from_ndarray(frame, format="rgb24")):
+                container.mux(packet)
+        for packet in stream.encode():
+            container.mux(packet)
     return path

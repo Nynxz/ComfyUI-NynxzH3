@@ -15,7 +15,7 @@ props and cast are found in the show folder around it (sets/, props/, cast.json)
 format is docs/GREYBOX-SCRIPT.md.
 
 Outputs go beside the scene, in `renders/`, unless `--out` says otherwise. Needs torch, numpy and
-Pillow (ComfyUI's Python has them), and ffmpeg for videos. Runs on the CPU unless `--device cuda`.
+Pillow (ComfyUI's Python has them), and PyAV for videos. Runs on the CPU unless `--device cuda`.
 The format is docs/GREYBOX.md.
 """
 
