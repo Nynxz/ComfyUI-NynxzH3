@@ -86,6 +86,9 @@ const emit = defineEmits<{ close: [] }>();
 
 const text = ref("");
 const original = ref("");
+const rewriting = ref(false);
+const rewritten = ref(false);
+const rewriteError = ref("");
 watch(
   () => props.scene,
   (i) => {
@@ -98,9 +101,6 @@ watch(
 );
 const changed = computed(() => text.value.trim() !== original.value.trim());
 
-const rewriting = ref(false);
-const rewritten = ref(false);
-const rewriteError = ref("");
 async function rewrite() {
   const i = props.scene;
   if (i === null) return;
