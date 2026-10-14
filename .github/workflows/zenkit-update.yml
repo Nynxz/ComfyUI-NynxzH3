@@ -1,0 +1,50 @@
+name: zenkit-update
+
+# Daily (or on demand): move to the newest ZenKit on npm, re-sync the vendored Python, run the
+# whole check, and open a PR with the result. Nothing happens when ZenKit hasn't moved.
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    if: ${{ github.repository_owner == 'Nynxz' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ruff
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm update --latest @nynxz/zenkit-ui @nynxz/zenkit-nodekit
+      - run: pnpm exec zenkit-nodekit sync
+      - id: version
+        run: echo "zenkit=$(node -p "require('./node_modules/@nynxz/zenkit-nodekit/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      # The PR only opens on a pack that passes against the new ZenKit; a PR opened by this token
+      # doesn't start CI itself, so this is the check that counts.
+      - run: pnpm check
+
+      - uses: peter-evans/create-pull-request@v7
+        with:
+          branch: zenkit-update
+          delete-branch: true
+          commit-message: "build: ZenKit ${{ steps.version.outputs.zenkit }}"
+          title: "ZenKit ${{ steps.version.outputs.zenkit }}"
+          body: |
+            ZenKit ${{ steps.version.outputs.zenkit }} from npm, with the vendored Python re-synced.
+            `pnpm check` passed against it in the workflow that opened this PR.
