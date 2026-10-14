@@ -25,20 +25,20 @@ IM_END = "<|im_end|>"
 VISION_BLOCK = "<|vision_start|><|image_pad|><|vision_end|>"
 
 TASK_ALIASES = {
-    't2v': 't2av',
-    't2va': 't2av',
-    't2av': 't2av',
-    'i2v': 'i2av',
-    'i2va': 'i2av',
-    'i2av': 'i2av',
-    'l2v': 'l2av',
-    'l2va': 'l2av',
-    'l2av': 'l2av',
-    'flf2v': 'fl2av',
-    'flf2va': 'fl2av',
-    'flf2av': 'fl2av',
-    'fl2va': 'fl2av',
-    'fl2av': 'fl2av',
+    "t2v": "t2av",
+    "t2va": "t2av",
+    "t2av": "t2av",
+    "i2v": "i2av",
+    "i2va": "i2av",
+    "i2av": "i2av",
+    "l2v": "l2av",
+    "l2va": "l2av",
+    "l2av": "l2av",
+    "flf2v": "fl2av",
+    "flf2va": "fl2av",
+    "flf2av": "fl2av",
+    "fl2va": "fl2av",
+    "fl2av": "fl2av",
 }
 
 # Labels shown in the node. `normalize_task` maps them to the training names
@@ -157,12 +157,7 @@ def build_user_content(prompt: str, task: str, resolution: str, duration: int) -
     if task == "t2av":
         return request
     if task == "i2av":
-        return (
-            "Picture 1 — exact first frame at 0.00 seconds:\n"
-            + VISION_BLOCK
-            + "\n"
-            + request
-        )
+        return "Picture 1 — exact first frame at 0.00 seconds:\n" + VISION_BLOCK + "\n" + request
     if task == "l2av":
         return (
             "Picture 1 — exact final frame at the end of the target video:\n"
@@ -192,7 +187,5 @@ def build_chat_prompt(
     system = (system_prompt or "").strip() or SYSTEM_PROMPT
     user = build_user_content(prompt, task, resolution, duration)
     return (
-        f"{IM_START}system\n{system}{IM_END}\n"
-        f"{IM_START}user\n{user}{IM_END}\n"
-        f"{IM_START}assistant\n"
+        f"{IM_START}system\n{system}{IM_END}\n{IM_START}user\n{user}{IM_END}\n{IM_START}assistant\n"
     )

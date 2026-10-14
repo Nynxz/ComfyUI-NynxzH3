@@ -29,7 +29,11 @@ const FONT = 'ui-monospace, "SF Mono", Menlo, Consolas, monospace';
 
 /** The references worth a sheet: those with a picture or video first, as H3 numbers them, then
  *  audio and placeholders. */
-export function sheetRefs(project: Project, sceneId?: string, inScene?: (r: Ref) => boolean): Ref[] {
+export function sheetRefs(
+  project: Project,
+  sceneId?: string,
+  inScene?: (r: Ref) => boolean,
+): Ref[] {
   const refs = sceneId && inScene ? project.refs.filter(inScene) : project.refs;
   const rank = (r: Ref) => (!r.media ? 3 : r.kind === "image" ? 0 : r.kind === "video" ? 1 : 2);
   return [...refs].sort((a, b) => rank(a) - rank(b));
@@ -49,9 +53,14 @@ async function cells(refs: Ref[]): Promise<Cell[]> {
   return Promise.all(
     refs.map(async (ref) => {
       const visual = ref.media && mediaKind(ref.media) !== "audio";
-      const url = !visual ? "" : ref.kind === "video" ? thumbUrl(ref.media, 768) : stableUrl(ref.media);
+      const url = !visual
+        ? ""
+        : ref.kind === "video"
+          ? thumbUrl(ref.media, 768)
+          : stableUrl(ref.media);
       const image = url ? await load(url) : null;
-      const aspect = image && image.naturalHeight ? image.naturalWidth / image.naturalHeight : CARD_ASPECT;
+      const aspect =
+        image && image.naturalHeight ? image.naturalWidth / image.naturalHeight : CARD_ASPECT;
       return { ref, image, aspect };
     }),
   );
@@ -133,14 +142,29 @@ function wrap(ctx: CanvasRenderingContext2D, text: string, max: number): string[
   return lines;
 }
 
-function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+function roundRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+) {
   ctx.beginPath();
   ctx.roundRect(x, y, w, h, r);
   ctx.fill();
 }
 
 /** One cell: the picture (or a card), then the @name chip and the description under it. */
-function drawCell(ctx: CanvasRenderingContext2D, cell: Cell, x: number, y: number, w: number, h: number, opts: SheetOptions) {
+function drawCell(
+  ctx: CanvasRenderingContext2D,
+  cell: Cell,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  opts: SheetOptions,
+) {
   // One text size across the sheet (set by its width), smaller only where a cell is too narrow.
   const base = (opts.width / 1536) * opts.text;
   const scale = base * Math.min(1, w / (300 * base));
@@ -184,9 +208,16 @@ function drawCell(ctx: CanvasRenderingContext2D, cell: Cell, x: number, y: numbe
     const size = Math.round(12.5 * scale);
     ctx.font = `${size}px ${FONT}`;
     ctx.textBaseline = "top";
-    const maxW = Math.min(w - pad * 2, cell.image ? Math.max(0.62 * w, 220 * scale) : w, 380 * scale);
+    const maxW = Math.min(
+      w - pad * 2,
+      cell.image ? Math.max(0.62 * w, 220 * scale) : w,
+      380 * scale,
+    );
     const line = size * 1.32;
-    const lines = wrap(ctx, note, maxW - size).slice(0, Math.max(1, Math.floor((h - (cy - y) - pad) / line) - 1));
+    const lines = wrap(ctx, note, maxW - size).slice(
+      0,
+      Math.max(1, Math.floor((h - (cy - y) - pad) / line) - 1),
+    );
     const bw = Math.max(...lines.map((l) => ctx.measureText(l).width)) + size;
     ctx.fillStyle = "rgba(10,12,18,0.62)";
     roundRect(ctx, x + pad, cy, bw, lines.length * line + size * 0.7, size * 0.3);
@@ -210,8 +241,21 @@ export async function drawSheet(opts: SheetOptions): Promise<HTMLCanvasElement> 
   const offset = (rows: ReturnType<typeof pack>, by: number) =>
     rows.map((r) => ({ ...r, items: r.items.map((i) => i + by) }));
   const rows = [
-    ...pack(pictures.map((c) => c.aspect), inner, gap, opts.width / 3.1),
-    ...offset(pack(cards.map((c) => c.aspect), inner, gap, opts.width / 7.5), pictures.length),
+    ...pack(
+      pictures.map((c) => c.aspect),
+      inner,
+      gap,
+      opts.width / 3.1,
+    ),
+    ...offset(
+      pack(
+        cards.map((c) => c.aspect),
+        inner,
+        gap,
+        opts.width / 7.5,
+      ),
+      pictures.length,
+    ),
   ];
   const height = Math.round(rows.reduce((s, r) => s + r.height, 0) + gap * (rows.length + 1));
   const canvas = document.createElement("canvas");
@@ -225,7 +269,15 @@ export async function drawSheet(opts: SheetOptions): Promise<HTMLCanvasElement> 
     let x = gap + row.x0;
     for (const i of row.items) {
       const w = list[i]!.aspect * row.height;
-      drawCell(ctx, list[i]!, Math.round(x), Math.round(y), Math.round(w), Math.round(row.height), opts);
+      drawCell(
+        ctx,
+        list[i]!,
+        Math.round(x),
+        Math.round(y),
+        Math.round(w),
+        Math.round(row.height),
+        opts,
+      );
       x += w + gap;
     }
     y += row.height + gap;

@@ -1,24 +1,68 @@
 // H3 Studio's dialogue on the frontend: making voices and lines, guessing how long a line takes to
 // say, and reading a screenplay-style script into lines. The prompt itself is written by
 // nodes/h3studio/_dialogue.py, which follows MiniMax's H3 prompt-writing guide.
-import { thumbUrl, uid, type Line, type LineMode, type Project, type Scene, type Voice } from "./h3studio";
+import {
+  thumbUrl,
+  uid,
+  type Line,
+  type LineMode,
+  type Project,
+  type Scene,
+  type Voice,
+} from "./h3studio";
 
-export const LANGUAGES = ["English", "Chinese", "Japanese", "Korean", "Spanish", "French", "German", "Italian", "Portuguese", "Russian"];
+export const LANGUAGES = [
+  "English",
+  "Chinese",
+  "Japanese",
+  "Korean",
+  "Spanish",
+  "French",
+  "German",
+  "Italian",
+  "Portuguese",
+  "Russian",
+];
 
 export const MODES: { value: LineMode; label: string; icon: string; title: string }[] = [
   { value: "say", label: "Says", icon: "mdi mdi-account-voice", title: "Spoken on screen" },
-  { value: "voiceover", label: "Voice-over", icon: "mdi mdi-microphone-outline", title: "Heard off-screen; the speaker's lips stay closed" },
+  {
+    value: "voiceover",
+    label: "Voice-over",
+    icon: "mdi mdi-microphone-outline",
+    title: "Heard off-screen; the speaker's lips stay closed",
+  },
   { value: "sing", label: "Sings", icon: "mdi mdi-music-note", title: "Sung" },
 ];
 
 /** One-click ways of saying a line. */
-export const DELIVERIES = ["softly", "in a whisper", "loudly", "with a laugh", "through tears", "hesitantly", "angrily", "sarcastically", "warmly", "out of breath"];
+export const DELIVERIES = [
+  "softly",
+  "in a whisper",
+  "loudly",
+  "with a laugh",
+  "through tears",
+  "hesitantly",
+  "angrily",
+  "sarcastically",
+  "warmly",
+  "out of breath",
+];
 
 export function newVoice(name: string, ref = ""): Voice {
   return { id: uid("v"), name, ref, timbre: "", voice: "", language: "English" };
 }
 export function newLine(speakers: string[] = []): Line {
-  return { id: uid("d"), speakers, mode: "say", delivery: "", words: "", next: "", cutoff: false, language: "" };
+  return {
+    id: uid("d"),
+    speakers,
+    mode: "say",
+    delivery: "",
+    words: "",
+    next: "",
+    cutoff: false,
+    language: "",
+  };
 }
 
 const CJK = /[぀-ヿ㐀-鿿가-힯]/g;
@@ -60,18 +104,28 @@ export const lineSeconds = (line: Line) => line.seconds || speechSeconds(line.wo
 
 /** Who a line's speakers are, by name. */
 export function speakerNames(project: Project, line: Line): string {
-  return line.speakers.map((id) => project.cast?.find((v) => v.id === id)?.name ?? "?").join(" & ") || "nobody";
+  return (
+    line.speakers.map((id) => project.cast?.find((v) => v.id === id)?.name ?? "?").join(" & ") ||
+    "nobody"
+  );
 }
 
 /** The voice a name means: a cast member by name, or a reference by its @name (made into a voice). */
 function voiceFor(project: Project, name: string, made: Voice[]): Voice {
   const key = name.trim().replace(/^@/, "").toLowerCase();
-  const known = [...(project.cast ?? []), ...made].find((v) => v.name.toLowerCase() === key || project.refs.find((r) => r.id === v.ref)?.name.toLowerCase() === key);
+  const known = [...(project.cast ?? []), ...made].find(
+    (v) =>
+      v.name.toLowerCase() === key ||
+      project.refs.find((r) => r.id === v.ref)?.name.toLowerCase() === key,
+  );
   if (known) return known;
   const ref = project.refs.find((r) => r.name.toLowerCase() === key && r.kind !== "audio");
   const plain = name.trim().replace(/^@/, "");
   // Scripts shout their names (ANNA); a voice is called Anna.
-  const title = plain === plain.toUpperCase() ? plain.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase()) : plain;
+  const title =
+    plain === plain.toUpperCase()
+      ? plain.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())
+      : plain;
   const voice = newVoice(ref ? ref.name : title, ref?.id ?? "");
   made.push(voice);
   return voice;
@@ -103,7 +157,10 @@ export function parseScript(project: Project, text: string): { lines: Line[]; vo
       continue;
     }
     const [, who, paren = "", words] = m;
-    const speakers = who!.split(/\s*(?:&|,|\band\b)\s*/i).filter(Boolean).map((n) => voiceFor(project, n, voices).id);
+    const speakers = who!
+      .split(/\s*(?:&|,|\band\b)\s*/i)
+      .filter(Boolean)
+      .map((n) => voiceFor(project, n, voices).id);
     const line = newLine([...new Set(speakers)]);
     const note = paren.trim();
     if (/^(v\.?\s*o\.?|o\.?\s*s\.?|voice-?over|off-?screen)$/i.test(note)) line.mode = "voiceover";
@@ -155,7 +212,14 @@ export function lineTimes(scene: Scene): LineTime[] {
       if (!line.words.trim()) continue;
       const start = Math.max(cursor, line.at ?? cursor);
       const finish = start + lineSeconds(line);
-      out.push({ line, shot: i, start, end: finish, gap: start - cursor, over: finish > end + 0.05 });
+      out.push({
+        line,
+        shot: i,
+        start,
+        end: finish,
+        gap: start - cursor,
+        over: finish > end + 0.05,
+      });
       cursor = finish;
     }
   });
@@ -171,7 +235,10 @@ export function moveLine(scene: Scene, id: string, local: number) {
   if (!from || !line) return;
   const t = Math.min(Math.max(0, local), scene.seconds - 0.1);
   // Where the others are said with this line out of the way.
-  const others = lineTimes({ ...scene, shots: scene.shots.map((sh) => ({ ...sh, lines: (sh.lines ?? []).filter((l) => l !== line) })) });
+  const others = lineTimes({
+    ...scene,
+    shots: scene.shots.map((sh) => ({ ...sh, lines: (sh.lines ?? []).filter((l) => l !== line) })),
+  });
   const hit = others.find((x) => t >= x.start && t < x.end);
   let to = 0;
   scene.shots.forEach((sh, i) => {

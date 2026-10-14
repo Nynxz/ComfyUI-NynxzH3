@@ -1,7 +1,14 @@
 <template>
   <div class="h3host">
     <StudioSummary v-if="!panel && poppedOut" :project="project" @focus="popOut(true)" />
-    <StudioEditor v-else :project="project" :view="view" :node-id="nodeId" :in-panel="panel" @pop-out="popOut(true)" />
+    <StudioEditor
+      v-else
+      :project="project"
+      :view="view"
+      :node-id="nodeId"
+      :in-panel="panel"
+      @pop-out="popOut(true)"
+    />
   </div>
 </template>
 

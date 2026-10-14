@@ -91,7 +91,8 @@ async function decodeFrames(blob: Blob): Promise<VideoFrame[] | null> {
     await decoder.completed;
     const track = decoder.tracks.selectedTrack;
     if (!track || track.frameCount <= 1) return null;
-    for (let i = 0; i < track.frameCount; i++) frames.push((await decoder.decode({ frameIndex: i })).image);
+    for (let i = 0; i < track.frameCount; i++)
+      frames.push((await decoder.decode({ frameIndex: i })).image);
     return frames;
   } catch {
     // A decode that fails part-way: the frames it did make are let go.
@@ -166,25 +167,42 @@ function listen() {
       // Possibly animated: decode it, so the monitor can show any moment of it, not just play it.
       void decodeFrames(blob).then((frames) => {
         if (current !== at) return frames?.forEach((f) => f.close());
-        put(frames ? { url: "", video: false, frames, step, total: d.total ?? null } : { url: URL.createObjectURL(blob), video: false, step, total: d.total ?? null });
+        put(
+          frames
+            ? { url: "", video: false, frames, step, total: d.total ?? null }
+            : { url: URL.createObjectURL(blob), video: false, step, total: d.total ?? null },
+        );
       });
       return;
     }
-    put({ url: URL.createObjectURL(blob), video: mime.startsWith("video/"), audio: !!d.audio, step, total: d.total ?? null });
+    put({
+      url: URL.createObjectURL(blob),
+      video: mime.startsWith("video/"),
+      audio: !!d.audio,
+      step,
+      total: d.total ?? null,
+    });
   });
 
   target.addEventListener("progress", (e) => {
     const d = (e as Detail<{ value?: number; max?: number }>).detail;
-    if (typeof d?.value === "number" && typeof d.max === "number") progress = { value: d.value, max: d.max };
+    if (typeof d?.value === "number" && typeof d.max === "number")
+      progress = { value: d.value, max: d.max };
   });
 
   target.addEventListener("b_preview_with_metadata", (e) => {
     const d = (e as Detail<{ blob?: Blob }>).detail;
     if (!current || current.fromOverride || !d?.blob) return;
-    put({ url: URL.createObjectURL(d.blob), video: false, step: progress?.value ?? 0, total: progress?.max ?? null });
+    put({
+      url: URL.createObjectURL(d.blob),
+      video: false,
+      step: progress?.value ?? 0,
+      total: progress?.max ?? null,
+    });
   });
 
-  for (const ended of ["execution_success", "execution_error", "execution_interrupted"]) target.addEventListener(ended, finish);
+  for (const ended of ["execution_success", "execution_error", "execution_interrupted"])
+    target.addEventListener(ended, finish);
 }
 
 /** The live state of one studio node (by its id on the canvas). */

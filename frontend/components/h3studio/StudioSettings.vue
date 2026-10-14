@@ -76,8 +76,8 @@
         <div class="what">
           <b>Writer model</b>
           <p>
-            A text encoder that can generate, used by Rewrite on each shot. Wiring H3 Studio
-            Setup's <code>rewrite_clip</code> overrides it.
+            A text encoder that can generate, used by Rewrite on each shot. Wiring H3 Studio Setup's
+            <code>rewrite_clip</code> overrides it.
           </p>
         </div>
         <ZenSelect

@@ -33,7 +33,9 @@ from ._prompt import expected_image_count, normalize_task
 FIELDS = ("integrated_multimodal_description", "overall_soundscape", "non_diegetic_music")
 
 _FIELD_RE = re.compile(r"^\s*(" + "|".join(FIELDS) + r")\s*:\s*", re.MULTILINE)
-_ALIGNMENT_RE = re.compile(r"^\s*(For the target video,|How the reference pictures align)", re.MULTILINE)
+_ALIGNMENT_RE = re.compile(
+    r"^\s*(For the target video,|How the reference pictures align)", re.MULTILINE
+)
 
 
 def single_frame(image, label: str):
@@ -41,7 +43,9 @@ def single_frame(image, label: str):
     if image is None:
         return None
     if image.shape[0] > 1:
-        logging.warning("H3 Rewrite Prompt: %s got %d images, using the first.", label, image.shape[0])
+        logging.warning(
+            "H3 Rewrite Prompt: %s got %d images, using the first.", label, image.shape[0]
+        )
     return image[:1]
 
 

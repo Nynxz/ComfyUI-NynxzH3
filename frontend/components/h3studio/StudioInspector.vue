@@ -93,7 +93,10 @@
                 >
                   <i class="mdi mdi-comment-quote-outline" />{{ sh.lines.length }}
                 </span>
-                <ZenPopover v-if="sceneRefs.length && openShot?.id === sh.id" placement="bottom-end">
+                <ZenPopover
+                  v-if="sceneRefs.length && openShot?.id === sh.id"
+                  placement="bottom-end"
+                >
                   <template #trigger="{ toggle }">
                     <button
                       type="button"
@@ -119,7 +122,9 @@
                       >
                         <span class="refthumb"><MediaThumb :media="r.media" :badge="false" /></span>
                         <b>@{{ r.name }}</b>
-                        <small>{{ tagOf(r.id) || (r.kind === "image" ? "picture" : r.kind) }}</small>
+                        <small>{{
+                          tagOf(r.id) || (r.kind === "image" ? "picture" : r.kind)
+                        }}</small>
                       </button>
                     </div>
                   </template>
@@ -214,7 +219,11 @@
               type="button"
               class="drawertoggle"
               :aria-expanded="drawerOpen"
-              :title="drawerOpen ? 'Fold the settings away' : 'This scene\'s settings, and the whole film\'s'"
+              :title="
+                drawerOpen
+                  ? 'Fold the settings away'
+                  : 'This scene\'s settings, and the whole film\'s'
+              "
               @click="drawerOpen = !drawerOpen"
             >
               <i class="mdi" :class="drawerOpen ? 'mdi-chevron-down' : 'mdi-chevron-up'" />
@@ -271,10 +280,7 @@
             />
 
             <!-- film settings: what every scene says unless it says its own -->
-            <section
-              v-if="level === 'film'"
-              class="settings pane setpane"
-            >
+            <section v-if="level === 'film'" class="settings pane setpane">
               <div class="accbody">
                 <label class="col">
                   <span class="lbl">style</span>
@@ -457,9 +463,13 @@
                     @update:model-value="(v: string) => setContinuation(v)"
                   />
                   <ZenSelect
-                    v-if="scene.continuation.mode === 'guide' || scene.continuation.mode === 'sound'"
+                    v-if="
+                      scene.continuation.mode === 'guide' || scene.continuation.mode === 'sound'
+                    "
                     :model-value="String(scene.continuation.frames)"
-                    :options="CONTEXT_FRAMES.map((f) => ({ value: String(f), label: `${f} frames` }))"
+                    :options="
+                      CONTEXT_FRAMES.map((f) => ({ value: String(f), label: `${f} frames` }))
+                    "
                     class="ctx"
                     @update:model-value="(v: string) => (scene.continuation.frames = Number(v))"
                   />
@@ -514,7 +524,8 @@
                     ]"
                     @update:model-value="
                       (v: string) =>
-                        (scene!.continuation.soundPicture = v as 'guides' | 'audio' | 'black' | 'real')
+                        (scene!.continuation.soundPicture = v as
+                          'guides' | 'audio' | 'black' | 'real')
                     "
                   />
                   <span class="soft">experimental</span>
