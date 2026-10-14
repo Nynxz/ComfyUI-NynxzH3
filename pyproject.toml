@@ -19,6 +19,7 @@ BugTracker = "https://github.com/Nynxz/ComfyUI-NynxzH3Studio/issues"
 
 [tool.comfy]
 PublisherId = "nynxz"
+Banner = "https://raw.githubusercontent.com/Nynxz/ComfyUI-NynxzH3/main/docs/images/banner.webp"
 DisplayName = "Nynxz H3 Studio"
 Icon = "https://avatars.githubusercontent.com/u/60878743?v=4"
 Tags = ["video", "minimax", "h3", "studio", "storyboard", "3d", "conditioning", "reference"]
