@@ -295,6 +295,23 @@ def _blank(plan, index: int, scene_id: str, setup: dict) -> dict:
     }
 
 
+def _carried_now(proj: dict, i: int, plan) -> str | None:
+    """What scene `i` continues from, as `render_scene` fingerprints it, from the previous scene's
+    latest clip: its key when the scene carries on from it, and that clip's own key too when its
+    sound is brought in — as snippets, or as guides (which the music track replaces)."""
+    if i == 0:
+        return None
+    previous = _reuse.latest(proj["scenes"][i - 1]["id"])
+    cont = plan.continuation
+    carried = None
+    if cont.get("mode") not in (None, "cut"):
+        carried = previous.get("key") if previous else None
+    guides = cont.get("sound_picture") == "guides"
+    if cont.get("sound_refs") and not (guides and plan.track):
+        carried = f"{carried}|{_clip_key(previous) if previous else None}"
+    return carried
+
+
 def scene_status(project) -> list[dict]:
     """Each scene's latest clip and whether it's up to date: its scene half (see _reuse) as the
     scene stands now — continuing from the previous scene's latest clip — against the one it was
@@ -306,14 +323,7 @@ def scene_status(project) -> list[dict]:
         state = "none"
         if record:
             plan = compile_scene(proj, i, has_audio)
-            carried = None
-            if i > 0 and plan.continuation.get("mode") not in (None, "cut"):
-                previous = _reuse.latest(proj["scenes"][i - 1]["id"])
-                carried = previous.get("key") if previous else None
-            if plan.continuation.get("sound_refs"):
-                previous = _reuse.latest(proj["scenes"][i - 1]["id"])
-                carried = f"{carried}|{_clip_key(previous) if previous else None}"
-            now = _reuse.scene_key(plan.as_dict(), i, carried)
+            now = _reuse.scene_key(plan.as_dict(), i, _carried_now(proj, i, plan))
             state = "current" if now == record.get("scene_key") else "stale"
         out.append(
             {
@@ -338,10 +348,7 @@ def takes_fit(project, takes: dict[str, list[dict]]) -> dict[str, list[dict]]:
         rows = takes.get(scene["id"])
         if not rows:
             continue
-        carried = None
-        if i > 0 and (scene.get("continuation") or {}).get("mode") not in (None, "cut"):
-            previous = _reuse.latest(proj["scenes"][i - 1]["id"])
-            carried = previous.get("key") if previous else None
+        carried = _carried_now(proj, i, compile_scene(proj, i, has_audio))
         keys: dict[int, str] = {}
         marked = []
         for t in rows:
