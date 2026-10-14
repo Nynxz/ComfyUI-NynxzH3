@@ -56,6 +56,15 @@ export default defineConfig(
   },
 
   {
+    // pnpm's hook file (.pnpmfile.cjs) is CommonJS run by pnpm in Node.
+    files: ["*.cjs"],
+    languageOptions: {
+      sourceType: "commonjs",
+      globals: { ...globals.node },
+    },
+  },
+
+  {
     // Declaration shims: ambient `declare module` blocks legitimately need
     // otherwise-discouraged shapes.
     files: ["**/*.d.ts"],

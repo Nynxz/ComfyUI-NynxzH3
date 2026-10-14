@@ -3,7 +3,3 @@
 minimumReleaseAgeExclude:
   - '@nynxz/zenkit-ui'
   - '@nynxz/zenkit-nodekit'
-# The live ZenKit checkout. Absolute, because a relative ../ZenKit from here finds an older copy.
-overrides:
-  '@nynxz/zenkit-nodekit': link:/home/user/git/nynxz/comfyui_nodepacks/ZenKit/packages/nodekit
-  '@nynxz/zenkit-ui': link:/home/user/git/nynxz/comfyui_nodepacks/ZenKit/packages/ui
