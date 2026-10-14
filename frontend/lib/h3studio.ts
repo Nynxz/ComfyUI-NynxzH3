@@ -547,7 +547,7 @@ export function pictureAt(
 }
 /** Whether a scene uses a reference: a shot @mentions it, or a voice it gives a face or a timbre to
  *  speaks there (as nodes/h3studio/_project.py's `mentions_ref`). */
-const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\-]/g, "\\$&");
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
 /** Whether a scene uses a reference — the same rules as the server's `mentions_ref`:
  *  `@name` brings what can be seen by that name (else its audio), `@name:look` only what can be
  *  seen, `@name:voice` only the audio; a voice speaking brings its voice sample, and its face only
