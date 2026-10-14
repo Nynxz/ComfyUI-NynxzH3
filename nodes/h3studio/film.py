@@ -27,65 +27,21 @@ _lock = threading.Lock()
 
 def assemble(proj: dict, music: dict | None = None, volume: float = 0.8, fade: float = 2.0):
     """Every scene's current take (black for its length where there is none), joined with the
-    project's film settings. Returns the video and the scene numbers that had no take."""
+    project's film settings into a file in ComfyUI's temp folder — streamed as `save` streams it,
+    so the film never sits in memory whole — with `music`, when given, under all of it at
+    `volume`, fading out over its last `fade` seconds. Returns the video, read from that file, and
+    the scene numbers that had no take."""
+    import uuid
+
+    import folder_paths
     from comfy_api.latest import InputImpl
 
-    from .studio import _blank_video
-
-    film = proj["film"]
-    width, height = proj["canvas"]["width"], proj["canvas"]["height"]
-    videos, missing = [], []
-    for i, scene in enumerate(proj["scenes"]):
-        record = _reuse.latest(scene["id"])
-        if record and os.path.exists(path_of(record["ref"])):
-            video = InputImpl.VideoFromFile(path_of(record["ref"]))
-            video.h3_scene = i
-            video.h3_latent, video.h3_head = _carry.load_sidecar(path_of(record["ref"]))
-            video.h3_tail = _carry.load_tail(path_of(record["ref"]))
-        else:
-            missing.append(i + 1)
-            video = _blank_video(
-                {
-                    "scene": i,
-                    "frames": frames_for(scene["seconds"]),
-                    "width": width,
-                    "height": height,
-                }
-            )
-        videos.append(video)
-    if missing:
-        LOG.warning(
-            "H3 Studio film: scene%s %s never rendered, black",
-            "s" if len(missing) > 1 else "",
-            ", ".join(map(str, missing)),
-        )
-    joined = _carry.join(videos, film["crossfade"], None if proj["track"] else music, volume, fade)
-    if proj["track"]:
-        joined = _with_track(proj, joined, music, volume, fade)
-    return joined, missing
-
-
-def _with_track(proj: dict, joined, music: dict | None, volume: float, fade: float):
-    """The joined film with the project's music track in its sound (see `_track.film_sound`), and
-    then any score given to the Film node under it all."""
-    from fractions import Fraction
-
-    from comfy_api.latest import InputImpl, Types
-
-    c = joined.get_components()
-    audio = c.audio
-    rate = int(audio["sample_rate"]) if audio else int(_track.song(proj["track"]["media"])["sample_rate"])
-    channels = audio["waveform"].shape[1] if audio else 2
-    counts = [frames_for(s["seconds"]) for s in proj["scenes"]]
-    sound = _track.film_sound(
-        proj, audio["waveform"][0].float() if audio else None, counts, rate, channels
-    )
-    out = {"waveform": sound[None], "sample_rate": rate} if sound is not None else None
-    if music is not None:
-        out = _carry._under(out, music, c.images.shape[0] / FPS, volume, fade)
-    return InputImpl.VideoFromComponents(
-        Types.VideoComponents(images=c.images, frame_rate=Fraction(FPS), audio=out)
-    )
+    folder = os.path.join(folder_paths.get_temp_directory(), "h3studio")
+    os.makedirs(folder, exist_ok=True)
+    path = os.path.join(folder, f"film_{uuid.uuid4().hex[:12]}.mp4")
+    score = (music, volume, fade) if music is not None else None
+    _, missing = _stream(proj, path, None, score)
+    return InputImpl.VideoFromFile(path), missing
 
 
 def save(proj: dict, metadata: dict | None = None) -> dict:
@@ -171,8 +127,11 @@ def _frames(scene: dict, width: int, height: int):
             yield frame.to_ndarray(format="rgb24")
 
 
-def _stream(proj: dict, path: str, metadata: dict | None) -> tuple[float, list[int]]:
-    """Stream the film to `path`; its length in seconds, and the scenes that had no take."""
+def _stream(
+    proj: dict, path: str, metadata: dict | None, score: tuple | None = None
+) -> tuple[float, list[int]]:
+    """Stream the film to `path`; its length in seconds, and the scenes that had no take. `score`
+    (music, volume, fade) is laid under the whole film's sound, as the H3 Studio Film node asks."""
     from fractions import Fraction
 
     import av
@@ -191,6 +150,8 @@ def _stream(proj: dict, path: str, metadata: dict | None) -> tuple[float, list[i
     like = next((s["audio"] for s in scenes if s["audio"] is not None), None)
     if like is None and proj["track"] and proj["track"]["sound"] != "scenes":
         like = _track.song(proj["track"]["media"])
+    if like is None and score is not None:
+        like = score[0]
     rate = int(like["sample_rate"]) if like else 48000
     channels = like["waveform"].shape[1] if like else 2
     # Where each scene falls, for the tag: tags are written with the header, before any picture,
@@ -254,6 +215,16 @@ def _stream(proj: dict, path: str, metadata: dict | None) -> tuple[float, list[i
 
         sound = _sound(scenes, counts, fades, rate, channels, comfy.audio, torch)
         sound = _track.film_sound(proj, sound, counts, rate, channels)
+        if score is not None:
+            music, volume, fade = score
+            under = _carry._under(
+                {"waveform": sound[None], "sample_rate": rate} if sound is not None else None,
+                music,
+                sum(counts) / FPS,
+                volume,
+                fade,
+            )
+            sound = under["waveform"][0][:channels]
         if audio is not None and sound is not None:
             frame = av.AudioFrame.from_ndarray(
                 sound.contiguous().numpy(), format="fltp", layout=layout
