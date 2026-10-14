@@ -57,6 +57,70 @@ def load_video(ref: str, fps: int = 24) -> tuple[torch.Tensor, dict | None]:
     return images[..., :3], components.audio
 
 
+def load_video_tail(ref: str, frames: int, fps: int = 24) -> tuple[torch.Tensor, dict | None]:
+    """The last `frames` pictures of a video and its whole soundtrack — what continuing from a
+    clip needs, without holding all of it (a 15 s clip is ~4.5 GB as float frames). Decoded as
+    `load_video` decodes them, so the pixels and sound are the same; a clip not at `fps` is
+    loaded whole and resampled instead."""
+    return video_tail(path_of(ref), frames, fps, ref)
+
+
+def video_tail(
+    path: str, frames: int, fps: int = 24, ref: str | None = None
+) -> tuple[torch.Tensor, dict | None]:
+    """`load_video_tail` for a file on disk (`ref`, when given, is used to load it whole)."""
+    import av
+    from comfy_api.latest import InputImpl
+
+    with av.open(path) as container:
+        stream = container.streams.video[0]
+        rate = float(stream.average_rate or 0)
+    if abs(rate - fps) > 0.01:
+        if ref is None:
+            components = InputImpl.VideoFromFile(path).get_components()
+            return components.images[-frames:, ..., :3], components.audio
+        images, audio = load_video(ref, fps)
+        return images[-frames:], audio
+    # A little more than asked for, so a seek that lands a frame late still covers it.
+    video = InputImpl.VideoFromFile(path, start_time=-(frames + 2) / fps)
+    images = video.get_components().images[-frames:]
+    return images[..., :3], _soundtrack(path)
+
+
+def _soundtrack(path: str) -> dict | None:
+    """A file's whole soundtrack as `VideoFromFile` decodes it (float planar, every frame from the
+    start), or None when it has none."""
+    import itertools
+
+    import av
+    import numpy as np
+    from comfy_api.latest._input_impl.video_types import last_decodable_audio_stream
+
+    with av.open(path) as container:
+        stream = last_decodable_audio_stream(container)
+        if stream is None:
+            return None
+        resampler = av.audio.resampler.AudioResampler(format="fltp")
+        chunks = []
+        first = True
+        for packet in container.demux(stream):
+            for frame in itertools.chain.from_iterable(map(resampler.resample, packet.decode())):
+                if first:
+                    skip = max(0, int(-frame.pts * stream.time_base * stream.sample_rate))
+                    if skip >= frame.samples:
+                        continue
+                    chunks.append(frame.to_ndarray()[..., skip:])
+                    first = False
+                else:
+                    chunks.append(frame.to_ndarray())
+        if not chunks:
+            return None
+        return {
+            "waveform": torch.from_numpy(np.concatenate(chunks, axis=1)).unsqueeze(0),
+            "sample_rate": int(stream.sample_rate) if stream.sample_rate else 1,
+        }
+
+
 def load_audio(ref: str) -> dict:
     """An AUDIO dict ({waveform [1, C, L], sample_rate})."""
     from comfy_extras.nodes_audio import load
