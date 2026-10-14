@@ -188,13 +188,15 @@ function startDrag(e: PointerEvent, id: string) {
     next.splice(to, 0, moved!);
     doc.value.cast = next;
   };
+  // Released, cancelled (a touch the browser takes over) or the capture lost: the drag ends.
+  const ends = ["pointerup", "pointercancel", "lostpointercapture"] as const;
   const up = () => {
     dragging.value = null;
     list.removeEventListener("pointermove", move);
-    list.removeEventListener("pointerup", up);
+    for (const type of ends) list.removeEventListener(type, up);
   };
   list.addEventListener("pointermove", move);
-  list.addEventListener("pointerup", up);
+  for (const type of ends) list.addEventListener(type, up);
 }
 
 function add(name = `Voice ${cast.value.length + 1}`, ref = "") {

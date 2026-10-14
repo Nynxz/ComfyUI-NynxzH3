@@ -72,9 +72,18 @@ export function setSceneOnTrack(project: Project, i: number, on: boolean) {
 export function setSeconds(project: Project, i: number, v: number) {
   const s = project.scenes[i]!;
   s.seconds = snapSeconds(Math.min(Math.max(v, 1), 30));
-  for (const shot of s.shots.slice(1))
-    shot.at = Math.min(shot.at, Math.max(0.25, s.seconds - 0.25));
+  // Shots past the new end move back to fit, each still a quarter second after the one before:
+  // pulled in from the end, so none land on top of each other.
+  const gap = 0.25;
+  let limit = s.seconds - gap;
+  for (let j = s.shots.length - 1; j >= 1; j--) {
+    const shot = s.shots[j]!;
+    shot.at = Math.max(gap * j, Math.min(shot.at, limit));
+    limit = shot.at - gap;
+  }
   for (const k of s.keyframes) k.at = Math.min(k.at, s.seconds);
+  for (const line of s.shots.flatMap((sh) => sh.lines ?? []))
+    if (line.at !== undefined) line.at = Math.min(line.at, Math.max(0, s.seconds - 0.1));
 }
 /** The first scene always cuts in: there is nothing before it to continue from. */
 function firstCuts(project: Project) {

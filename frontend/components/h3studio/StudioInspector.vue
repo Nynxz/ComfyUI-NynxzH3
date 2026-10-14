@@ -317,7 +317,7 @@
                   :class="{ dropping: songDropping }"
                   title="A song under the whole film: each scene renders to its stretch of it (pinned through the scene as sound), so lips and beats land on the music. Drop a song here, or pick one."
                   @dragover="onSongDragOver"
-                  @dragleave="songDropping = false"
+                  @dragleave="(e: DragEvent) => leftZone(e) && (songDropping = false)"
                   @drop="onSongDrop"
                 >
                   <span class="lbl">music track</span>
@@ -533,7 +533,7 @@
                         : `Set the ${edge} frame — click, or drop a picture here`
                     "
                     @dragover="onEdgeDragOver($event, edge)"
-                    @dragleave="edgeDropping = null"
+                    @dragleave="(e: DragEvent) => leftZone(e) && (edgeDropping = null)"
                     @drop="onEdgeDrop($event, edge)"
                     @click="
                       edgeKeyframe(edge)
@@ -894,9 +894,12 @@ function onKeyframeDragOver(e: DragEvent) {
   e.stopPropagation();
   keyframeDropping.value = true;
 }
+/** Whether a dragleave really left its drop zone, not just crossed onto a child inside it. */
+function leftZone(e: DragEvent) {
+  return !(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node | null);
+}
 function onKeyframeDragLeave(e: DragEvent) {
-  const to = e.relatedTarget as Node | null;
-  if (!(e.currentTarget as HTMLElement).contains(to)) keyframeDropping.value = false;
+  if (leftZone(e)) keyframeDropping.value = false;
 }
 const edgeDropping = ref<"first" | "last" | null>(null);
 function onEdgeDragOver(e: DragEvent, edge: "first" | "last") {
@@ -1035,13 +1038,15 @@ function startShotDrag(e: PointerEvent, id: string) {
           : at;
     if (to !== at) edit.reorderShot(props.project, props.sel.sceneIndex, at, to);
   };
+  // Released, cancelled (a touch the browser takes over) or the capture lost: the drag ends.
+  const ends = ["pointerup", "pointercancel", "lostpointercapture"] as const;
   const up = () => {
     draggingShot.value = null;
     list.removeEventListener("pointermove", move);
-    list.removeEventListener("pointerup", up);
+    for (const type of ends) list.removeEventListener(type, up);
   };
   list.addEventListener("pointermove", move);
-  list.addEventListener("pointerup", up);
+  for (const type of ends) list.addEventListener(type, up);
 }
 
 // --- LoRA lane ----------------------------------------------------------------------------------
