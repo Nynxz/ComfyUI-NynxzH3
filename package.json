@@ -10,7 +10,7 @@
   "devDependencies": {
     "@comfyorg/comfyui-frontend-types": "1.22.1",
     "@eslint/js": "^10.0.1",
-    "@nynxz/zenkit-nodekit": "^0.3.1",
+    "@nynxz/zenkit-nodekit": "^0.3.2",
     "@types/node": "^26.4.1",
     "@types/three": "0.184.1",
     "@vitejs/plugin-vue": "6.0.8",
@@ -36,7 +36,7 @@
     "check": "pnpm lint && pnpm format:check && pnpm typecheck && ruff check . && ruff format --check . && zenkit-nodekit sync --check && zenkit-nodekit check-widgets && pnpm build"
   },
   "dependencies": {
-    "@nynxz/zenkit-ui": "^0.3.1",
+    "@nynxz/zenkit-ui": "^0.3.2",
     "three": "0.184.0"
   }
 }
