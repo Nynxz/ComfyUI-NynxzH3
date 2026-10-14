@@ -82,7 +82,8 @@ export const loraSource: LoraSource = {
   list: listLoras,
   favorites: getFavorites,
   setFavorite,
-  previewUrl: (name) => route("lora/preview") + "?name=" + encodeURIComponent(name),
+  previewUrl: (name, size) =>
+    route("lora/preview") + "?name=" + encodeURIComponent(name) + (size ? `&size=${size}` : ""),
   mediaUrl: (name) => route("lora/preview") + "?raw=1&name=" + encodeURIComponent(name),
   info: getInfo,
 };
