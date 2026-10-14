@@ -2,191 +2,215 @@
   <ZenModal
     :open="open"
     title="H3 Studio settings"
-    width="520px"
-    height="auto"
+    width="720px"
+    height="560px"
     @update:open="(v: boolean) => emit('update:open', v)"
   >
-    <div class="sets">
-      <h4>Rendering <span>saved with this workflow</span></h4>
-      <div class="set">
-        <div class="what">
-          <b>LoRA step shapes</b>
-          <p
-            :title="'Changing strength over the steps uses ComfyUI hooks, which sample on a second, non-dynamic copy of the model. With dynamic VRAM on (the default) that copy runs a 32 GB card out of memory; start ComfyUI with --disable-dynamic-vram to avoid it.'"
-          >
-            How LoRA strength that changes over the steps is applied. <b>Auto</b> does it when
-            ComfyUI's dynamic VRAM is off, and otherwise uses each shape's average; <b>Fast</b> and
-            <b>Low VRAM</b> always do it, keeping the patched weights on or off the GPU.
-          </p>
-        </div>
-        <ZenToggleGroup
-          :model-value="settings.hooks ?? 'auto'"
-          :options="[
-            { value: 'auto', label: 'Auto' },
-            { value: 'fast', label: 'Fast' },
-            { value: 'low_vram', label: 'Low VRAM' },
-          ]"
-          @update:model-value="(v: string) => set({ hooks: v as 'auto' | 'fast' | 'low_vram' })"
-        />
-      </div>
-      <div class="set">
-        <div class="what">
-          <b>Step shape detail</b>
-          <p>
-            The most points a shape is split into. Each change re-patches the LoRA, so fewer is
-            faster; only real changes count.
-          </p>
-        </div>
-        <ZenNumber
-          :model-value="settings.step_detail ?? 8"
-          :min="2"
-          :max="24"
-          :step="1"
-          :precision="0"
-          @update:model-value="(v: number) => set({ step_detail: v })"
-        />
-      </div>
-      <div class="set">
-        <div class="what">
-          <b>Verbose logging</b>
-          <p>
-            A short summary of each scene's render in the ComfyUI console: the references H3 sees
-            and in what role, keyframes, what carries over from the scene before, LoRAs and the
-            ControlNet.
-          </p>
-        </div>
-        <ZenSwitch
-          :model-value="settings.verbose ?? false"
-          @update:model-value="(v: boolean) => set({ verbose: v })"
-        />
-      </div>
-      <div class="set">
-        <div class="what">
-          <b>Log the prompt</b>
-          <p>Also write each scene's full compiled prompt to the console.</p>
-        </div>
-        <ZenSwitch
-          :model-value="settings.log_prompt ?? false"
-          @update:model-value="(v: boolean) => set({ log_prompt: v })"
-        />
-      </div>
-
-      <h4>Live preview <span>saved with this workflow</span></h4>
-      <div class="set">
-        <div class="what">
-          <b>Preview while sampling</b>
-          <p>
-            Every step of the scene plays on the monitor as it samples. <b>Auto</b> decodes with the
-            preview VAE below, <b>Fast</b> with the cheaper colour preview. A preview override node
-            after H3 Studio Outputs takes over instead.
-          </p>
-        </div>
-        <ZenToggleGroup
-          :model-value="settings.preview ?? 'auto'"
-          :options="[
-            { value: 'auto', label: 'Auto' },
-            { value: 'fast', label: 'Fast' },
-            { value: 'off', label: 'Off' },
-          ]"
-          @update:model-value="(v: string) => set({ preview: v as 'auto' | 'fast' | 'off' })"
-        />
-      </div>
-      <div class="set" :class="{ idle: (settings.preview ?? 'auto') !== 'auto' }">
-        <div class="what">
-          <b>Preview VAE</b>
-          <p>
-            A tiny VAE from <code>models/vae_approx</code>. <b>Matching H3</b> uses taeh3 when it's
-            there, and the colour preview when it isn't.
-          </p>
-        </div>
-        <ZenSelect
-          class="wide"
-          :model-value="settings.preview_vae || PAIRED"
-          :options="[PAIRED, ...vaes]"
-          @update:model-value="(v: string) => set({ preview_vae: v === PAIRED ? '' : v })"
-        />
-      </div>
-      <div class="set" :class="{ idle: (settings.preview ?? 'auto') === 'off' }">
-        <div class="what">
-          <b>Preview sound</b>
-          <p>Each step's sound under its picture. Needs H3 Studio Setup's audio VAE.</p>
-        </div>
-        <ZenSwitch
-          :model-value="settings.preview_sound ?? true"
-          @update:model-value="(v: boolean) => set({ preview_sound: v })"
-        />
-      </div>
-
-      <h4>Shot writer <span>this browser</span></h4>
-      <div class="set">
-        <div class="what">
-          <b>Writer model</b>
-          <p>
-            A text encoder that can generate, used by Rewrite on each shot. Wiring H3 Studio Setup's
-            <code>rewrite_clip</code> overrides it.
-          </p>
-        </div>
-        <ZenSelect
-          v-model="writerSettings.model"
-          class="wide"
-          :options="models.length ? models : [writerSettings.model].filter(Boolean)"
-          placeholder="pick a model"
-        />
-      </div>
-      <div class="set">
-        <div class="what">
-          <b>Temperature</b>
-          <p>Higher writes more freely.</p>
-        </div>
-        <ZenNumber
-          v-model="writerSettings.temperature"
-          :min="0.05"
-          :max="1.5"
-          :step="0.05"
-          :precision="2"
-        />
-      </div>
-      <div class="set">
-        <div class="what">
-          <b>Show the writer the references</b>
-          <p>
-            The pictures and videos a shot @mentions, then the rest its scene uses, so it can
-            describe them. Needs a model that can see, like Qwen3-VL.
-          </p>
-        </div>
-        <ZenSwitch v-model="writerSettings.pictures" />
-      </div>
-
-      <h4 class="danger">Start over</h4>
-      <div class="set danger">
-        <div class="what">
-          <b>Clear everything</b>
-          <p>Back to one empty scene. The canvas size, these settings and the layout stay.</p>
-        </div>
-        <ZenButton
-          v-if="!confirming"
-          sm
-          variant="danger"
-          icon="mdi mdi-delete-sweep-outline"
-          @click="confirming = true"
+    <div class="layout">
+      <nav class="tabs" aria-label="Settings sections">
+        <button
+          v-for="s in SECTIONS"
+          :key="s.id"
+          type="button"
+          class="tab"
+          :class="{ on: tab === s.id, danger: s.id === 'project' }"
+          :aria-current="tab === s.id ? 'page' : undefined"
+          @click="tab = s.id"
         >
-          Clear everything…
-        </ZenButton>
-      </div>
-      <div
-        v-if="confirming"
-        class="confirm"
-        role="alertdialog"
-        aria-label="Clear the whole project?"
-      >
-        <b>Clear the whole project?</b>
-        <p>This removes {{ removing }}. Undo (Ctrl+Z, or the undo button) brings it all back.</p>
-        <div class="row">
-          <ZenButton sm variant="ghost" @click="confirming = false">Cancel</ZenButton>
-          <ZenButton sm variant="danger" icon="mdi mdi-delete-sweep-outline" @click="clearAll"
-            >Clear everything</ZenButton
+          <i class="mdi" :class="s.icon" />{{ s.label }}
+        </button>
+      </nav>
+      <div class="sets zen-scroll">
+        <template v-if="tab === 'rendering'">
+          <h4>Rendering <span>saved with this workflow</span></h4>
+          <div class="set">
+            <div class="what">
+              <b>LoRA step shapes</b>
+              <p
+                :title="'Changing strength over the steps uses ComfyUI hooks, which sample on a second, non-dynamic copy of the model. With dynamic VRAM on (the default) that copy runs a 32 GB card out of memory; start ComfyUI with --disable-dynamic-vram to avoid it.'"
+              >
+                How LoRA strength that changes over the steps is applied. <b>Auto</b> does it when
+                ComfyUI's dynamic VRAM is off, and otherwise uses each shape's average;
+                <b>Fast</b> and <b>Low VRAM</b> always do it, keeping the patched weights on or off
+                the GPU.
+              </p>
+            </div>
+            <ZenToggleGroup
+              :model-value="settings.hooks ?? 'auto'"
+              :options="[
+                { value: 'auto', label: 'Auto' },
+                { value: 'fast', label: 'Fast' },
+                { value: 'low_vram', label: 'Low VRAM' },
+              ]"
+              @update:model-value="(v: string) => set({ hooks: v as 'auto' | 'fast' | 'low_vram' })"
+            />
+          </div>
+          <div class="set">
+            <div class="what">
+              <b>Step shape detail</b>
+              <p>
+                The most points a shape is split into. Each change re-patches the LoRA, so fewer is
+                faster; only real changes count.
+              </p>
+            </div>
+            <ZenNumber
+              :model-value="settings.step_detail ?? 8"
+              :min="2"
+              :max="24"
+              :step="1"
+              :precision="0"
+              @update:model-value="(v: number) => set({ step_detail: v })"
+            />
+          </div>
+          <div class="set">
+            <div class="what">
+              <b>Verbose logging</b>
+              <p>
+                A short summary of each scene's render in the ComfyUI console: the references H3
+                sees and in what role, keyframes, what carries over from the scene before, LoRAs and
+                the ControlNet.
+              </p>
+            </div>
+            <ZenSwitch
+              :model-value="settings.verbose ?? false"
+              @update:model-value="(v: boolean) => set({ verbose: v })"
+            />
+          </div>
+          <div class="set">
+            <div class="what">
+              <b>Log the prompt</b>
+              <p>Also write each scene's full compiled prompt to the console.</p>
+            </div>
+            <ZenSwitch
+              :model-value="settings.log_prompt ?? false"
+              @update:model-value="(v: boolean) => set({ log_prompt: v })"
+            />
+          </div>
+        </template>
+        <template v-if="tab === 'preview'">
+          <h4>Live preview <span>saved with this workflow</span></h4>
+          <div class="set">
+            <div class="what">
+              <b>Preview while sampling</b>
+              <p>
+                Every step of the scene plays on the monitor as it samples. <b>Auto</b> decodes with
+                the preview VAE below, <b>Fast</b> with the cheaper colour preview. A preview
+                override node after H3 Studio Outputs takes over instead.
+              </p>
+            </div>
+            <ZenToggleGroup
+              :model-value="settings.preview ?? 'auto'"
+              :options="[
+                { value: 'auto', label: 'Auto' },
+                { value: 'fast', label: 'Fast' },
+                { value: 'off', label: 'Off' },
+              ]"
+              @update:model-value="(v: string) => set({ preview: v as 'auto' | 'fast' | 'off' })"
+            />
+          </div>
+          <div class="set" :class="{ idle: (settings.preview ?? 'auto') !== 'auto' }">
+            <div class="what">
+              <b>Preview VAE</b>
+              <p>
+                A tiny VAE from <code>models/vae_approx</code>. <b>Matching H3</b> uses taeh3 when
+                it's there, and the colour preview when it isn't.
+              </p>
+            </div>
+            <ZenSelect
+              class="wide"
+              :model-value="settings.preview_vae || PAIRED"
+              :options="[PAIRED, ...vaes]"
+              @update:model-value="(v: string) => set({ preview_vae: v === PAIRED ? '' : v })"
+            />
+          </div>
+          <div class="set" :class="{ idle: (settings.preview ?? 'auto') === 'off' }">
+            <div class="what">
+              <b>Preview sound</b>
+              <p>Each step's sound under its picture. Needs H3 Studio Setup's audio VAE.</p>
+            </div>
+            <ZenSwitch
+              :model-value="settings.preview_sound ?? true"
+              @update:model-value="(v: boolean) => set({ preview_sound: v })"
+            />
+          </div>
+        </template>
+        <template v-if="tab === 'writer'">
+          <h4>Shot writer <span>this browser</span></h4>
+          <div class="set">
+            <div class="what">
+              <b>Writer model</b>
+              <p>
+                A text encoder that can generate, used by Rewrite on each shot. Wiring H3 Studio
+                Setup's
+                <code>rewrite_clip</code> overrides it.
+              </p>
+            </div>
+            <ZenSelect
+              v-model="writerSettings.model"
+              class="wide"
+              :options="models.length ? models : [writerSettings.model].filter(Boolean)"
+              placeholder="pick a model"
+            />
+          </div>
+          <div class="set">
+            <div class="what">
+              <b>Temperature</b>
+              <p>Higher writes more freely.</p>
+            </div>
+            <ZenNumber
+              v-model="writerSettings.temperature"
+              :min="0.05"
+              :max="1.5"
+              :step="0.05"
+              :precision="2"
+            />
+          </div>
+          <div class="set">
+            <div class="what">
+              <b>Show the writer the references</b>
+              <p>
+                The pictures and videos a shot @mentions, then the rest its scene uses, so it can
+                describe them. Needs a model that can see, like Qwen3-VL.
+              </p>
+            </div>
+            <ZenSwitch v-model="writerSettings.pictures" />
+          </div>
+        </template>
+        <template v-if="tab === 'project'">
+          <h4 class="danger">Start over</h4>
+          <div class="set danger">
+            <div class="what">
+              <b>Clear everything</b>
+              <p>Back to one empty scene. The canvas size, these settings and the layout stay.</p>
+            </div>
+            <ZenButton
+              v-if="!confirming"
+              sm
+              variant="danger"
+              icon="mdi mdi-delete-sweep-outline"
+              @click="confirming = true"
+            >
+              Clear everything…
+            </ZenButton>
+          </div>
+          <div
+            v-if="confirming"
+            class="confirm"
+            role="alertdialog"
+            aria-label="Clear the whole project?"
           >
-        </div>
+            <b>Clear the whole project?</b>
+            <p>
+              This removes {{ removing }}. Undo (Ctrl+Z, or the undo button) brings it all back.
+            </p>
+            <div class="row">
+              <ZenButton sm variant="ghost" @click="confirming = false">Cancel</ZenButton>
+              <ZenButton sm variant="danger" icon="mdi mdi-delete-sweep-outline" @click="clearAll"
+                >Clear everything</ZenButton
+              >
+            </div>
+          </div>
+        </template>
       </div>
     </div>
   </ZenModal>
@@ -207,6 +231,16 @@ import { clearProject, projectContents } from "@/lib/h3edits";
 import { previewVaes, writerModels, writerSettings } from "@/lib/h3writer";
 
 const props = defineProps<{ project: Project; open: boolean }>();
+
+const SECTIONS = [
+  { id: "rendering", label: "Rendering", icon: "mdi-movie-cog-outline" },
+  { id: "preview", label: "Live preview", icon: "mdi-progress-clock" },
+  { id: "writer", label: "Shot writer", icon: "mdi-text-box-edit-outline" },
+  { id: "project", label: "Start over", icon: "mdi-delete-sweep-outline" },
+] as const;
+type Section = (typeof SECTIONS)[number]["id"];
+const tab = ref<Section>("rendering");
+watch(tab, () => (confirming.value = false));
 const emit = defineEmits<{ "update:open": [open: boolean] }>();
 
 /** The project document, shared by every view of the studio and edited in place. */
@@ -269,10 +303,58 @@ watch(
 </script>
 
 <style scoped>
+.layout {
+  display: flex;
+  gap: 14px;
+  height: 100%;
+  min-height: 0;
+}
+.tabs {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 2px;
+  width: 150px;
+  padding: 4px 12px 4px 0;
+  border-right: 1px solid var(--zen-border, #34343c);
+}
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 10px;
+  border: none;
+  border-radius: var(--zen-radius, 8px);
+  background: transparent;
+  color: var(--zen-muted, #9aa0aa);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.tab .mdi {
+  font-size: 15px;
+}
+.tab:hover {
+  background: color-mix(in srgb, var(--zen-text, #fff) 6%, transparent);
+  color: var(--zen-text, #e5e5ea);
+}
+.tab.on {
+  background: color-mix(in srgb, var(--zen-accent, #6366f1) 18%, transparent);
+  color: var(--zen-text, #e5e5ea);
+}
+.tab.danger.on,
+.tab.danger:hover {
+  color: #e5807d;
+}
 .sets {
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: 10px;
+  min-width: 0;
+  overflow-y: auto;
   padding: 4px 2px 8px;
 }
 h4 {

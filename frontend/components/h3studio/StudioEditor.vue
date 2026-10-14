@@ -34,7 +34,7 @@
       <button
         type="button"
         class="brand"
-        :title="`${project.scenes.length} scene${project.scenes.length === 1 ? '' : 's'} · ${formatTime(length)} — the script, sheets and settings`"
+        :title="`${project.scenes.length} scene${project.scenes.length === 1 ? '' : 's'} · ${formatTime(length)} — sheets and settings`"
         @click="openStudioMenu"
       >
         <i class="mdi mdi-movie-open-star-outline" /><span v-if="!inPanel">H3 Studio</span
@@ -102,6 +102,13 @@
           @update:height="(h: number) => (project.canvas = { ...project.canvas, height: h })"
         />
       </ZenPopover>
+      <ZenButton
+        sm
+        icon="mdi mdi-script-text-outline"
+        title="Script — paste scenes as text, copy them out, or write them with an LLM"
+        @click="scriptOpen = true"
+        >Script</ZenButton
+      >
       <StudioCodex :project="project" />
       <span class="sep" />
       <ZenIconButton
@@ -567,19 +574,13 @@ const outOfDate = computed(() =>
 );
 const render = (ids: string[] | null, next = false) =>
   void renderScenes(project, props.nodeId ?? "", ids, next);
-/** The studio's own menu, on its name: the script, sheets, settings and popping out. */
+/** The studio's own menu, on its name: sheets and settings. */
 function openStudioMenu(e: MouseEvent) {
   const i = place.value.scene;
   const rendered = !!project.scenes[i]?.render;
   const at = (e.currentTarget as HTMLElement).getBoundingClientRect();
   openMenu(
     [
-      {
-        label: "Script…",
-        icon: "mdi mdi-script-text-outline",
-        run: () => (scriptOpen.value = true),
-      },
-      "-",
       {
         label: "Reference sheet",
         icon: "mdi mdi-view-dashboard-outline",
