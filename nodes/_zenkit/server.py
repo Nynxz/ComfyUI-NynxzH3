@@ -25,7 +25,7 @@ pages but not DNS rebinding, and it trusts a request with no Content-Type check;
 
 1. Host: while ComfyUI listens only on loopback (the default), the Host header must name
    loopback (localhost, 127.0.0.1, [::1]). With `--listen <addr>` that address is allowed too,
-   and so is this machine's own name (`archon`, `archon.local`): a rebinding page sends its own
+   and so is this machine's own name (`mybox`, `mybox.local`): a rebinding page sends its own
    domain as the Host, never this machine's name. With a wildcard (`--listen` alone, 0.0.0.0, ::)
    the Host isn't checked, since the user chose to expose the server. Behind a reverse proxy,
    list the names it serves ComfyUI under in ZENKIT_ALLOWED_HOSTS (comma-separated, e.g.
