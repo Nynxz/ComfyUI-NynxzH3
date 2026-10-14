@@ -365,6 +365,8 @@ REF_SIZES = (1.0, 0.75, 0.5)
 #: A keyframe picture of another shape than the canvas: cropped to fill it, or stretched onto it.
 FITS = ("crop", "stretch")
 HOOK_MODES = ("auto", "fast", "low_vram")
+#: The live preview: taeh3 (or the decoder picked) when installed, the colour preview, or none.
+PREVIEW_MODES = ("auto", "fast", "off")
 
 
 def normalize_film(raw: Any) -> dict[str, Any]:
@@ -402,6 +404,10 @@ def normalize_settings(raw: Any) -> dict[str, Any]:
         "step_detail": int(_num(raw.get("step_detail"), 8, 2, 24)),
         "verbose": raw.get("verbose") is True,
         "log_prompt": raw.get("log_prompt") is True,
+        "preview": raw.get("preview") if raw.get("preview") in PREVIEW_MODES else "auto",
+        #: A file in models/vae_approx; empty for the one ComfyUI pairs with H3 (taeh3).
+        "preview_vae": _str(raw.get("preview_vae")),
+        "preview_sound": raw.get("preview_sound") is not False,
     }
 
 

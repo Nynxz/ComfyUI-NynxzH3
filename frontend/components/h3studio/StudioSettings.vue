@@ -71,6 +71,52 @@
         />
       </div>
 
+      <h4>Live preview <span>saved with this workflow</span></h4>
+      <div class="set">
+        <div class="what">
+          <b>Preview while sampling</b>
+          <p>
+            Every step of the scene plays on the monitor as it samples. <b>Auto</b> decodes with the
+            preview VAE below, <b>Fast</b> with the cheaper colour preview. A preview override node
+            after H3 Studio Outputs takes over instead.
+          </p>
+        </div>
+        <ZenToggleGroup
+          :model-value="settings.preview ?? 'auto'"
+          :options="[
+            { value: 'auto', label: 'Auto' },
+            { value: 'fast', label: 'Fast' },
+            { value: 'off', label: 'Off' },
+          ]"
+          @update:model-value="(v: string) => set({ preview: v as 'auto' | 'fast' | 'off' })"
+        />
+      </div>
+      <div class="set" :class="{ idle: (settings.preview ?? 'auto') !== 'auto' }">
+        <div class="what">
+          <b>Preview VAE</b>
+          <p>
+            A tiny VAE from <code>models/vae_approx</code>. <b>Matching H3</b> uses taeh3 when it's
+            there, and the colour preview when it isn't.
+          </p>
+        </div>
+        <ZenSelect
+          class="wide"
+          :model-value="settings.preview_vae || PAIRED"
+          :options="[PAIRED, ...vaes]"
+          @update:model-value="(v: string) => set({ preview_vae: v === PAIRED ? '' : v })"
+        />
+      </div>
+      <div class="set" :class="{ idle: (settings.preview ?? 'auto') === 'off' }">
+        <div class="what">
+          <b>Preview sound</b>
+          <p>Each step's sound under its picture. Needs H3 Studio Setup's audio VAE.</p>
+        </div>
+        <ZenSwitch
+          :model-value="settings.preview_sound ?? true"
+          @update:model-value="(v: boolean) => set({ preview_sound: v })"
+        />
+      </div>
+
       <h4>Shot writer <span>this browser</span></h4>
       <div class="set">
         <div class="what">
@@ -158,7 +204,7 @@ import {
 } from "@nynxz/zenkit-ui";
 import type { Project, StudioSettings } from "@/lib/h3studio";
 import { clearProject, projectContents } from "@/lib/h3edits";
-import { writerModels, writerSettings } from "@/lib/h3writer";
+import { previewVaes, writerModels, writerSettings } from "@/lib/h3writer";
 
 const props = defineProps<{ project: Project; open: boolean }>();
 const emit = defineEmits<{ "update:open": [open: boolean] }>();
@@ -200,11 +246,19 @@ watch(
   },
 );
 
+const PAIRED = "Matching H3";
 const models = ref<string[]>([]);
+const vaes = ref<string[]>([]);
 watch(
   () => props.open,
   async (open) => {
-    if (!open || models.value.length) return;
+    if (!open) return;
+    try {
+      vaes.value = await previewVaes();
+    } catch {
+      // the list fills in once ComfyUI answers
+    }
+    if (models.value.length) return;
     try {
       models.value = (await writerModels()).models;
     } catch {
@@ -294,5 +348,8 @@ h4.danger {
 }
 .wide {
   width: 210px;
+}
+.set.idle {
+  opacity: 0.55;
 }
 </style>

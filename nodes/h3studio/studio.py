@@ -26,7 +26,7 @@ import node_helpers
 from comfy_api.latest import io
 
 from .._base import NynxzNode
-from . import _carry, _control, _marks, _reuse, _track
+from . import _carry, _control, _live, _marks, _reuse, _track
 from ._loras import apply as apply_loras
 from ._media import (
     has_audio,
@@ -688,6 +688,9 @@ def render_scene(setup: dict, project, scene: int | None) -> dict:
         LOG.warning("H3 Studio scene %d: %s", index + 1, warning)
     return {
         "model": model,
+        "audio_vae": setup.get("audio_vae"),
+        #: The live preview's settings, for H3 Studio Outputs.
+        "preview": {k: plan.settings.get(k) for k in ("preview", "preview_vae", "preview_sound")},
         "positive": positive,
         "latent": latent,
         "prompt": plan.prompt,
@@ -1344,7 +1347,8 @@ class NynxzH3StudioOutputs(NynxzNode):
                 io.Model.Output(
                     display_name="model",
                     tooltip="The model from H3 Studio Setup with this scene's LoRAs (lanes with a curve "
-                    "over the steps ride on `positive` as hooks) and its control video applied.",
+                    "over the steps ride on `positive` as hooks) and its control video applied. Sampling with it "
+                    "plays each step on the studio's monitor (Live preview in Studio Settings).",
                 ),
                 io.Conditioning.Output(display_name="positive"),
                 io.Noise.Output(
@@ -1377,7 +1381,12 @@ class NynxzH3StudioOutputs(NynxzNode):
                 "Clip's video instead — it plays a skipped scene's clip — or render every scene."
             )
         return io.NodeOutput(
-            render.get("model"),
+            _live.attach(
+                render.get("model"),
+                render.get("preview") or {},
+                render["frames"],
+                render.get("audio_vae"),
+            ),
             render["positive"],
             _carry.SceneNoise(render["seed"], render.get("noise_carry")),
             render["latent"],

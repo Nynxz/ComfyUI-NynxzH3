@@ -37,6 +37,8 @@ LOG = logging.getLogger(__name__)
 
 #: Nodes whose part in a render the scene half already covers, so the chain walk stops at them.
 COVERED = {"nynxz.H3.Studio", "LoopIteration", "StartLoop"}
+#: Studio settings that change how a render is logged or watched, not what it makes.
+VIEW_SETTINGS = ("verbose", "log_prompt", "preview", "preview_vae", "preview_sound")
 INDEX_FILE = "renders.json"
 SCENES_FILE = "scenes.json"
 #: Every clip each scene has rendered, newest last — the Renders sidebar's history.
@@ -63,7 +65,7 @@ def scene_key(plan: dict, index: int, carried: str | None) -> str:
     """The scene half: `plan` is the compiled scene, `carried` the fingerprint of what it continues."""
     request = {k: v for k, v in plan.items() if k != "warnings"}
     request["settings"] = {
-        k: v for k, v in plan.get("settings", {}).items() if k not in ("verbose", "log_prompt")
+        k: v for k, v in plan.get("settings", {}).items() if k not in VIEW_SETTINGS
     }
     media = sorted(
         {

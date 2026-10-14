@@ -241,6 +241,13 @@ export interface StudioSettings {
   verbose?: boolean;
   /** Log each scene's full prompt to the ComfyUI console. */
   log_prompt?: boolean;
+  /** The monitor's live preview while a scene samples: "auto" (default) decodes with the tiny VAE,
+   *  "fast" with the colour preview, "off" sends none. */
+  preview?: "auto" | "fast" | "off";
+  /** A file in models/vae_approx to decode the preview with; empty for the one paired with H3. */
+  preview_vae?: string;
+  /** Play the scene's sound under the preview (needs Setup's audio VAE). */
+  preview_sound?: boolean;
 }
 export interface Project {
   /** 2: references are in a scene only when used there or marked for it (see `refInScene`). */

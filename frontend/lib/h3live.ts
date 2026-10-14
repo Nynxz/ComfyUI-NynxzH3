@@ -4,10 +4,13 @@
 // or loop pass, under the node id on the canvas). Every sampling preview that arrives until the
 // run moves on belongs to that scene. Previews come from whichever source is there:
 //
-//   • Model Preview Override (ComfyUI-NynxzPersonal) — tiny-VAE clips with step numbers. Listened
-//     to by event name only, so the studio doesn't depend on that pack.
+//   • the studio's own (`nynxz.h3studio.preview`) — H3 Studio Outputs puts a preview on the model
+//     it hands the sampler: a clip of the whole scene per step, with its sound;
+//   • Model Preview Override (ComfyUI-NynxzPersonal), when one is wired after Outputs — the same
+//     messages, which the studio's own then leaves to it. Listened to by event name only, so the
+//     studio doesn't depend on that pack;
 //   • ComfyUI's own sampler previews (`b_preview_with_metadata`), with steps from `progress` —
-//     used for a scene only while no Preview Override frame has arrived for it.
+//     used for a scene only while neither of those has sent a frame for it.
 //
 // Every step of a scene's latest run is kept (until that scene renders again or the page reloads),
 // so the monitor can scrub through them. H3 Studio Clip reports each finished, saved clip
@@ -17,13 +20,13 @@ import { reactive } from "vue";
 
 const RENDER_EVENT = "nynxz.h3studio.render";
 const CLIP_EVENT = "nynxz.h3studio.clip";
-const OVERRIDE_EVENT = "nynxz.personal.preview_override";
+const PREVIEW_EVENTS = ["nynxz.h3studio.preview", "nynxz.personal.preview_override"];
 
 export interface LiveFrame {
   /** A still or a video clip; absent when the step came as decoded frames. */
   url: string;
   video: boolean;
-  /** The clip carries sound (Preview Override with an audio VAE). */
+  /** The clip carries sound (Setup has the audio VAE). */
   audio?: boolean;
   /** An animated WebP's frames, decoded so playback can be placed at any moment. */
   frames?: VideoFrame[];
@@ -35,7 +38,7 @@ export interface LiveFrame {
 export interface LiveRun {
   /** One payload per step boundary that arrived, in step order. */
   steps: LiveFrame[];
-  /** The schedule, one sigma per boundary (Preview Override sends it with the first message). */
+  /** The schedule, one sigma per boundary (sent with a preview's first message). */
   sigmas: number[] | null;
   /** The change each step made (`deltas[i]` belongs to boundary i + 1). */
   deltas: number[];
@@ -54,7 +57,7 @@ export interface StudioLive {
 }
 
 const studios = reactive(new Map<string, StudioLive>());
-let current: { nodeId: string; scene: number; fromOverride: boolean } | null = null;
+let current: { nodeId: string; scene: number; ownPreview: boolean } | null = null;
 let progress: { value: number; max: number } | null = null;
 let listening = false;
 
@@ -124,7 +127,7 @@ function listen() {
     const d = (e as Detail<{ node_id?: string; scene?: number }>).detail;
     if (!d?.node_id || typeof d.scene !== "number") return;
     if (current) entry(current.nodeId).rendering = null;
-    current = { nodeId: d.node_id, scene: d.scene, fromOverride: false };
+    current = { nodeId: d.node_id, scene: d.scene, ownPreview: false };
     progress = null;
     const e2 = entry(d.node_id);
     for (const f of e2.runs[d.scene]?.steps ?? []) release(f);
@@ -137,7 +140,7 @@ function listen() {
     if (d?.node_id && d.scene_id && d.media) entry(d.node_id).clips[d.scene_id] = d.media;
   });
 
-  target.addEventListener(OVERRIDE_EVENT, (e) => {
+  const onPreview = (e: Event) => {
     type Message = {
       image?: string;
       mime?: string;
@@ -149,7 +152,7 @@ function listen() {
     };
     const d = (e as Detail<Message>).detail;
     if (!current || !d) return;
-    current.fromOverride = true;
+    current.ownPreview = true;
     const run = entry(current.nodeId).runs[current.scene];
     const step = d.step ?? 0;
     if (run) {
@@ -182,7 +185,8 @@ function listen() {
       step,
       total: d.total ?? null,
     });
-  });
+  };
+  for (const name of PREVIEW_EVENTS) target.addEventListener(name, onPreview);
 
   target.addEventListener("progress", (e) => {
     const d = (e as Detail<{ value?: number; max?: number }>).detail;
@@ -192,7 +196,7 @@ function listen() {
 
   target.addEventListener("b_preview_with_metadata", (e) => {
     const d = (e as Detail<{ blob?: Blob }>).detail;
-    if (!current || current.fromOverride || !d?.blob) return;
+    if (!current || current.ownPreview || !d?.blob) return;
     put({
       url: URL.createObjectURL(d.blob),
       video: false,

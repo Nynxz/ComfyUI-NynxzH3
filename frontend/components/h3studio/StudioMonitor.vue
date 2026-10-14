@@ -196,8 +196,7 @@
 // The monitor, in three modes:
 //   • plan    — an animatic of the film at the playhead: the latest keyframe (or the scene's
 //               reference) as the frame and the shot's description as a caption.
-//   • preview — the sampler's newest step for the scene at the playhead (the step-by-step chart
-//               lives in Model Preview Override).
+//   • preview — the sampler's newest step for the scene at the playhead.
 //   • render  — the scene's finished clip, following the studio's playhead: play, scrub and step
 //               shots with the transport and timeline as for the animatic.
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
@@ -341,10 +340,10 @@ function placePreview(force = false) {
 }
 watch([position, shown, view, () => props.playing], () => void nextTick(() => placePreview()));
 
-// A step's preview has only a few frames (Model Preview Override's preview_frames) spread over the
-// whole scene, so each would hold for several of the film's frames and stutter. Instead the two
-// frames either side of the playhead are blended by how far it is between them: smooth, and still
-// exactly in time with the timeline. Drawn from its own animation loop, only when the moment or the
+// A step's preview can have far fewer frames than the scene (the colour preview has one per latent
+// token) spread over the whole scene, so each would hold for several of the film's frames and
+// stutter. Instead the two frames either side of the playhead are blended by how far it is between
+// them: smooth, and still exactly in time with the timeline. Drawn from its own animation loop, only when the moment or the
 // step changes.
 let framesRaf = 0;
 let drawn = "";

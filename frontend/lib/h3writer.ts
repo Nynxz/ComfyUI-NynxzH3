@@ -107,6 +107,13 @@ export async function writerModels(): Promise<{ models: string[]; types: string[
   };
 }
 
+/** The tiny VAEs in models/vae_approx, for the live preview's decoder. */
+export async function previewVaes(): Promise<string[]> {
+  const res = await comfy.fetchApi("/models/vae_approx");
+  const files: unknown = res.ok ? await res.json() : [];
+  return Array.isArray(files) ? files.filter((f): f is string => typeof f === "string") : [];
+}
+
 // --- the writer model wired into H3 Studio Setup's rewrite_clip -------------------------------------
 const SETUP = "nynxz.H3.StudioSetup";
 export type ApiNode = { class_type: string; inputs: Record<string, unknown> };
