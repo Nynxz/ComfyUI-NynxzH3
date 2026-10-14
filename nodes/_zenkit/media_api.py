@@ -11,7 +11,10 @@ Routes (`<ns>` is the pack namespace, dots as slashes)
 ------------------------------------------------------
 GET /<ns>/media?type=input               {"type", "items": [{name, filename, subfolder, type, kind,
                                          size, mtime}], "truncated"}
-GET /<ns>/media/thumb?type=&name=&size=  a JPEG poster (images, and the first frame of videos)
+GET /<ns>/media/thumb?type=&name=&size=[&t=]
+                                         a JPEG poster: an image, or a video's frame at `t`
+                                         seconds (default its first); answers with
+                                         `X-Thumb-Time` when it took `t`
 GET /<ns>/media/info?ref=input/a.mp4     {"kind", "duration", "width", "height", "fps", "has_audio"}
 GET /<ns>/media/find?size=&sha256=       {"ref": "input/sub/name.png" | null}: a file already in
                                          the input folder with exactly these bytes, so a drop
@@ -29,6 +32,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import math
 import os
 
 from .identity import DISPLAY_NAME, NAMESPACE, route
@@ -48,9 +52,9 @@ __all__ = [
     "FOLDERS",
     "KINDS",
     "find_input",
-    "kind_of",
     "list_media",
     "media_info",
+    "media_kind",
     "path_of",
     "register",
     "resolve",
@@ -65,7 +69,7 @@ KINDS = {
 MAX_ITEMS = 20000
 
 
-def kind_of(name: str) -> str | None:
+def media_kind(name: str) -> str | None:
     """'image' | 'video' | 'audio' by extension (GIF is an image), None for anything else."""
     lower = name.lower()
     return next((kind for kind, exts in KINDS.items() if lower.endswith(exts)), None)
@@ -119,7 +123,7 @@ def list_media(folder: str) -> list[dict]:
     for root, dirs, files in os.walk(base):
         dirs[:] = sorted(d for d in dirs if not d.startswith("."))
         for name in files:
-            kind = kind_of(name)
+            kind = media_kind(name)
             if not kind or name.startswith("."):
                 continue
             full = os.path.join(root, name)
@@ -179,7 +183,7 @@ def media_info(path: str) -> dict:
     """What a file is: its kind, length (seconds; None for a picture), size, frame rate and whether
     it has sound — from the file itself, which the browser can't reliably tell. Pictures are read
     with PIL; video and audio need PyAV, and without it everything but `kind` is None."""
-    kind = kind_of(path)
+    kind = media_kind(path)
     info = {
         "kind": kind,
         "duration": None,
@@ -219,21 +223,77 @@ def _cache_dir() -> str:
     return path
 
 
-def _thumb_path(path: str, size: int) -> str:
+def _thumb_path(path: str, size: int, frame: int = 0) -> str:
+    """Where a thumbnail is cached: by file (and its version), size and frame of a video (frame 0,
+    the first, shares the key of a thumbnail asked for without a time)."""
     stat = os.stat(path)
-    key = hashlib.sha1(f"{path}|{stat.st_mtime_ns}|{stat.st_size}|{size}".encode()).hexdigest()
-    return os.path.join(_cache_dir(), key + ".jpg")
+    at = f"|f{frame}" if frame else ""
+    key = f"{path}|{stat.st_mtime_ns}|{stat.st_size}|{size}{at}"
+    return os.path.join(_cache_dir(), hashlib.sha1(key.encode()).hexdigest() + ".jpg")
 
 
-def _make_thumb(path: str, size: int, out: str) -> None:
+#: Absorbs float error: a time given as `k / fps` (to a microsecond) is frame k.
+_FRAME_EPS = 1e-3
+_RATES: dict[str, tuple[int, float, float | None]] = {}
+
+
+def _rate(path: str) -> tuple[float, float | None]:
+    """A video's frame rate (24 when it doesn't say) and length in seconds (None if unknown),
+    read once per version of the file."""
+    mtime = os.stat(path).st_mtime_ns
+    known = _RATES.get(path)
+    if known and known[0] == mtime:
+        return known[1], known[2]
+    with av.open(path) as container:
+        stream = container.streams.video[0]
+        fps = float(stream.average_rate) if stream.average_rate else 24.0
+        duration = None
+        if stream.duration and stream.time_base:
+            duration = float(stream.duration * stream.time_base)
+        elif container.duration:
+            duration = container.duration / 1_000_000
+    _RATES[path] = (mtime, fps, duration)
+    return fps, duration
+
+
+def _frame_at(path: str, t: float) -> tuple[int, float]:
+    """The frame of a video showing `t` seconds in — clamped to the video — and its frame rate."""
+    fps, duration = _rate(path)
+    if duration is not None:
+        t = min(t, max(0.0, duration - 0.5 / fps))
+    return max(0, math.floor(max(0.0, t) * fps + _FRAME_EPS)), fps
+
+
+def _video_frame(path: str, frame: int, fps: float):
+    """Frame `frame` of a video as a PIL image: the last one starting at or before the middle of
+    that frame's slot (seeking to the keyframe before it first), else the last frame there is."""
+    with av.open(path) as container:
+        stream = container.streams.video[0]
+        if frame == 0:
+            return next(container.decode(stream)).to_image()
+        start = float(stream.start_time * stream.time_base) if stream.start_time else 0.0
+        want = start + (frame + 0.5) / fps
+        if stream.time_base:
+            container.seek(int(want / stream.time_base), stream=stream, backward=True)
+        shown = None
+        for decoded in container.decode(stream):
+            if shown is not None and decoded.time is not None and decoded.time > want:
+                break
+            shown = decoded
+        if shown is None:
+            raise RuntimeError("no frame there")
+        return shown.to_image()
+
+
+def _make_thumb(path: str, size: int, out: str, at: tuple[int, float] | None = None) -> None:
+    """Write a JPEG thumbnail of `path` to `out`: a picture, or a video's frame `at` (frame, fps;
+    else its first frame)."""
     from PIL import Image, ImageOps
 
-    if kind_of(path) == "video":
+    if media_kind(path) == "video":
         if av is None:
             raise RuntimeError("video thumbnails need PyAV (pip install av)")
-        with av.open(path) as container:
-            frame = next(container.decode(container.streams.video[0]))
-            image = frame.to_image()
+        image = _video_frame(path, *(at or (0, 24.0)))
     else:
         image = ImageOps.exif_transpose(Image.open(path))
     image.thumbnail((size, size))
@@ -266,7 +326,7 @@ def register(routes) -> None:
         if (denied := request_allowed(request)) is not None:
             return denied
         path = resolve(request.query.get("ref", ""))
-        if not path or not kind_of(path):
+        if not path or not media_kind(path):
             return web.json_response({"error": "not found"}, status=404)
         try:
             info = await asyncio.to_thread(media_info, path)
@@ -293,20 +353,36 @@ def register(routes) -> None:
         query = request.query
         base = _base(query.get("type", "input"))
         path = _under(base, query.get("name", "")) if base else None
-        if not path or not os.path.isfile(path) or kind_of(path) not in ("image", "video"):
+        if not path or not os.path.isfile(path) or media_kind(path) not in ("image", "video"):
             return web.Response(status=404)
         try:
             size = max(32, min(768, int(query.get("size", "256"))))
         except ValueError:
             size = 256
-        out = _thumb_path(path, size)
+        # `t`: a video's frame at that many seconds in (clamped to the video), cached per frame.
+        at: tuple[int, float] | None = None
+        headers = {"Cache-Control": "public, max-age=31536000, immutable"}
+        if "t" in query:
+            try:
+                t = float(query["t"])
+            except ValueError:
+                t = math.nan
+            if not math.isfinite(t):
+                return web.Response(status=400, text="t must be a number of seconds")
+            if media_kind(path) == "video" and av is not None:
+                try:
+                    at = await asyncio.to_thread(_frame_at, path, t)
+                except Exception as err:  # noqa: BLE001 - a broken file just has no poster
+                    return web.Response(status=415, text=str(err))
+                headers["X-Thumb-Time"] = f"{at[0] / at[1]:.6f}"
+            else:
+                headers["X-Thumb-Time"] = "0"
+        out = _thumb_path(path, size, at[0] if at else 0)
         if not os.path.isfile(out):
             async with thumb_workers:
                 if not os.path.isfile(out):
                     try:
-                        await asyncio.to_thread(_make_thumb, path, size, out)
+                        await asyncio.to_thread(_make_thumb, path, size, out, at)
                     except Exception as err:  # noqa: BLE001 - a broken file just has no poster
                         return web.Response(status=415, text=str(err))
-        return web.FileResponse(
-            out, headers={"Cache-Control": "public, max-age=31536000, immutable"}
-        )
+        return web.FileResponse(out, headers=headers)

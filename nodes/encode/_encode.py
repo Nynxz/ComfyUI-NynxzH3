@@ -141,13 +141,16 @@ def plan(items: list[dict], mode: str = "auto") -> dict:
         # cannot override a deliberate choice — and it cannot fire under `auto`, which only picks
         # this branch when a role already exists.
         pictures = [i for i in items if i["kind"] == "image"]
-        assign = dict(zip((id(p) for p in pictures[:2]), ("first_frame", "last_frame")))
+        assign = dict(
+            zip((id(p) for p in pictures[:2]), ("first_frame", "last_frame"), strict=False)
+        )
         if assign:
             # Rebuilt rather than mutated: `items` belongs to the payload on the wire, and other
             # nodes downstream read it.
             items = [dict(i, role=assign.get(id(i), i["role"])) for i in items]
             promoted = [
-                (p["label"], role) for p, role in zip(pictures, ("first_frame", "last_frame"))
+                (p["label"], role)
+                for p, role in zip(pictures, ("first_frame", "last_frame"), strict=False)
             ]
 
     keyframes: list[dict] = []

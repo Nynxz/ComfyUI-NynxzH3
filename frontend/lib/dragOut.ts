@@ -1,5 +1,5 @@
 // A studio file carried out of the page on a drag.
-import { mediaKind, setImageDragData } from "@/framework";
+import { mediaKind, setMediaDragData } from "@/framework";
 import { stableUrl } from "./h3studio";
 
 /** The file on the drag, as ComfyUI's asset browser carries one: another app (a chat box, say)
@@ -12,7 +12,7 @@ export function carryMedia(e: DragEvent, media: string) {
   const filename = parts.pop()!;
   const [type, ...subfolder] = parts;
   const comfyType = type === "input" || type === "output" || type === "temp" ? type : undefined;
-  setImageDragData(e, {
+  setMediaDragData(e, {
     url: stableUrl(media),
     ref: media,
     filename,

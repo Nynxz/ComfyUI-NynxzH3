@@ -24,9 +24,12 @@ or a GET with side effects beyond a cache). ComfyUI's own origin middleware stop
 pages but not DNS rebinding, and it trusts a request with no Content-Type check; the guard adds:
 
 1. Host: while ComfyUI listens only on loopback (the default), the Host header must name
-   loopback (localhost, 127.0.0.1, [::1]). With `--listen <addr>` that address is allowed too;
-   with a wildcard (`--listen` alone, 0.0.0.0, ::) the Host isn't checked, since the user chose
-   to expose the server.
+   loopback (localhost, 127.0.0.1, [::1]). With `--listen <addr>` that address is allowed too,
+   and so is this machine's own name (`archon`, `archon.local`): a rebinding page sends its own
+   domain as the Host, never this machine's name. With a wildcard (`--listen` alone, 0.0.0.0, ::)
+   the Host isn't checked, since the user chose to expose the server. Behind a reverse proxy,
+   list the names it serves ComfyUI under in ZENKIT_ALLOWED_HOSTS (comma-separated, e.g.
+   `comfy.example.com`); the proxy must pass the browser's Host through.
 2. Origin: when present, its host:port must equal the Host header's.
 3. Content type: a state-changing request with a body must send `application/json`, which a
    cross-site form can't without a CORS preflight.
@@ -37,6 +40,8 @@ A refused request gets a 403 with a short JSON error, logged once per path.
 from __future__ import annotations
 
 import logging
+import os
+import socket
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -84,7 +89,22 @@ def _listen_hosts() -> frozenset[str] | None:
     names = {part.strip().strip("[]").lower() for part in listen.split(",")}
     if names & _WILDCARD:
         return None
+    names |= _proxied_hosts()
+    if names - _LOOPBACK:
+        # gethostname() asks no DNS server, so this can't stall a request.
+        own = socket.gethostname().lower()
+        names |= {own, f"{own}.local"}
     return _LOOPBACK | names
+
+
+def _proxied_hosts() -> set[str]:
+    """Names a reverse proxy serves ComfyUI under (ZENKIT_ALLOWED_HOSTS), ports dropped."""
+    out = set()
+    for name in os.environ.get("ZENKIT_ALLOWED_HOSTS", "").split(","):
+        parsed = _host_port(name.strip(), "http") if name.strip() else None
+        if parsed:
+            out.add(parsed[0])
+    return out
 
 
 def _host_port(netloc: str, scheme: str) -> tuple[str, int | None] | None:
@@ -123,12 +143,19 @@ def request_allowed(request):
         return _deny(request, "missing or malformed Host header")
     allowed = _listen_hosts()
     if allowed is not None and host[0] not in allowed:
-        return _deny(request, f"Host {host[0]!r} is not an address this server listens on")
+        return _deny(
+            request,
+            f"Host {host[0]!r} is not an address this server listens on; open ComfyUI at one it "
+            "does, add it to --listen, or (behind a proxy) to ZENKIT_ALLOWED_HOSTS",
+        )
 
     origin = request.headers.get("Origin")
     if origin is not None:
         parts = urlsplit(origin)
-        if _host_port(parts.netloc, parts.scheme.lower()) != host:
+        theirs = parts.scheme.lower()
+        # The Host's default port follows the Origin's scheme: behind a proxy that ends TLS the
+        # browser is on https while this server sees plain http.
+        if _host_port(parts.netloc, theirs) != _host_port(request.headers.get("Host", ""), theirs):
             return _deny(request, "Origin does not match Host")
 
     if (

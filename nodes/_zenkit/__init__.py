@@ -44,14 +44,40 @@ __all__ = [
     "NODE_PACKAGE",
     "ROUTE_PREFIX",
     "WIDGET_IO_PREFIX",
+    "Job",
+    "advanced",
     "comfy_entrypoint",
+    "emit",
+    "inline_widget",
     "load_nodes",
+    "media_info",
+    "media_kind",
     "node_id",
+    "path_of",
     "route",
     "setting_id",
     "setup",
     "type_id",
+    "widget_type",
 ]
+
+_LAZY = {
+    "Job": "jobs",
+    "emit": "jobs",
+    "advanced": "io_types",
+    "inline_widget": "io_types",
+    "widget_type": "io_types",
+    "media_info": "media_api",
+    "media_kind": "media_api",
+    "path_of": "media_api",
+}
+
+
+def __getattr__(name: str):
+    if name in _LAZY:
+        return getattr(importlib.import_module(f".{_LAZY[name]}", __name__), name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 #: The package this one is vendored into, the one whose modules hold the nodes.
 NODE_PACKAGE = __name__.rpartition(".")[0]
