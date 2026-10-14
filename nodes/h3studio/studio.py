@@ -1407,6 +1407,9 @@ class NynxzH3StudioClip(NynxzNode):
         return cls.make_schema(
             node_id="H3.StudioClip",
             display_name="H3 Studio Clip",
+            # It saves each scene's clip, and the film after a full render, so a looped render that
+            # ends at End Loop has an output without a Save or Preview node after it.
+            is_output_node=True,
             description="A rendered scene as one video: the decoded frames and sound at 24 fps, with the "
             "continuation's carried-over head cut off so scenes join cleanly. In a loop, wire it to End "
             "Loop's next_iteration_value (the next scene continues from it) and output_value with "
@@ -1540,7 +1543,7 @@ class NynxzH3StudioClip(NynxzNode):
                         "media": saved,
                     },
                 )
-            return io.NodeOutput(cls._finish(video, render, keep))
+            return cls._output(video, render, keep, None if render.get("hold") else saved)
         if audio is _UNWIRED:
             audio = None
         if latent is _UNWIRED:
@@ -1621,11 +1624,21 @@ class NynxzH3StudioClip(NynxzNode):
             # outputs, and a few GB of frames per scene ran a full render out of memory.
             video = _as_file(video, ref)
             _mem("clip: handed on as file")
-        return io.NodeOutput(cls._finish(video, render, keep))
+            return cls._output(video, render, keep, ref)
+        return cls._output(video, render, keep, None)
 
     @classmethod
-    def _finish(cls, video, render: dict, keep: bool):
-        """The clip; and after the last scene of a full render, the film saved."""
+    def _output(cls, video, render: dict, keep: bool, clip: str | None):
+        """The clip, with what was saved (the clip, and the film after a full render) listed as the
+        node's results, so they show in ComfyUI's outputs."""
+        saved = [ref for ref in (clip, cls._finish(render, keep)) if ref]
+        if not saved:
+            return io.NodeOutput(video)
+        return io.NodeOutput(video, ui=_saved_results(saved))
+
+    @classmethod
+    def _finish(cls, render: dict, keep: bool) -> str | None:
+        """After the last scene of a full render, the film saved; its media ref."""
         if keep and render.get("film") and render.get("studio_node") is not None:
             from . import film
 
@@ -1633,9 +1646,23 @@ class NynxzH3StudioClip(NynxzNode):
                 _mem("film: before save")
                 record = film.save(render["film"], cls._metadata())
                 _send(FILM_EVENT, {"node_id": render["studio_node"], **record})
+                return record.get("ref")
             except Exception:
                 LOG.exception("H3 Studio: couldn't save the film (Renders ▸ Export film retries)")
-        return video
+        return None
+
+
+def _saved_results(refs: list[str]):
+    """`output/…` media refs as a video preview of saved files, as core's Save Video reports them."""
+    from comfy_api.latest import ui
+
+    results = []
+    for ref in refs:
+        if not ref.startswith("output/"):
+            continue
+        subfolder, _, file = ref[len("output/") :].rpartition("/")
+        results.append(ui.SavedResult(file, subfolder, io.FolderType.output))
+    return ui.PreviewVideo(results) if results else None
 
 
 def _as_file(video, ref: str):
