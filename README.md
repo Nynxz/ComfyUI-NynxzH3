@@ -36,6 +36,15 @@ and LoRAs. In H3 Studio, the References tab's **Fill from Codex** button fills a
 
 ![The Codex](docs/images/codex.webp)
 
+## Example workflows
+
+Drag the picture onto ComfyUI to open the workflow, or find it in ComfyUI's **Templates** under this
+pack. Its note lists every model it needs and where to get them.
+
+**H3 Studio**: a two-scene film rendered in a loop, with the shot writer wired up.
+
+<img src="example_workflows/H3%20Studio.webp" alt="The H3 Studio workflow">
+
 ## Install
 
 ```bash
