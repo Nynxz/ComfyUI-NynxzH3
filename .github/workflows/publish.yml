@@ -1,11 +1,6 @@
 name: Publish to Comfy registry
-# Manual only for now: the editors in web/ are built from frontend/ and aren't committed, and this
-# job doesn't build them yet, so an automatic publish would ship the pack without its UI.
 on:
   workflow_dispatch:
-
-permissions:
-  issues: write
 
 jobs:
   publish-node:
@@ -13,11 +8,33 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ github.repository_owner == 'Nynxz' }}
     steps:
-      - name: Check out code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
         with:
-          submodules: true
-      - name: Publish Custom Node
-        uses: Comfy-Org/publish-node-action@main
+          version: 11
+      - uses: actions/setup-node@v4
         with:
-          personal_access_token: ${{ secrets.REGISTRY_ACCESS_TOKEN }}
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install ruff
+      - run: pnpm install --frozen-lockfile
+      # The same checks as CI, then the editors' bundle the pack ships in web/.
+      - run: pnpm check
+      - run: test -f web/main.js
+
+      # comfy-cli archives git-TRACKED files only, and web/ is gitignored. Staging is
+      # enough — `git ls-files` reads the index, so nothing is committed or pushed.
+      - run: git add -f web
+
+      - run: pip install comfy-cli
+
+      # Invoked directly rather than via publish-node-action: that action runs its own checkout
+      # with clean:true, which would delete the staged bundle.
+      - name: Publish to the ComfyUI registry
+        run: comfy node publish --token "$REGISTRY_TOKEN"
+        env:
+          REGISTRY_TOKEN: ${{ secrets.REGISTRY_ACCESS_TOKEN }}

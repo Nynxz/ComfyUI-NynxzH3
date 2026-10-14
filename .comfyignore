@@ -1,9 +1,26 @@
-# Kept out of the published registry package.
-#
-# Short, because there is no build step: `web/` IS the frontend source, so there is no
-# source-vs-bundle split to manage and nothing to exclude but development scaffolding.
+# Excluded from the published registry package (`comfy node pack`).
+# Only runtime files ship: __init__.py, nodes/, web/ (the built editors), pyproject.toml, README,
+# LICENSE. web/ is built in the publish workflow and staged, since it is gitignored.
+
 .github/
+docs/
+skills/
 tests/
 temp/
-.venv/
-docs/
+
+frontend/
+node_modules
+package.json
+pnpm-lock.yaml
+pnpm-workspace.yaml
+pack.json
+tsconfig.json
+vite.config.mts
+eslint.config.js
+.prettierrc.json
+.prettierignore
+
+# local caches
+.ruff_cache
+__pycache__
+.venv
