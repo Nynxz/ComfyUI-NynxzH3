@@ -30,7 +30,15 @@ jobs:
       - run: pip install ruff
 
       - run: pnpm install --frozen-lockfile
-      - run: pnpm update --latest @nynxz/zenkit-ui @nynxz/zenkit-nodekit
+      # Asks npm itself for the latest versions: `pnpm update --latest` can answer from cached
+      # metadata and quietly change nothing.
+      - name: Take the newest ZenKit
+        run: |
+          for p in ui nodekit; do
+            v=$(npm view "@nynxz/zenkit-$p" version)
+            field=$(node -p "require('./package.json').devDependencies?.['@nynxz/zenkit-$p'] ? '-D' : ''")
+            pnpm add $field "@nynxz/zenkit-$p@^$v"
+          done
       - run: pnpm exec zenkit-nodekit sync
       - id: version
         run: echo "zenkit=$(node -p "require('./node_modules/@nynxz/zenkit-nodekit/package.json').version")" >> "$GITHUB_OUTPUT"

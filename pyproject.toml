@@ -4,7 +4,7 @@
 
 [project]
 name = "comfyui-nynxzh3"  # the Registry id: fixed, since installs track it
-version = "0.0.2"
+version = "0.1.0"
 description = "A production pack for MiniMax H3 in ComfyUI: H3 Studio (write a film as scenes, render it in one loop), Grey Box Studio (block scenes in 3D), the Codex (a show's characters and places), and the H3 conditioning, prompt and sampling nodes underneath."
 authors = [{ name = "Nynxz", email = "contact@nynxz.com" }]
 readme = "README.md"
