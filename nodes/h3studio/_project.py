@@ -35,6 +35,9 @@ from ._dialogue import Dialogue, normalize_cast, normalize_lines
 FPS = 24
 MIN_SECONDS = 1.0
 MAX_SECONDS = 30.0
+#: Scenes a project may hold. It arrives with shared workflows, and every scene is compiled (and
+#: checked for renders) whenever the studio asks for status.
+MAX_SCENES = 200
 CONTEXT_FRAMES = (5, 22, 39)
 SEED_MAX = 2**64 - 1
 
@@ -212,7 +215,9 @@ def normalize(raw: Any) -> dict[str, Any]:
         )
 
     scenes = []
-    for i, scene in enumerate(raw.get("scenes") or []):
+    raw_scenes = raw.get("scenes")
+    raw_scenes = raw_scenes[:MAX_SCENES] if isinstance(raw_scenes, list) else []
+    for i, scene in enumerate(raw_scenes):
         if not isinstance(scene, dict):
             continue
         # Stored snapped to H3's frame grid, so the length the editor shows is the length rendered.

@@ -63,7 +63,13 @@ def _vec(v: Any, what: str, default: Vec | None = None) -> Vec:
 
 
 def _num(v: Any, default: float, lo: float = -1e9, hi: float = 1e9) -> float:
-    return min(max(float(v), lo), hi) if isinstance(v, (int, float)) else default
+    ok = isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+    return min(max(float(v), lo), hi) if ok else default
+
+
+#: The longest shot a scene may ask for, in seconds: a scene file comes with shared workflows, and
+#: a shot's frames are rendered into memory.
+MAX_SHOT_SECONDS = 120.0
 
 
 def _shape(raw: dict, where: str) -> Shape:
@@ -578,7 +584,7 @@ def build(
     for i, s in enumerate(raw.get("shots", [])):
         sname = str(s.get("name", f"shot{i + 1}"))
         start = _num(s.get("start"), 0.0, 0)
-        end = _num(s.get("end"), start + 3.0, start + 0.05)
+        end = _num(s.get("end"), start + 3.0, start + 0.05, start + MAX_SHOT_SECONDS)
         shots.append(
             Shot(sname, start, end, _keys(s.get("camera"), f"shot {sname}'s camera", "smooth"))
         )

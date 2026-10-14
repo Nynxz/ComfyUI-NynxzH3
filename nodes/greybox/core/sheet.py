@@ -15,7 +15,11 @@ import torch
 from PIL import Image, ImageDraw, ImageFont
 
 from .render import bounds, camera_rays, depth_image, edge_image, plan_rays, render
-from .scene import Scene, Shot, held, shapes_at
+from .scene import Scene, SceneError, Shot, held, shapes_at
+
+#: Frames x pixels one render may hold in memory (about 9 GB of float32 RGB): a minute at 1280x720
+#: and 30 fps fits, a request for hours of 4K doesn't take the server down.
+MAX_PIXELS = 750_000_000
 
 INK = (235, 235, 240)
 MUTED = (150, 150, 160)
@@ -65,6 +69,11 @@ def shot_frames(
     rate = fps or scene.fps
     t0 = shot.start if start is None else start
     n = count or max(1, round((shot.end - shot.start) * rate))
+    if n * height * width > MAX_PIXELS:
+        raise SceneError(
+            f"{n} frames at {width}x{height} is more than a grey box render holds in memory; "
+            "render a shorter shot, a lower frame rate or a smaller size."
+        )
     out = torch.empty(n, height, width, 3)
     depths = []
     for i in range(n):

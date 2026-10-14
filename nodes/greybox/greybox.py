@@ -2,8 +2,8 @@
 reference (saved to output/greybox, so H3 Studio can add it), its depth, a character's mask, and
 the scene's contact sheet with the plan.
 
-The scene is a JSON file (docs/GREYBOX.md): a path that's absolute, under ComfyUI's user
-directory, or one of the pack's examples (`examples/midnight-spoon/scenes/mika-arrives.json`).
+The scene is a JSON file (docs/GREYBOX.md): a path under ComfyUI's user directory (absolute or
+relative to it), or one of the pack's examples (`examples/midnight-spoon/scenes/mika-arrives.json`).
 """
 
 from __future__ import annotations
@@ -24,21 +24,22 @@ HERE = Path(__file__).parent
 
 
 def _resolve(path: str) -> Path:
+    """The scene file `path` names, which must lie inside ComfyUI's user folder or the pack's
+    examples: a scene path comes with a shared workflow, and the scene's sets and cast are read
+    from beside it."""
     import folder_paths
 
+    users = Path(folder_paths.get_user_directory()).resolve()
+    roots = (users, (HERE / "examples").resolve())
     p = Path(path.strip().strip('"'))
-    if p.is_absolute():
-        return p
-    for base in (
-        Path(folder_paths.get_user_directory()),
-        Path(folder_paths.get_user_directory()) / "default",
-        HERE,
-    ):
-        if (base / p).exists():
-            return base / p
+    candidates = [p] if p.is_absolute() else [users / p, users / "default" / p, HERE / p]
+    for c in candidates:
+        real = c.resolve()
+        if real.is_file() and any(root == real or root in real.parents for root in roots):
+            return real
     raise gscene.SceneError(
-        f"No scene at {path!r}: give an absolute path, one under ComfyUI's user folder, or one of the "
-        "pack's examples (examples/midnight-spoon/scenes/mika-arrives.json)."
+        f"No scene at {path!r}: give a path under ComfyUI's user folder, or one of the pack's "
+        "examples (examples/midnight-spoon/scenes/mika-arrives.json)."
     )
 
 
@@ -58,7 +59,7 @@ class NynxzGreyBoxShot(NynxzNode):
                 io.String.Input(
                     "scene",
                     default="examples/midnight-spoon/scenes/mika-arrives.json",
-                    tooltip="The scene file: absolute, under ComfyUI's user folder, or a pack example.",
+                    tooltip="The scene file: under ComfyUI's user folder, or a pack example.",
                 ),
                 io.String.Input("shot", default="1A", tooltip="The shot's name in the scene."),
                 io.Int.Input("width", default=832, min=64, max=2048, step=16),
@@ -197,7 +198,7 @@ class NynxzGreyBoxRender(NynxzNode):
         pdir = Path(str(body.get("pdir", ""))).resolve()
         users = Path(folder_paths.get_user_directory()).resolve()
         # Only a project inside ComfyUI's user folder (where every Codex show lives).
-        if users not in pdir.parents or pdir.name != "greybox":
+        if users not in pdir.parents or pdir.name != "greybox" or not pdir.is_dir():
             raise ValueError("Grey Box Render: not a Grey Box project folder.")
         ref = render_video(body, pdir)
         return io.NodeOutput(ui={"ref": [ref]})
