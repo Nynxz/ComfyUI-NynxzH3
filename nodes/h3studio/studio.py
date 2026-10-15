@@ -417,6 +417,7 @@ def render_scene(setup: dict, project, scene: int | None) -> dict:
         if index not in _needed(proj, only):
             return _blank(plan, index, scene_id, setup)
     setup = _decoded(setup, _whole_clip(plan))
+    previous_frames, previous_audio = setup.get("previous_frames"), setup.get("previous_audio")
     _mem("previous clip decoded")
     carried = setup.get("previous_scene")
     if setup.get("previous_frames") is not None and carried is not None and carried != index - 1:
