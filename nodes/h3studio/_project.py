@@ -55,7 +55,14 @@ def seed_of(scene_id: str) -> int:
 #: open on its last frame (a first-frame keyframe); or show its last frame as a reference picture
 #: (the same place and light, a new shot); or cut the picture while the sound carries on ("sound":
 #: its last moments of audio lead in, so music and ambience continue across the cut).
-CONTINUATIONS = ("cut", "guide", "first_frame", "reference", "sound")
+CONTINUATIONS = ("cut", "guide", "first_frame", "reference", "sound", "video")
+#: The media of a reference that is the end of the previous scene's clip, picture and sound,
+#: filled in when the scene renders: what a "video" continuation continues (Ref2VA's trained
+#: video continuation — the source video as <Video N>, the target picking up where it ends).
+PREVIOUS_TAIL = "previous:tail"
+#: How much of the previous clip a "video" continuation shows: about 3 s (73 frames, on H3's grid;
+#: Ref2VA takes reference videos of 2-15 s).
+VIDEO_TAIL = 73
 #: The media of a keyframe or reference that is the previous scene's last frame, filled in when the
 #: scene renders.
 PREVIOUS_FRAME = "previous:last"
@@ -638,7 +645,11 @@ def tag_refs(
         [r for r in images if r["role"] == "reference"]
         + [r for r in images if r["role"] == "semantic"],
     )
-    videos = capped("video", [r for r in refs if r["kind"] == "video"])
+    videos = capped(
+        "video",
+        [r for r in refs if r["kind"] == "video" and r["role"] == "continuation"]
+        + [r for r in refs if r["kind"] == "video" and r["role"] != "continuation"],
+    )
     audios = capped("audio", [r for r in refs if r["kind"] == "audio"])
 
     out: list[dict[str, Any]] = []
@@ -651,8 +662,9 @@ def tag_refs(
         if r["role"] == "blocking":
             out.append({**r, "tag": f"<Video {i}>", "subject": None, "soundtrack_tag": None})
             continue
-        # A sound reference (from the previous scene's clip) is there for its sound alone.
-        if r["role"] == "sound":
+        # A sound reference (from the previous scene's clip) is there for its sound alone, and the
+        # footage a continuation continues brings its sound but is no subject.
+        if r["role"] in ("sound", "continuation"):
             audio_n += 1
             out.append(
                 {
@@ -743,6 +755,21 @@ def compile_scene(project: dict[str, Any], index: int, has_audio=None) -> Compil
                 f"{voices + n_sound - LIMITS['audio']} snippet(s) left out. Show them with picture instead."
             )
     in_scene = [*in_scene, *sound_refs]
+    if carry == "video":
+        in_scene.append(
+            {
+                "id": "continued",
+                "media": PREVIOUS_TAIL,
+                "kind": "video",
+                "name": "before",
+                "note": "",
+                "role": "continuation",
+                "retain": RETENTION[0],
+                "soundtrack": True,
+                "size": 1.0,
+                "scenes": "all",
+            }
+        )
     # Control videos go to the ControlNet, not into H3's references or its prompt.
     controls = [
         {
@@ -863,6 +890,9 @@ def compile_scene(project: dict[str, Any], index: int, has_audio=None) -> Compil
         if continuing
         else ""
     )
+    # A "video" continuation shows the end of the previous clip as a reference video (Ref2VA's
+    # trained video continuation): the scene picks up where it ends.
+    continued = next((r for r in refs if r["role"] == "continuation" and not r.get("alias")), None)
     numbers = []
     for i, shot in enumerate(shots):
         numbers.append(1 if i == 0 else numbers[-1] + (shot["transition"] not in CONTINUOUS))
@@ -878,9 +908,10 @@ def compile_scene(project: dict[str, Any], index: int, has_audio=None) -> Compil
         own = _sentence(mentions(shot["text"]))
         text = " ".join(t for t in (own, spoken) if t)
         when = _timestamp(shot["at"])
-        if i == 0 and continuing:
+        if i == 0 and (continuing or continued):
             follow = _lower_first(text, cast_names) if text else "the scene continues."
-            paragraphs.append(f"[Shot 1] Continuing without a cut, {follow}")
+            source = f" from the end of {continued['tag']}" if continued else ""
+            paragraphs.append(f"[Shot 1] Continuing{source} without a cut, {follow}")
         elif i == 0:
             paragraphs.append(f"[Shot 1] {text or 'The scene continues.'}")
         elif shot["transition"] == "continue":
@@ -968,6 +999,13 @@ def compile_scene(project: dict[str, Any], index: int, has_audio=None) -> Compil
                     for r in blocking
                 ]
                 + [
+                    f"{r['tag']} is the footage just before this scene: the target video continues "
+                    "it, starting where it ends, without a cut."
+                    + (f" Its sound is {r['soundtrack_tag']}." if r["soundtrack_tag"] else "")
+                    for r in shown
+                    if r["role"] == "continuation"
+                ]
+                + [
                     f"{r['tag']} is a moment from just before this scene; only its sound, "
                     f"{r['soundtrack_tag']}, matters — take nothing from its picture."
                     if r["kind"] == "video"
@@ -987,7 +1025,11 @@ def compile_scene(project: dict[str, Any], index: int, has_audio=None) -> Compil
         # The carried-over setting frames every shot, mentioned or not.
         used += [r for r in subjects if r["id"] == "previous" and r not in used]
         features = ", ".join(f"<Subject {r['subject']}>" for r in used) or (
-            "the referenced sound" if sounds else "the scene described below"
+            f"the continuation of {continued['tag']}"
+            if continued
+            else "the referenced sound"
+            if sounds
+            else "the scene described below"
         )
         retention = [
             f"<Subject {r['subject']}> (appears in [Shot {_first_shot(sharing(r), shots, numbers)}]): {r['retain']} - "
@@ -998,6 +1040,12 @@ def compile_scene(project: dict[str, Any], index: int, has_audio=None) -> Compil
             f"{note(r)[2:] or names(r)} guides the sound."
             for r in shown
             if r["kind"] == "audio" and r["role"] != "sound"
+        ]
+        retention += [
+            f"{r['tag']} (continuation): fully_preserved - the target video picks up where "
+            f"{r['tag']} ends; its place, people, framing and motion carry on without a cut."
+            for r in shown
+            if r["role"] == "continuation"
         ]
         retention += [
             f"{heard(r)} (throughout): fully_preserved - the ambience, engines, weather and music "
@@ -1011,7 +1059,15 @@ def compile_scene(project: dict[str, Any], index: int, has_audio=None) -> Compil
             f"{r['tag']}; nothing of its look is kept."
             for r in blocking
         ]
-        directive = "reference generation + audio reference" if sounds else "reference generation"
+        directive = " + ".join(
+            (["video continuation"] if continued else [])
+            + (
+                ["reference generation"]
+                if not continued or any(r["role"] != "continuation" for r in shown)
+                else []
+            )
+            + (["audio reference"] if sounds else [])
+        )
         follows = (
             " Its staging, cuts and camera movement follow "
             + " and ".join(r["tag"] for r in blocking)

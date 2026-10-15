@@ -11,7 +11,7 @@ export const CONTEXT_FRAMES = [5, 22, 39] as const;
 export type Transition = "cut" | "dissolve" | "fade" | "wipe" | "continue" | "continue_timed";
 /** How a shot follows the one before (nodes/h3studio/_project.py `TRANSITIONS`). */
 /** How a scene follows the one before (see CONTINUATIONS in nodes/h3studio/_project.py). */
-export type Continuation = "cut" | "guide" | "first_frame" | "reference" | "sound";
+export type Continuation = "cut" | "guide" | "first_frame" | "reference" | "sound" | "video";
 export const CONTINUATIONS: {
   value: Continuation;
   label: string;
@@ -32,6 +32,14 @@ export const CONTINUATIONS: {
     icon: "mdi-link-variant",
     title: "Its last frames lead into this scene: the motion and the camera carry on",
     script: "continues",
+  },
+  {
+    value: "video",
+    label: "Continue (Ref2VA)",
+    icon: "mdi-movie-open-play-outline",
+    title:
+      "Its last 3 seconds, picture and sound, are shown as the footage this scene continues: Ref2VA's own video continuation. Use with the Ref2VA model",
+    script: "continues footage",
   },
   {
     value: "first_frame",

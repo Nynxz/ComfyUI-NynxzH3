@@ -42,6 +42,8 @@ from ._project import (
     FPS,
     PREVIOUS_FRAME,
     PREVIOUS_SOUND,
+    PREVIOUS_TAIL,
+    VIDEO_TAIL,
     compile_scene,
     normalize,
 )
@@ -95,8 +97,9 @@ def _mem(label: str) -> None:
         pass
 
 
-#: The most of the previous clip's end a scene uses: its longest carried head.
-TAIL_FRAMES = max(CONTEXT_FRAMES)
+#: The most of the previous clip's end a scene uses: its longest carried head, or the footage a
+#: "video" continuation continues.
+TAIL_FRAMES = max(*CONTEXT_FRAMES, VIDEO_TAIL)
 
 
 def _whole_clip(plan) -> bool:
@@ -132,6 +135,19 @@ def _previous_clip(setup: dict, project: dict, index: int, whole: bool = True):
 def _clip_key(record: dict) -> str:
     """A saved clip's fingerprint: the one it was made under, else its file's."""
     return record.get("key") or _reuse.digest(_reuse.media_stat(record["ref"]))
+
+
+def _previous_tail(frames, audio, n: int):
+    """The previous clip's last `n` frames and their sound: what a "video" continuation shows H3
+    as the footage it continues."""
+    part = frames[-n:]
+    track = None
+    if audio is not None:
+        rate = audio["sample_rate"]
+        total = audio["waveform"].shape[-1]
+        start = max(0, total - round(part.shape[0] / FPS * rate))
+        track = {"waveform": audio["waveform"][..., start:], "sample_rate": rate}
+    return part, track
 
 
 def _sound_snippet(clip, media: str, black: bool):
@@ -475,7 +491,16 @@ def render_scene(setup: dict, project, scene: int | None) -> dict:
                         }
                     )
             elif ref["kind"] == "video":
-                if ref["media"].startswith(PREVIOUS_SOUND):
+                if ref["media"] == PREVIOUS_TAIL:
+                    if previous_frames is None:
+                        raise ValueError(
+                            f"H3 Studio: scene {index + 1} continues scene {index}'s footage, but "
+                            f"scene {index} hasn't been rendered. Render it first."
+                        )
+                    video_frames, track = _previous_tail(
+                        previous_frames, previous_audio, VIDEO_TAIL
+                    )
+                elif ref["media"].startswith(PREVIOUS_SOUND):
                     if previous_clip is None:
                         previous_clip = _previous_clip(setup, proj, index)
                     video_frames, track = _sound_snippet(
@@ -561,6 +586,10 @@ def render_scene(setup: dict, project, scene: int | None) -> dict:
     noise_carry = None
     carried = last_key
     mode = plan.continuation.get("mode")
+    if mode == "video" and previous_frames is not None:
+        carried = setup.get("previous_key") or _reuse.frames_key(
+            previous_frames[-VIDEO_TAIL:], previous_audio
+        )
     context = 0
     if mode in ("guide", "sound") and previous_frames is not None:
         # The carried head is cut off after decoding, so at least one grid step stays new.

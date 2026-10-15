@@ -310,9 +310,11 @@ export function parseProjectScript(project: Project, text: string): ScriptResult
           ? "reference"
           : opts.some((o) => /last frame|first frame|picks? up/i.test(o))
             ? "first_frame"
-            : opts.some((o) => /contin/i.test(o))
-              ? "guide"
-              : "cut";
+            : opts.some((o) => /contin\w* (?:the )?footage|ref2va/i.test(o))
+              ? "video"
+              : opts.some((o) => /contin/i.test(o))
+                ? "guide"
+                : "cut";
       result.scenes.push(scene);
       shot = null;
       continue;

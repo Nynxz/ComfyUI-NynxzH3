@@ -99,6 +99,17 @@ its sound) at frame 0; H3 Studio Clip cuts those regenerated frames from the hea
 so scenes join cleanly. Wire the previous scene's clip into H3 Studio Setup's `previous` (the loop
 below carries it round).
 
+A continued scene's prompt says so: it opens with the carried seconds continuing the footage
+before it without a cut, and its first shot reads as carrying on — otherwise H3 reproduces the
+anchored frames and then cuts to the shot the prompt describes. The anchor is a multi-frame guide,
+which the FL2VA model wasn't trained on (it takes a first and a last *picture*): it holds the
+opening, but the motion carries on better on Ref2VA.
+
+*Continue (Ref2VA)* is Ref2VA's own video continuation, for scenes rendered with the Ref2VA
+model: the previous clip's last 3 s, picture and sound, are shown as `<Video 1>` — the footage this
+scene continues — with the summary tagged `[video continuation]`, and the scene starts where that
+footage ends. Nothing is anchored or cut off, so it keeps its own length.
+
 ### Rendering the whole film in a loop
 
 Core's loop nodes render every scene in one run. The clip is what goes round the loop, never the
