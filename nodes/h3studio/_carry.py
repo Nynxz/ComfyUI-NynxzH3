@@ -285,6 +285,21 @@ def _silence(frames: int, like: dict) -> torch.Tensor:
     return torch.zeros((*w.shape[:-1], round(frames / FPS * like["sample_rate"])), dtype=w.dtype)
 
 
+def switch_frame(ours: torch.Tensor, theirs: torch.Tensor) -> int:
+    """Where to switch from `ours` to `theirs`, two renders of the same frames (`[N, H, W, C]`):
+    the frame where they look most alike, compared small. A switch, not a blend: the two never
+    line up exactly, and averaging them ghosts the detail and washes the colour out for as long as
+    the blend lasts."""
+
+    def small(x: torch.Tensor) -> torch.Tensor:
+        x = x[..., :3].movedim(-1, 1).float()
+        factor = max(1, x.shape[-1] // 64)
+        return torch.nn.functional.avg_pool2d(x, factor) if factor > 1 else x
+
+    differ = (small(ours) - small(theirs)).abs().flatten(1).mean(dim=1)
+    return int(torch.argmin(differ))
+
+
 def join(
     videos: list,
     crossfade: int,
@@ -293,9 +308,10 @@ def join(
     music_fade: float = 2.0,
 ):
     """The clips as one video at 24 fps. Where a clip carries the head it regenerated over the end
-    of the one before (`h3_head`), the last `crossfade` frames of that one fade into it — the
-    picture linearly (unless the picture cut, and only the sound carried), the sound with
-    equal-power gains — so the film keeps its length. `music`, when given, plays under the whole
+    of the one before (`h3_head`), the last `crossfade` frames of that one hand over to it — the
+    picture by switching where the two are most alike (`switch_frame`; not when the picture cut,
+    and only the sound carried), the sound by an equal-power crossfade — so the film keeps its
+    length. `music`, when given, plays under the whole
     film at `music_volume`, fading out over its last `music_fade` seconds."""
     from fractions import Fraction
 
@@ -342,9 +358,9 @@ def join(
                 k = 0
         if k:
             if head_picture:
-                w = torch.linspace(1, k, k, dtype=frames[-1].dtype).div(k + 1).view(k, 1, 1, 1)
-                tail = frames[-1][-k:] * (1 - w) + head_frames[-k:].to(frames[-1].dtype) * w
-                frames[-1] = torch.cat([frames[-1][:-k], tail])
+                ours, theirs = frames[-1][-k:], head_frames[-k:].to(frames[-1].dtype)
+                at = switch_frame(ours, theirs)
+                frames[-1] = torch.cat([frames[-1][:-k], ours[:at], theirs[at:]])
             # With a handle the previous scene's own sound runs on past the cut instead (below).
             if sound and head_audio is not None and like is not None and handle is None:
                 n = min(

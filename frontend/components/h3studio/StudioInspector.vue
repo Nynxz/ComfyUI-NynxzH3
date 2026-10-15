@@ -373,7 +373,7 @@
                 </template>
                 <label
                   class="row"
-                  title="Frames a continued scene fades in over, where it joins the one before"
+                  title="Frames a continued scene hands over in, where it joins the one before: the picture switches at the frame where the two renders look most alike, and the sound crossfades over them. More frames, more chances of a near-identical switch point (up to the frames it carries). 0 butt-joins."
                 >
                   <span class="lbl">crossfade</span>
                   <ZenNumber

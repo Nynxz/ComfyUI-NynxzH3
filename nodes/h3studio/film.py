@@ -178,7 +178,7 @@ def _stream(
             frame = av.VideoFrame.from_ndarray(np.ascontiguousarray(rgb), format="rgb24")
             output.mux(video.encode(frame.reformat(format="yuv420p")))
 
-        # The last few pictures of each scene wait, in case the next one fades in over them.
+        # The last few pictures of each scene wait, in case the next one hands over within them.
         held: list = []
         counts, fades = [], []
         for i, s in enumerate(scenes):
@@ -188,15 +188,11 @@ def _stream(
                 head_frames, _, head_picture = head
                 k = min(crossfade, head_frames.shape[0], len(held))
                 if head_picture and tuple(head_frames.shape[1:3]) == (height, width):
-                    tail = head_frames[-k:].float().numpy()
-                    for j in range(k):
-                        w = (j + 1) / (k + 1)
-                        before = held[len(held) - k + j].astype(np.float32) / 255.0
+                    tail = head_frames[-k:].float()
+                    ours = torch.from_numpy(np.stack(held[-k:])).float() / 255.0
+                    for j in range(_carry.switch_frame(ours, tail), k):
                         held[len(held) - k + j] = (
-                            ((before * (1 - w) + tail[j] * w) * 255.0)
-                            .round()
-                            .clip(0, 255)
-                            .astype(np.uint8)
+                            (tail[j] * 255.0).round().clamp(0, 255).to(torch.uint8).numpy()
                         )
             fades.append(k)
             for rgb in held:

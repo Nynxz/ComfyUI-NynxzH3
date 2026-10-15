@@ -1844,7 +1844,7 @@ class NynxzH3StudioFilm(NynxzNode):
                     default=8,
                     min=0,
                     max=39,
-                    tooltip="Frames each continuation fades in over, as on H3 Studio Join.",
+                    tooltip="Frames each continuation hands over in, as on H3 Studio Join.",
                 ),
                 io.Audio.Input("music", optional=True, tooltip="A score under the whole film."),
                 io.Float.Input("music_volume", default=0.8, min=0.0, max=2.0, step=0.05),
@@ -1889,9 +1889,10 @@ class NynxzH3StudioJoin(NynxzNode):
             node_id="H3.StudioJoin",
             display_name="H3 Studio Join",
             description="Every scene's clip as one film — in place of Concatenate Video. Where a "
-            "scene continues the one before, the end of that one crossfades into the head the "
-            "continuation regenerated over it, picture and sound, instead of butt-joining; cuts "
-            "stay cuts. The film keeps its length.",
+            "scene continues the one before, the end of that one hands over to the head the "
+            "continuation regenerated over it, instead of butt-joining: the picture switches at "
+            "the frame where the two are most alike, the sound crossfades; cuts stay cuts. The "
+            "film keeps its length.",
             is_input_list=True,
             inputs=[
                 io.Video.Input(
@@ -1902,9 +1903,10 @@ class NynxzH3StudioJoin(NynxzNode):
                     default=8,
                     min=0,
                     max=39,
-                    tooltip="Frames each continuation fades in over (at most the frames it "
-                    "carries). 0 butt-joins, like Concatenate Video. A cut whose sound carries on "
-                    "fades only its sound.",
+                    tooltip="Frames each continuation hands over in (at most the frames it "
+                    "carries): the picture switches at the most alike frame among them, the sound "
+                    "crossfades over them. 0 butt-joins, like Concatenate Video. A cut whose sound "
+                    "carries on fades only its sound.",
                 ),
                 io.Audio.Input(
                     "music",
