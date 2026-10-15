@@ -303,6 +303,15 @@ export function addRefs(project: Project, media: string[]): Ref[] {
   });
   return added;
 }
+/** A picture as a reference in every scene — a character's look, carried through the film. The
+ *  reference already made from it is reused; otherwise one is added. */
+export function useInEveryScene(project: Project, media: string): Ref {
+  const ref = project.refs.find((r) => r.media === media) ?? addRefs(project, [media])[0]!;
+  ref.scenes = "all";
+  if (ref.kind === "image" && ref.role !== "reference" && ref.role !== "semantic")
+    ref.role = "reference";
+  return ref;
+}
 /** A unique reference name from `base` ("anna", then "anna2", …). */
 export function freeRefName(project: Project, base: string): string {
   const clean = base.replace(/[^\w-]+/g, "_").slice(0, 20) || "ref";

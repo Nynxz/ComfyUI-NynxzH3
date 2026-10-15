@@ -36,6 +36,8 @@ export interface MenuActions {
   removeRef: (id: string) => void;
   removeLora: (id: string) => void;
   addRefs: (media: string[]) => void;
+  /** A picture as a reference in every scene, selected. */
+  useInEveryScene: (media: string) => void;
   pickImage: (title: string, selected?: string) => Promise<string | undefined>;
   pickKeyframe: (t: number) => void;
   pickRefs: () => void;
@@ -228,6 +230,11 @@ export function studioMenus(project: Project, a: MenuActions) {
         label: "Use as a reference too",
         icon: "mdi mdi-account-box-plus-outline",
         run: () => a.addRefs([k.media]),
+      },
+      {
+        label: "Use as a reference in every scene",
+        icon: "mdi mdi-account-star-outline",
+        run: () => a.useInEveryScene(k.media),
       },
       "-",
       {

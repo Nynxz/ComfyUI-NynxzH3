@@ -245,6 +245,7 @@
                         @select="(t) => selectAndShow(t.kind, t.id)"
                         @seconds="setSeconds"
                         @remove-keyframe="removeKeyframe"
+                        @use-in-every-scene="useInEveryScene"
                         @replace-keyframe="dropKeyframeMedia"
                         @drop-edge-keyframe="dropEdgeKeyframe"
                         @edit-text="(i: number) => (sceneTextOf = i)"
@@ -1163,6 +1164,9 @@ async function pickEdgeKeyframe(sceneIndex: number, edge: "first" | "last") {
       ).id,
     );
 }
+function useInEveryScene(media: string) {
+  select("ref", edit.useInEveryScene(project, media).id);
+}
 function removeKeyframe(id: string) {
   edit.removeKeyframe(project, id);
   explicit.value = null;
@@ -1312,6 +1316,7 @@ const menus = studioMenus(project, {
   splitAt,
   removeShot,
   removeKeyframe,
+  useInEveryScene,
   removeRef,
   removeLora,
   addRefs,

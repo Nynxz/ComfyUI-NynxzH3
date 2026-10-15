@@ -810,6 +810,13 @@
         <span class="grow" />
         <ZenButton
           sm
+          icon="mdi mdi-account-star-outline"
+          title="Add this picture as a reference in every scene, so the character looks the same in all of them (Ref2VA)"
+          @click="emit('useInEveryScene', keyframe.media)"
+          >Every scene</ZenButton
+        >
+        <ZenButton
+          sm
           variant="danger"
           icon="mdi mdi-trash-can-outline"
           @click="emit('removeKeyframe', keyframe.id)"
@@ -885,6 +892,7 @@ const emit = defineEmits<{
   select: [target: { kind: Selection["kind"]; id: string }];
   seconds: [scene: number, seconds: number];
   removeKeyframe: [id: string];
+  useInEveryScene: [media: string];
   replaceKeyframe: [id: string, event: DragEvent];
   dropEdgeKeyframe: [scene: number, edge: "first" | "last", event: DragEvent];
   editText: [scene: number];
