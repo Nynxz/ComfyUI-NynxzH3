@@ -530,6 +530,53 @@
                   />
                   <span class="soft">experimental</span>
                 </div>
+                <div
+                  v-if="
+                    sel.sceneIndex > 0 &&
+                    (scene.continuation.mode === 'guide' || scene.continuation.mode === 'sound')
+                  "
+                  class="row"
+                >
+                  <span class="lbl">carry over</span>
+                  <ZenToggleGroup
+                    :model-value="scene.continuation.leadIn ? 'on' : 'off'"
+                    :options="[
+                      {
+                        value: 'off',
+                        label: 'No lead-in',
+                        title: 'The carried head starts from its own guide, as before',
+                      },
+                      {
+                        value: 'on',
+                        label: 'Lead-in',
+                        title:
+                          'The second of the previous scene\'s sound just before the carried head, given to H3 as a frozen audio prefix ahead of frame 0 (after TaoMate-H3), so the voice and room carry on into the head. Not on Ref2VA scenes.',
+                      },
+                    ]"
+                    @update:model-value="(v: string) => (scene!.continuation.leadIn = v === 'on')"
+                  />
+                  <ZenToggleGroup
+                    v-if="scene.continuation.mode === 'guide'"
+                    :model-value="scene.continuation.matchColour ? 'on' : 'off'"
+                    :options="[
+                      {
+                        value: 'off',
+                        label: 'Own colour',
+                        title: 'The scene keeps the colour it samples',
+                      },
+                      {
+                        value: 'on',
+                        label: 'Match colour',
+                        title:
+                          'On the last step, the scene\'s video is shifted per channel so its carried head matches the end of the previous scene it repeats (after TaoMate-H3), against colour and exposure drift that builds up over a chain. A lighting change later in the scene is kept.',
+                      },
+                    ]"
+                    @update:model-value="
+                      (v: string) => (scene!.continuation.matchColour = v === 'on')
+                    "
+                  />
+                  <span class="soft">experimental</span>
+                </div>
                 <div class="kfs">
                   <span class="lbl">keyframes</span>
                   <button

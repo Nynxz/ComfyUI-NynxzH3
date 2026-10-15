@@ -217,6 +217,10 @@ export interface Scene {
     /** How those snippets are given to H3: pinned through the scene as audio guides, or as
      *  references — audio alone, or video, black or with their picture. */
     soundPicture?: "guides" | "audio" | "black" | "real";
+    /** Experimental: the second of sound before the carried head, as a frozen audio prefix. */
+    leadIn?: boolean;
+    /** Experimental: on the last step, the scene's colour moved so its head matches the previous scene's end. */
+    matchColour?: boolean;
   };
   /** The scene's finished clip (`output/h3studio/…`), saved by H3 Studio Clip on its last run. */
   render?: string;

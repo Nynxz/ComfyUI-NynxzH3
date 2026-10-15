@@ -120,6 +120,98 @@ def noise_carry(
     }
 
 
+# --- experimental, after TaoMate-H3's FL2VA streaming (github.com/TaoLiveAIGC/TaoMate-H3) ---
+
+#: Audio latents (1 s at 40 Hz) of the lead-in: TaoMate's teacher carries this much of the previous
+#: window's clean sound into the next as a frozen prefix (`fl2va/teacher.py`, `ref_audio_t=40`).
+LEAD_IN_TOKENS = 40
+
+
+def lead_in(audio: torch.Tensor, context: int) -> dict[str, Any] | None:
+    """The previous scene's sound just before the frames a continuation carries (`context`), as an
+    audio reference block: core packs a reference's audio right ahead of the scene's own audio, at
+    the reference timestep (1.0), which is where and how TaoMate places its frozen prefix — so H3
+    hears the second leading into the head rather than starting the head cold."""
+    end = audio.shape[-1] - (audio_tokens(context) if context >= 5 else 0)
+    start = max(0, end - LEAD_IN_TOKENS)
+    if end - start < 1:
+        return None
+    z = audio[..., start:end].contiguous()
+    return {"kind": "audio", "ref_audio_t": z.shape[-1], "audio_latent": z}
+
+
+def _channel_stats(video: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    v = video.float().transpose(0, 1).reshape(video.shape[1], -1)
+    return v.mean(dim=1), v.std(dim=1, unbiased=False).clamp(min=1e-6)
+
+
+#: How far the colour match may stretch a channel's spread: the head and the tail it measures are
+#: the same frames, so a bigger correction means something other than drift and is held back.
+SPREAD_LIMIT = 1.5
+
+
+def match_colour(model, anchor: torch.Tensor, head_tokens: int):
+    """`model` with its last step's video moved so its carried head (its first `head_tokens`) has
+    the per-channel mean and spread of `anchor`, the previous scene's tail that head regenerates,
+    after TaoMate's per-block renormalization (`prefix_renorm`, alpha 1). Head and tail are the same
+    frames, so what differs between them is drift, not content; the one correction it finds moves
+    the whole scene. The anchor is the guide itself, so a chain anchors each scene to the one before
+    as it finally looks. Audio is left alone; earlier steps are untouched."""
+    import comfy.utils
+
+    mean0, std0 = _channel_stats(anchor)
+
+    def post_cfg(args):
+        denoised = args["denoised"]
+        sigmas = args["model_options"].get("transformer_options", {}).get("sample_sigmas")
+        if sigmas is None or sigmas.shape[0] < 2 or float(sigmas[-1]) != 0.0:
+            return denoised
+        if not math.isclose(float(args["sigma"].flatten()[0]), float(sigmas[-2]), rel_tol=1e-4):
+            return denoised
+        shapes = getattr(args["model"], "latent_shapes", None)
+        if not shapes or len(shapes) < 2:
+            return denoised
+        streams = comfy.utils.unpack_latents(denoised, shapes)
+        video = streams[0]
+        if video.shape[1] != mean0.shape[0] or video.shape[2] < head_tokens:
+            return denoised
+        mean, std = _channel_stats(video[:, :, :head_tokens])
+        device = video.device
+        ratio = (std0.to(device) / std.to(device)).clamp(1 / SPREAD_LIMIT, SPREAD_LIMIT)
+        view = (1, -1) + (1,) * (video.ndim - 2)
+        shift = mean0.to(device) - mean.to(device) * ratio
+        streams[0] = (video.float() * ratio.view(view) + shift.view(view)).to(video.dtype)
+        return comfy.utils.pack_latents(streams)[0]
+
+    model = model.clone()
+    model.set_model_sampler_post_cfg_function(post_cfg)
+    return model
+
+
+def picture_stats(frames: torch.Tensor) -> list[list[float]]:
+    """Per-channel mean and spread of decoded frames (`[N, H, W, C]`, 0-1), as plain lists."""
+    mean, std = _channel_stats(frames[..., :3].movedim(-1, 0).unsqueeze(0).float())
+    return [mean.tolist(), std.tolist()]
+
+
+def match_picture(images: torch.Tensor, anchor, head: int, chunk: int = 16) -> torch.Tensor:
+    """`images` moved per channel so their first `head` frames (the carried head) have `anchor`'s
+    mean and spread (`picture_stats` of the previous clip's end, the same frames): the drift the
+    latent match leaves after decoding, measured where it is seen. Returns a new tensor."""
+    if head < 1 or images.shape[0] < head:
+        return images
+    mean0, std0 = (torch.tensor(v, dtype=torch.float32) for v in anchor)
+    mean, std = (torch.tensor(v, dtype=torch.float32) for v in picture_stats(images[:head]))
+    ratio = (std0 / std).clamp(1 / SPREAD_LIMIT, SPREAD_LIMIT)
+    shift = mean0 - mean * ratio
+    out = images.clone()
+    ratio, shift = ratio.to(out.device, out.dtype), shift.to(out.device, out.dtype)
+    for a in range(0, out.shape[0], chunk):
+        part = out[a : a + chunk, ..., :3]
+        part.mul_(ratio).add_(shift).clamp_(0.0, 1.0)
+    return out
+
+
 # --- beside a saved clip: its latent and its regenerated head, so a reused clip carries them too ---
 
 

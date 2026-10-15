@@ -585,6 +585,8 @@ def render_scene(setup: dict, project, scene: int | None) -> dict:
 
     trim = 0
     noise_carry = None
+    colour_anchor = None
+    picture_anchor = None
     carried = last_key
     mode = plan.continuation.get("mode")
     if mode == "video" and previous_frames is not None:
@@ -640,6 +642,10 @@ def render_scene(setup: dict, project, scene: int | None) -> dict:
             ]
             keyframes.insert(0, {**guide, "image": None})
             trim = context
+            if guide["resolved_frame_index"] == 0:
+                colour_anchor = guide.get("latent")
+                if picture and plan.continuation.get("match_colour"):
+                    picture_anchor = _carry.picture_stats(previous_frames[-context:])
             LOG.info(
                 "H3 Studio: scene %d %s scene %d's last %d frames at frame %d (%s, %d guide tokens)",
                 index + 1,
@@ -651,6 +657,32 @@ def render_scene(setup: dict, project, scene: int | None) -> dict:
                 guide["latent"].shape[2] if "latent" in guide else 0,
             )
             noise_carry = _carry.noise_carry(proj, index, context, latent, picture=picture)
+            if plan.continuation.get("lead_in") and plan.task != "ref2va":
+                lead = None
+                if carried_latent is not None:
+                    lead = _carry.lead_in(carried_latent[1], context)
+                elif previous_audio is not None and audio_vae is not None:
+                    rate = previous_audio["sample_rate"]
+                    end = previous_audio["waveform"].shape[-1] - round(context / h3.FPS * rate)
+                    start = max(0, end - rate)
+                    if end - start > 0:
+                        z, t = h3._encode_ref_audio(
+                            audio_vae,
+                            {
+                                "waveform": previous_audio["waveform"][..., start:end],
+                                "sample_rate": rate,
+                            },
+                        )
+                        lead = {"kind": "audio", "ref_audio_t": t, "audio_latent": z}
+                if lead is not None:
+                    ref_blocks = [*ref_blocks, lead]
+                    LOG.info(
+                        "H3 Studio: scene %d leads in with %d audio tokens of scene %d's sound "
+                        "before the carried head",
+                        index + 1,
+                        lead["ref_audio_t"],
+                        index,
+                    )
             carried = setup.get("previous_key") or _reuse.frames_key(
                 previous_frames[-context:], previous_audio
             )
@@ -708,6 +740,19 @@ def render_scene(setup: dict, project, scene: int | None) -> dict:
     model, positive = apply_loras(
         setup.get("model"), positive, plan.loras, plan.warnings, plan.settings
     )
+    if plan.continuation.get("match_colour") and mode == "guide" and model is not None:
+        if colour_anchor is not None:
+            model = _carry.match_colour(model, colour_anchor, colour_anchor.shape[2])
+            LOG.info(
+                "H3 Studio: scene %d matches its head's colour to scene %d's last %d tokens",
+                index + 1,
+                index,
+                colour_anchor.shape[2],
+            )
+        elif previous_frames is not None:
+            plan.warnings.append(
+                "Match colour needs the carried head at the scene's start; it's skipped."
+            )
     control_note = None
     if plan.controls:
         before = model
@@ -752,6 +797,8 @@ def render_scene(setup: dict, project, scene: int | None) -> dict:
         "seed": plan.seed,
         "noise_carry": noise_carry,
         "carries_picture": mode == "guide",
+        #: Match colour: the previous clip's end, which Clip matches the decoded head to.
+        "picture_anchor": picture_anchor if mode == "guide" else None,
         # A scene carrying the previous one's sound is out of date when that clip changes.
         "scene_key": _reuse.scene_key(
             plan.as_dict(),
@@ -1595,6 +1642,13 @@ class NynxzH3StudioClip(NynxzNode):
             latent = None
 
         trim = min(int(render.get("trim_frames") or 0), max(0, images.shape[0] - 1))
+        if render.get("picture_anchor") and trim:
+            images = _carry.match_picture(images, render["picture_anchor"], trim)
+            LOG.info(
+                "H3 Studio: scene %d's picture matched to the end of scene %d",
+                int(render.get("scene") or 0) + 1,
+                int(render.get("scene") or 0),
+            )
         frames = images[trim:]
         # The head it regenerated over the end of the previous scene: H3 Studio Join fades into it.
         head = None

@@ -290,6 +290,12 @@ def normalize(raw: Any) -> dict[str, Any]:
                     "sound_picture": cont.get("soundPicture", cont.get("sound_picture"))
                     if cont.get("soundPicture", cont.get("sound_picture")) in SOUND_PICTURES
                     else "guides",
+                    # Experimental: the second of the previous scene's sound just before the
+                    # carried head, given to H3 as a frozen audio prefix ahead of frame 0.
+                    "lead_in": cont.get("leadIn", cont.get("lead_in")) is True,
+                    # Experimental: the scene's video latent rescaled per channel to the previous
+                    # scene's mean and spread on its last step, against colour/exposure drift.
+                    "match_colour": cont.get("matchColour", cont.get("match_colour")) is True,
                 },
             }
         )
