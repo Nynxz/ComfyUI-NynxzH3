@@ -768,13 +768,24 @@
       </header>
       <div
         class="fitframe"
-        :style="{ aspectRatio: `${project.canvas.width} / ${project.canvas.height}` }"
+        :style="keyframeFrameStyle"
         title="Drop a picture here to replace it"
         @dragover="onKeyframeDragOver"
         @dragleave="onKeyframeDragLeave"
         @drop="onKeyframeDrop"
       >
-        <img :class="keyframe.fit ?? 'crop'" :src="stableUrl(keyframe.media)" alt="" />
+        <img
+          :class="keyframe.fit ?? 'crop'"
+          :src="stableUrl(keyframe.media)"
+          alt=""
+          @load="
+            keyframeSize = [
+              ($event.target as HTMLImageElement).naturalWidth,
+              ($event.target as HTMLImageElement).naturalHeight,
+            ]
+          "
+        />
+        <div v-if="cropWindow" class="cropwin" :style="cropWindow" />
         <div v-if="keyframeDropping" class="replacing">
           <i class="mdi mdi-swap-horizontal" />
           <span>Replace</span>
@@ -800,7 +811,11 @@
             (v: string) => (keyframe!.fit = v === 'stretch' ? 'stretch' : 'crop')
           "
         />
-        <span class="soft">as H3 will see it, in the canvas's shape</span>
+        <span class="soft">{{
+          cropWindow
+            ? "the bright part is what H3 sees; the rest is cut off"
+            : "as H3 will see it, in the canvas's shape"
+        }}</span>
       </div>
       <div class="row">
         <ZenButton sm icon="mdi mdi-page-first" @click="keyframe.at = 0">First frame</ZenButton>
@@ -1016,6 +1031,35 @@ function mentionParts(text: string) {
   }));
 }
 const keyframe = computed(() => scene.value?.keyframes.find((k) => k.id === props.sel.id));
+/** The keyframe picture's own size, once loaded: a crop shows all of it, with the part H3 keeps. */
+const keyframeSize = ref<[number, number] | null>(null);
+watch(
+  () => keyframe.value?.media,
+  () => (keyframeSize.value = null),
+);
+const canvasRatio = computed(() => props.project.canvas.width / props.project.canvas.height);
+/** The preview's shape: the picture's own for a crop (once loaded), else the canvas's — narrowed
+ *  for a tall one so it fits under the frame's height cap instead of being clipped. */
+const keyframeFrameStyle = computed(() => {
+  const size = keyframeSize.value;
+  const [w, h] =
+    (keyframe.value?.fit ?? "crop") === "crop" && size
+      ? size
+      : [props.project.canvas.width, props.project.canvas.height];
+  return { aspectRatio: `${w} / ${h}`, width: `min(100%, ${(220 * w) / h}px)` };
+});
+/** The canvas-shaped window a crop keeps, centred on the picture, as a style; null when nothing
+ *  is cut (a stretch, or a picture already in the canvas's shape). */
+const cropWindow = computed(() => {
+  const size = keyframeSize.value;
+  if (!size || (keyframe.value?.fit ?? "crop") !== "crop") return null;
+  const picture = size[0] / size[1];
+  const ratio = canvasRatio.value;
+  if (Math.abs(picture - ratio) < 0.01) return null;
+  const w = picture > ratio ? (ratio / picture) * 100 : 100;
+  const h = picture > ratio ? 100 : (picture / ratio) * 100;
+  return { left: `${(100 - w) / 2}%`, top: `${(100 - h) / 2}%`, width: `${w}%`, height: `${h}%` };
+});
 const colors = computed(() => (scene.value ? shotColors(scene.value) : []));
 const transitionOf = (sh: Shot) =>
   TRANSITIONS.find((t) => t.value === (sh.transition ?? "cut")) ?? TRANSITIONS[0]!;
@@ -1404,6 +1448,7 @@ function mention(name: string) {
 .fitframe {
   position: relative;
   width: 100%;
+  margin: 0 auto;
   max-height: 220px;
   overflow: hidden;
   border-radius: var(--h3-radius);
@@ -1432,7 +1477,14 @@ function mention(name: string) {
   height: 100%;
 }
 .fitframe img.crop {
-  object-fit: cover;
+  object-fit: contain;
+}
+/* The part of a cropped keyframe H3 keeps: bright, outlined, everything outside it dimmed. */
+.cropwin {
+  position: absolute;
+  box-shadow: 0 0 0 9999px rgb(0 0 0 / 55%);
+  outline: 1px solid rgb(255 255 255 / 85%);
+  pointer-events: none;
 }
 .fitframe img.stretch {
   object-fit: fill;
