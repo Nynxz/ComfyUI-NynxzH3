@@ -591,6 +591,11 @@ def render_scene(setup: dict, project, scene: int | None) -> dict:
             previous_frames[-VIDEO_TAIL:], previous_audio
         )
     context = 0
+    if mode in ("guide", "sound", "video") and previous_frames is None and index > 0:
+        plan.warnings.append(
+            f"This scene continues scene {index}, but there's no clip of scene {index} to continue "
+            f"from (render it first, or render both in one run), so it cuts instead."
+        )
     if mode in ("guide", "sound") and previous_frames is not None:
         # The carried head is cut off after decoding, so at least one grid step stays new.
         context = min(plan.continuation["frames"], previous_frames.shape[0], frame_count - 17)
@@ -634,6 +639,16 @@ def render_scene(setup: dict, project, scene: int | None) -> dict:
             ]
             keyframes.insert(0, {**guide, "image": None})
             trim = context
+            LOG.info(
+                "H3 Studio: scene %d %s scene %d's last %d frames at frame %d (%s, %d guide tokens)",
+                index + 1,
+                "continues" if picture else "carries the sound of",
+                index,
+                context,
+                guide["resolved_frame_index"],
+                "its sampled latent" if tail is not None else "re-encoded from its clip",
+                guide["latent"].shape[2] if "latent" in guide else 0,
+            )
             noise_carry = _carry.noise_carry(proj, index, context, latent, picture=picture)
             carried = setup.get("previous_key") or _reuse.frames_key(
                 previous_frames[-context:], previous_audio
