@@ -864,6 +864,20 @@
             : "as H3 will see it, in the canvas's shape"
         }}</span>
       </div>
+      <div v-if="matchedCanvas" class="row">
+        <span class="lbl">canvas</span>
+        <ZenButton
+          sm
+          icon="mdi mdi-aspect-ratio"
+          :title="`Set the film's canvas to this picture's shape at about its current size: ${matchedCanvas.width}×${matchedCanvas.height}, each side a multiple of 32. Every scene renders at the new size.`"
+          @click="edit.setCanvas(project, matchedCanvas)"
+          >Match this picture</ZenButton
+        >
+        <span class="soft"
+          >{{ project.canvas.width }}×{{ project.canvas.height }} →
+          {{ matchedCanvas.width }}×{{ matchedCanvas.height }}</span
+        >
+      </div>
       <div class="row">
         <ZenButton sm icon="mdi mdi-page-first" @click="keyframe.at = 0">First frame</ZenButton>
         <ZenButton sm icon="mdi mdi-page-last" @click="keyframe.at = scene!.seconds"
@@ -914,6 +928,7 @@ import {
 import {
   CONTEXT_FRAMES,
   CONTINUATIONS,
+  canvasForShape,
   randomSeed,
   continuationOf,
   formatTime,
@@ -1106,6 +1121,15 @@ const cropWindow = computed(() => {
   const w = picture > ratio ? (ratio / picture) * 100 : 100;
   const h = picture > ratio ? 100 : (picture / ratio) * 100;
   return { left: `${(100 - w) / 2}%`, top: `${(100 - h) / 2}%`, width: `${w}%`, height: `${h}%` };
+});
+/** The canvas in this picture's shape at the film's current size, or null when the canvas already
+ *  is (or the picture hasn't loaded). */
+const matchedCanvas = computed(() => {
+  const size = keyframeSize.value;
+  if (!size) return null;
+  const { width, height } = props.project.canvas;
+  const next = canvasForShape(size[0] / size[1], width * height);
+  return next.width === width && next.height === height ? null : next;
 });
 const colors = computed(() => (scene.value ? shotColors(scene.value) : []));
 const transitionOf = (sh: Shot) =>

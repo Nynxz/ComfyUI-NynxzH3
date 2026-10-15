@@ -53,6 +53,10 @@ export function clearProject(project: Project) {
 
 // --- the music track ------------------------------------------------------------------------------
 /** The film's song: `media` sets or swaps it; other fields change its settings. */
+export function setCanvas(project: Project, canvas: { width: number; height: number }) {
+  project.canvas = { width: canvas.width, height: canvas.height };
+}
+
 export function setTrack(project: Project, change: Partial<MusicTrack>) {
   const media = change.media ?? project.track?.media;
   if (media) project.track = { ...project.track, ...change, media };

@@ -349,6 +349,27 @@ export function nativeCanvas(ratio: number): { width: number; height: number } {
   return { width: snap(w), height: snap(h) };
 }
 
+/** The canvas nearest `ratio` (width / height) at about `area` pixels, each side a multiple of 32
+ *  and at most `maxSide`: a picture's shape at the film's current size. */
+export function canvasForShape(
+  ratio: number,
+  area: number,
+  maxSide = 2048,
+): { width: number; height: number } {
+  const snap = (v: number) => Math.max(32, Math.round(v / 32) * 32);
+  const ideal = snap(Math.sqrt(area * ratio));
+  let best: { width: number; height: number } | null = null;
+  let score = Number.POSITIVE_INFINITY;
+  for (let width = ideal - 32 * 4; width <= ideal + 32 * 4; width += 32) {
+    const height = snap(width / ratio);
+    if (width < 32 || width > maxSide || height > maxSide) continue;
+    const off =
+      10 * Math.abs(Math.log(width / height / ratio)) + Math.abs(Math.log((width * height) / area));
+    if (off < score) [best, score] = [{ width, height }, off];
+  }
+  return best ?? nativeCanvas(ratio);
+}
+
 export const uid = (prefix: string) => `${prefix}${Math.random().toString(36).slice(2, 8)}`;
 
 /** H3's frame grid: 17k + 5 frames at 24 fps. */
