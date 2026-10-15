@@ -852,6 +852,17 @@ def compile_scene(project: dict[str, Any], index: int, has_audio=None) -> Compil
     cast_names = frozenset(v["name"].lower() for v in project["cast"])
     # A shot either starts a new [Shot N] (a cut, or a dissolve / fade / wipe) or carries on the
     # one before without a cut — so H3's shot numbers count only the former.
+    # A scene continuing the picture opens on the previous scene's last frames (the carried head,
+    # anchored as a guide). The prompt has to say so, or H3 reads [Shot 1] as a new shot and cuts
+    # to it once the anchored frames are done.
+    continuing = carry == "guide" and head > 0
+    opening = (
+        f"The first {head / FPS:.2f} seconds of the target video continue the footage just before "
+        "it exactly, and the action carries on from there without a cut: the same place, the same "
+        "people, the same framing and the same motion."
+        if continuing
+        else ""
+    )
     numbers = []
     for i, shot in enumerate(shots):
         numbers.append(1 if i == 0 else numbers[-1] + (shot["transition"] not in CONTINUOUS))
@@ -867,7 +878,10 @@ def compile_scene(project: dict[str, Any], index: int, has_audio=None) -> Compil
         own = _sentence(mentions(shot["text"]))
         text = " ".join(t for t in (own, spoken) if t)
         when = _timestamp(shot["at"])
-        if i == 0:
+        if i == 0 and continuing:
+            follow = _lower_first(text, cast_names) if text else "the scene continues."
+            paragraphs.append(f"[Shot 1] Continuing without a cut, {follow}")
+        elif i == 0:
             paragraphs.append(f"[Shot 1] {text or 'The scene continues.'}")
         elif shot["transition"] == "continue":
             if text:
@@ -1017,6 +1031,8 @@ def compile_scene(project: dict[str, Any], index: int, has_audio=None) -> Compil
         if unmentioned:
             tags = " and ".join(r["tag"] for r in unmentioned)
             lead += f" The staging, timing and camera movement follow {tags}."
+        if opening:
+            lead += f" {opening}"
         if carried:
             tags = " and ".join(heard(r) for r in carried)
             soundscape = (
@@ -1054,6 +1070,8 @@ def compile_scene(project: dict[str, Any], index: int, has_audio=None) -> Compil
         else:
             task = "t2va"
             first_line = ""
+        if opening:
+            first_line = f"{first_line} {opening}".strip()
         first_shot = body.replace("[Shot 1] ", f"[Shot 1] {style} ", 1) if style else body
         prompt = (
             (f"{first_line}\n\n" if first_line else "")
