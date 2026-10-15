@@ -18,6 +18,8 @@
 import { api } from "@comfy/api";
 import { reactive } from "vue";
 
+import { FPS } from "./h3studio";
+
 const RENDER_EVENT = "nynxz.h3studio.render";
 const CLIP_EVENT = "nynxz.h3studio.clip";
 const PREVIEW_EVENTS = ["nynxz.h3studio.preview", "nynxz.personal.preview_override"];
@@ -44,6 +46,11 @@ export interface LiveRun {
   deltas: number[];
   /** Boundaries in the run (steps + 1). */
   total: number;
+  /** Seconds of carried head before the scene starts, in every step's clip. */
+  lead: number;
+  /** How long every step's clip is: the whole render (head, scene, then grid and handle), or
+   *  null when the render didn't say. */
+  seconds: number | null;
 }
 
 export interface StudioLive {
@@ -124,14 +131,22 @@ function listen() {
   const target = api as unknown as EventTarget;
 
   target.addEventListener(RENDER_EVENT, (e) => {
-    const d = (e as Detail<{ node_id?: string; scene?: number }>).detail;
+    const d = (e as Detail<{ node_id?: string; scene?: number; frames?: number; lead?: number }>)
+      .detail;
     if (!d?.node_id || typeof d.scene !== "number") return;
     if (current) entry(current.nodeId).rendering = null;
     current = { nodeId: d.node_id, scene: d.scene, ownPreview: false };
     progress = null;
     const e2 = entry(d.node_id);
     for (const f of e2.runs[d.scene]?.steps ?? []) release(f);
-    e2.runs[d.scene] = { steps: [], sigmas: null, deltas: [], total: 0 };
+    e2.runs[d.scene] = {
+      steps: [],
+      sigmas: null,
+      deltas: [],
+      total: 0,
+      lead: (d.lead ?? 0) / FPS,
+      seconds: d.frames ? d.frames / FPS : null,
+    };
     e2.rendering = d.scene;
   });
 

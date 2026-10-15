@@ -40,18 +40,31 @@
       <template v-else-if="view === 'preview'">
         <template v-if="shown">
           <canvas v-if="shown.frames" ref="framesEl" class="render" />
-          <video
-            v-else-if="shown.video"
-            ref="previewEl"
-            :key="shown.url"
-            class="render"
-            :src="shown.url"
-            :muted="!shown.audio || props.muted || props.volume === 0 || songReplaces"
-            :volume="props.volume"
-            playsinline
-            preload="auto"
-            @loadedmetadata="placePreview(true)"
-          />
+          <!-- A new step loads hidden behind the one playing and takes over once it is at the
+               playhead, so a step never blanks or restarts the picture. -->
+          <template v-else-if="shown.video">
+            <video
+              v-for="f in previewVideos"
+              :key="f.url"
+              :ref="(el) => setPreviewEl(f.url, el as HTMLVideoElement | null)"
+              class="render"
+              :class="{ waiting: f.url !== showingUrl }"
+              :src="f.url"
+              :muted="
+                f.url !== showingUrl ||
+                !f.audio ||
+                props.muted ||
+                props.volume === 0 ||
+                songReplaces
+              "
+              :volume="props.volume"
+              playsinline
+              preload="auto"
+              @loadedmetadata="placePreview(true)"
+              @canplay="takeOver(f.url)"
+              @seeked="takeOver(f.url)"
+            />
+          </template>
           <img v-else class="render" :src="shown.url" alt="" draggable="false" />
         </template>
         <div v-else class="card">
@@ -328,15 +341,59 @@ const timecode = computed(() => {
 // than played on its own clock: a new step joins at the same moment, pausing freezes it with the
 // timeline, and a scene loop loops it in step with everything else.
 const shown = computed(() => props.run?.steps[props.run.steps.length - 1] ?? null);
-/** Where the playhead is through the scene, 0–1. */
-const position = computed(() =>
-  props.sceneSeconds > 0 ? Math.min(Math.max(props.offset / props.sceneSeconds, 0), 1) : 0,
+/** How far through a step's clip the playhead is, 0–1. The clip is the whole render: the carried
+ *  head, the scene, then H3's grid and the handle, so the scene starts `lead` in and plays at the
+ *  clip's own speed. Without the render's length it is spread over the scene, as before. */
+const position = computed(() => {
+  const run = props.run;
+  const at = run?.seconds
+    ? (run.lead + props.offset) / run.seconds
+    : props.sceneSeconds > 0
+      ? props.offset / props.sceneSeconds
+      : 0;
+  return Math.min(Math.max(at, 0), 1);
+});
+/** How fast a step's clip plays (its length over the time it spans on the timeline). */
+function previewRate(duration: number): number {
+  const span = props.run?.seconds ?? props.sceneSeconds;
+  return span > 0 && duration > 0 ? duration / span : 1;
+}
+
+/** The step showing, until a newer one is at the playhead and takes over. */
+const showingUrl = ref("");
+const previewVideos = computed(() => {
+  const steps = props.run?.steps ?? [];
+  const showing = steps.find((f) => f.url === showingUrl.value && f.video);
+  const newest = shown.value?.video ? shown.value : null;
+  return [showing, newest].filter(
+    (f, i, all): f is NonNullable<typeof f> => !!f && all.indexOf(f) === i,
+  );
+});
+const previewEls = new Map<string, HTMLVideoElement>();
+function setPreviewEl(url: string, el: HTMLVideoElement | null) {
+  if (el) previewEls.set(url, el);
+  else previewEls.delete(url);
+}
+function takeOver(url: string) {
+  const el = previewEls.get(url);
+  if (url !== shown.value?.url || url === showingUrl.value || !el || el.seeking) return;
+  if (el.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) return;
+  showingUrl.value = url;
+}
+watch(
+  () => props.run,
+  () => (showingUrl.value = ""),
 );
 
-const previewEl = ref<HTMLVideoElement | null>(null);
 const framesEl = ref<HTMLCanvasElement | null>(null);
 function placePreview(force = false) {
-  syncVideo(previewEl.value, (d) => position.value * Math.max(0, d - 0.01), force);
+  for (const [url, el] of previewEls)
+    syncVideo(
+      el,
+      (d) => position.value * Math.max(0, d - 0.01),
+      force && url !== showingUrl.value,
+      previewRate(el.duration),
+    );
 }
 watch([position, shown, view, () => props.playing], () => void nextTick(() => placePreview()));
 
@@ -418,8 +475,14 @@ const hasSound = computed(
  *  paused or scrubbing; while the transport plays, let it play — with sound — and correct only a
  *  drift that is actually visible, never while it is still seeking or loading (each seek restarts
  *  the load, and correcting a loading video stalls it for good). */
-function syncVideo(v: HTMLMediaElement | null, want: (duration: number) => number, force = false) {
+function syncVideo(
+  v: HTMLMediaElement | null,
+  want: (duration: number) => number,
+  force = false,
+  rate = 1,
+) {
   if (!v || !Number.isFinite(v.duration)) return;
+  if (Math.abs(v.playbackRate - rate) > 0.001) v.playbackRate = rate;
   const end = Math.max(0, v.duration - 0.01);
   const at = Math.min(Math.max(want(v.duration), 0), end);
   if (props.playing) {

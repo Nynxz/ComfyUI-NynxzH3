@@ -836,7 +836,12 @@ def _announce(unique_id, dynprompt, render: dict) -> None:
     render["studio_node"] = str(node_id)
     _send(
         RENDER_EVENT,
-        {"node_id": str(node_id), "scene": render["scene"], "frames": render["frames"]},
+        {
+            "node_id": str(node_id),
+            "scene": render["scene"],
+            "frames": render["frames"],
+            "lead": render.get("trim_frames") or 0,
+        },
     )
 
 
