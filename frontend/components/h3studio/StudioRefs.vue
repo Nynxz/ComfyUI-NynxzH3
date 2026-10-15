@@ -87,6 +87,7 @@
               proxy: !r.media,
               dragging: dragId === r.id,
               over: overId === r.id && dragId !== r.id,
+              after: overId === r.id && dragId !== r.id && overAfter,
               filling: fileCardId === r.id,
             }"
             @click="emit('select', r.id)"
@@ -569,6 +570,8 @@ const shownAt = computed(() => {
 // --- reorder: drag a card's thumbnail onto another card (or into a section) ----------------------
 const dragId = ref<string | null>(null);
 const overId = ref<string | null>(null);
+/** Whether the dragged card lands after the one it is over (its right half), not before. */
+const overAfter = ref(false);
 const fileOver = ref(false);
 /** The card (or the selected reference's editor) new media is being dragged over, to replace. */
 const fileCardId = ref<string | null>(null);
@@ -596,14 +599,15 @@ function accepts(section: SectionId): boolean {
     ? section === "look" || section === "meaning"
     : sectionOf(dragged) === section;
 }
-function moveTo(section: SectionId, beforeId: string | null) {
+function moveTo(section: SectionId, targetId: string | null, after = false) {
   const refs = props.project.refs;
   const from = refs.findIndex((r) => r.id === dragId.value);
   if (from < 0) return;
   const [moved] = refs.splice(from, 1);
   if (moved!.kind === "image") moved!.role = section === "meaning" ? "semantic" : "reference";
-  let to = beforeId ? refs.findIndex((r) => r.id === beforeId) : -1;
-  if (to < 0) {
+  let to = targetId ? refs.findIndex((r) => r.id === targetId) : -1;
+  if (to >= 0 && after) to += 1;
+  else if (to < 0) {
     // After the last card of the section, or at the end.
     const last = refs
       .map((r, i) => (sectionOf(r) === section ? i : -1))
@@ -628,6 +632,8 @@ function onCardDragOver(id: string, section: SectionId, e: DragEvent) {
   e.preventDefault();
   e.stopPropagation();
   overId.value = id;
+  const box = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  overAfter.value = e.clientX > box.left + box.width / 2;
 }
 function onCardDragLeave(id: string, e: DragEvent) {
   const to = e.relatedTarget as Node | null;
@@ -645,7 +651,7 @@ function onCardDrop(id: string, section: SectionId, e: DragEvent) {
   if (!dragId.value || !accepts(section)) return;
   e.preventDefault();
   e.stopPropagation();
-  if (id !== dragId.value) moveTo(section, id);
+  if (id !== dragId.value) moveTo(section, id, overAfter.value);
   endDrag();
 }
 function onSectionDragOver(section: SectionId, e: DragEvent) {
@@ -806,6 +812,9 @@ function onEditorDrop(e: DragEvent) {
 .card.over {
   border-color: var(--zen-accent, #6366f1);
   box-shadow: -3px 0 0 var(--zen-accent, #6366f1);
+}
+.card.over.after {
+  box-shadow: 3px 0 0 var(--zen-accent, #6366f1);
 }
 .card.filling {
   border-color: var(--zen-accent, #6366f1);
