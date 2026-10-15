@@ -1569,6 +1569,10 @@ onBeforeUnmount(() => ro?.disconnect());
   --zen-scrollbar: color-mix(in srgb, var(--h3-text) 28%, transparent);
   --h3-muted: var(--zen-muted, var(--descrip-text, #9aa0aa));
   --h3-accent: var(--zen-accent, var(--p-primary-color, #4f7cff));
+  --h3-surface-2: var(--zen-surface-2, color-mix(in srgb, var(--h3-text) 7%, var(--h3-panel)));
+  /* Behind pictures, thumbnails and video: near-black on a dark theme, a soft grey on a light one. */
+  --h3-well: color-mix(in srgb, var(--h3-text) 9%, var(--h3-bg));
+  --h3-hover: color-mix(in srgb, var(--h3-text) 6%, transparent);
 
   display: flex;
   flex-direction: column;

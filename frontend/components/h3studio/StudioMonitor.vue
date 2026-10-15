@@ -500,9 +500,7 @@ watch(
   box-sizing: border-box;
   border: 1px solid var(--h3-line);
   border-radius: var(--h3-radius);
-  background: #050506;
-  /* Near-black on a dark theme, a soft tint of the theme on a light one. */
-  background: oklch(from var(--h3-bg) calc(l - 0.14) c h);
+  background: var(--h3-well);
 }
 .screen {
   position: relative;
@@ -510,7 +508,7 @@ watch(
   width: min(100cqw, 100cqh * var(--ar));
   height: min(100cqh, 100cqw / var(--ar));
   overflow: hidden;
-  background: radial-gradient(circle at 50% 40%, #1b1b22, #08080a 70%);
+  background: radial-gradient(circle at 50% 40%, var(--h3-surface-2), var(--h3-well) 70%);
 }
 .screen img,
 .screen video {
@@ -528,7 +526,7 @@ watch(
   align-items: center;
   justify-content: center;
   gap: 2px;
-  color: rgb(255 255 255 / 35%);
+  color: color-mix(in srgb, var(--h3-text) 35%, transparent);
 }
 .card-scene {
   font-size: 22px;
@@ -577,7 +575,7 @@ watch(
 /* A render preview is what H3 will make, so show all of it rather than the animatic's crop. */
 .screen .render {
   object-fit: contain;
-  background: #000;
+  background: var(--h3-well);
 }
 .screen .render.waiting {
   visibility: hidden;

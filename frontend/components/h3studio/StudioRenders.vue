@@ -877,7 +877,7 @@ h4 {
   height: 48px;
   overflow: hidden;
   border-radius: var(--h3-radius, var(--zen-radius, 8px));
-  background: var(--zen-media-bg, var(--h3-field));
+  background: var(--h3-well);
   color: var(--h3-muted);
 }
 .nowthumb img,
@@ -980,7 +980,7 @@ h4 {
   height: 40px;
   overflow: hidden;
   border-radius: calc(var(--h3-radius) - 3px);
-  background: var(--zen-media-bg, var(--h3-panel));
+  background: var(--h3-well);
 }
 .tthumb :deep(.mt) {
   width: 100%;

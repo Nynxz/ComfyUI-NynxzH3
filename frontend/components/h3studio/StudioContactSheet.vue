@@ -176,7 +176,7 @@ async function copyImage() {
   overflow: auto;
   border: 1px solid var(--zen-border, #34343c);
   border-radius: var(--zen-radius, 8px);
-  background: #121214;
+  background: color-mix(in srgb, var(--zen-text, #e5e5ea) 9%, var(--zen-bg, #18181c));
 }
 .preview img {
   display: block;

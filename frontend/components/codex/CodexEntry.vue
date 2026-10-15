@@ -568,7 +568,7 @@ h4 {
   flex: none;
   border: 1px solid var(--zen-border, #34343c);
   border-radius: var(--zen-radius, 8px);
-  background: var(--zen-media-bg, #111);
+  background: var(--h3-well);
 }
 .cover :deep(.mt) {
   width: 100%;
@@ -600,7 +600,7 @@ h4 {
   padding: 0;
   border: 1px solid var(--zen-border, #34343c);
   border-radius: 6px;
-  background: var(--zen-media-bg, #111);
+  background: var(--h3-well);
   cursor: pointer;
 }
 .pic :deep(.mt) {

@@ -941,6 +941,10 @@ function onKey(e: KeyboardEvent) {
   --h3-line: var(--zen-border, #34343c);
   --h3-text: var(--zen-text, #e5e5ea);
   --h3-muted: var(--zen-muted, #9aa0aa);
+  --h3-surface-2: var(--zen-surface-2, color-mix(in srgb, var(--h3-text) 7%, var(--h3-panel)));
+  /* Behind pictures, thumbnails and video: near-black on a dark theme, a soft grey on a light one. */
+  --h3-well: color-mix(in srgb, var(--h3-text) 9%, var(--h3-bg));
+  --h3-hover: color-mix(in srgb, var(--h3-text) 6%, transparent);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1091,7 +1095,7 @@ function onKey(e: KeyboardEvent) {
 .overlay video {
   width: 100%;
   border-radius: 5px;
-  background: #000;
+  background: var(--h3-well);
 }
 .msg {
   position: absolute;

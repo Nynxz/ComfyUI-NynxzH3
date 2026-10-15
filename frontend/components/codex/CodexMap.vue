@@ -343,7 +343,7 @@ function startDrag(id: string, e: PointerEvent) {
   height: 58px;
   border: 3px solid var(--c);
   border-radius: 50%;
-  background: var(--zen-media-bg, #111);
+  background: var(--h3-well);
 }
 .disc :deep(.mt) {
   width: 100%;

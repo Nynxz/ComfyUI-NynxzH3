@@ -68,7 +68,7 @@ watch(
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #0b0b0e;
+  background: var(--h3-well, #0b0b0e);
 }
 .mt img,
 .mt video {
@@ -97,8 +97,8 @@ watch(
   justify-content: center;
   width: 100%;
   height: 100%;
-  background: linear-gradient(135deg, #2b3a55, #1d2436);
-  color: #9db7ff;
+  background: linear-gradient(135deg, var(--h3-surface-2, #2b3a55), var(--h3-well, #1d2436));
+  color: var(--h3-accent, #9db7ff);
   font-size: 22px;
 }
 .kind {

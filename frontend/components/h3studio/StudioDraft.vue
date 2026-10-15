@@ -297,7 +297,7 @@ function discard() {
   white-space: pre-wrap;
 }
 .text b {
-  color: #9db7ff;
+  color: var(--h3-accent);
   font-weight: 500;
 }
 .warn {

@@ -1379,11 +1379,11 @@ function mention(name: string) {
   aspect-ratio: 1;
   overflow: hidden;
   border-radius: calc(var(--zen-radius, 8px) - 2px);
-  background: #0b0b0e;
+  background: var(--h3-well);
 }
 .refcard b {
   overflow: hidden;
-  color: #9db7ff;
+  color: var(--h3-accent);
   font-size: 11px;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -1452,7 +1452,7 @@ function mention(name: string) {
   max-height: 220px;
   overflow: hidden;
   border-radius: var(--h3-radius);
-  background: #000;
+  background: var(--h3-well);
 }
 .replacing {
   position: absolute;
@@ -1901,7 +1901,7 @@ function mention(name: string) {
   opacity: 0.6;
 }
 .shotpeek b {
-  color: #9db7ff;
+  color: var(--h3-accent);
   font-weight: 500;
 }
 .shotpeek b.unknown {
@@ -2015,6 +2015,6 @@ function mention(name: string) {
   height: 150px;
   overflow: hidden;
   border-radius: calc(var(--h3-radius) - 2px);
-  background: #0b0b0e;
+  background: var(--h3-well);
 }
 </style>

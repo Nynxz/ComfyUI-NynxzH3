@@ -838,7 +838,7 @@ function onEditorDrop(e: DragEvent) {
   aspect-ratio: 1;
   overflow: hidden;
   border-radius: calc(var(--zen-radius, 8px) * 0.75);
-  background: #000;
+  background: var(--h3-well);
   cursor: grab;
 }
 .thumb:active {

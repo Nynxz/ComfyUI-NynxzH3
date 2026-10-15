@@ -823,6 +823,18 @@ function openEpisode(id: string) {
 
 <style scoped>
 .codex {
+  --h3-radius: var(--zen-radius, 8px);
+  --h3-bg: var(--zen-bg, var(--comfy-menu-bg, #18181c));
+  --h3-panel: var(--zen-surface, #202026);
+  --h3-field: var(--zen-field-bg, var(--zen-input, #15151a));
+  --h3-line: var(--zen-border, #34343c);
+  --h3-text: var(--zen-text, #e5e5ea);
+  --h3-muted: var(--zen-muted, #9aa0aa);
+  --h3-accent: var(--zen-accent, #6366f1);
+  --h3-surface-2: var(--zen-surface-2, color-mix(in srgb, var(--h3-text) 7%, var(--h3-panel)));
+  /* Behind pictures, thumbnails and video: near-black on a dark theme, a soft grey on a light one. */
+  --h3-well: color-mix(in srgb, var(--h3-text) 9%, var(--h3-bg));
+  --h3-hover: color-mix(in srgb, var(--h3-text) 6%, transparent);
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
@@ -1096,7 +1108,7 @@ function openEpisode(id: string) {
   flex: none;
   height: var(--h);
   border-bottom: 2px solid var(--c, transparent);
-  background: var(--zen-media-bg, #111);
+  background: var(--h3-well);
 }
 .thumb :deep(.mt) {
   width: 100%;
